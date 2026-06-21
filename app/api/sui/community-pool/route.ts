@@ -74,19 +74,146 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
         ORDER BY notional_value DESC
         LIMIT 20`,
     );
-    return rows.map((r) => ({
+
+    const baseRows = rows.map((r) => ({
       id: r.id,
       market: String(r.market || ''),
-      side: (String(r.side || '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG'),
+      side: (String(r.side || '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as 'LONG' | 'SHORT',
       size: Number(r.size),
       notionalValue: Number(r.notional_value),
       leverage: Number(r.leverage),
       entryPrice: r.entry_price == null ? 0 : Number(r.entry_price),
-      currentPrice: r.current_price == null ? null : Number(r.current_price),
-      currentPnl: Number(r.current_pnl ?? 0),
+      // DB columns become FALLBACK only — see live overlay below.
+      dbCurrentPrice: r.current_price == null ? null : Number(r.current_price),
+      dbCurrentPnl: Number(r.current_pnl ?? 0),
       openedAt: (r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)),
-      source: r.hedge_id_onchain ? 'on-chain-mirror' : 'bluefin-perp',
+      source: (r.hedge_id_onchain ? 'on-chain-mirror' : 'bluefin-perp') as 'on-chain-mirror' | 'bluefin-perp',
     }));
+
+    // ── LIVE OVERLAY ────────────────────────────────────────────────────
+    // The DB's current_price / current_pnl columns are updated by a
+    // separate cron and drift between writes (we've seen them stuck for
+    // hours on values that haven't been true since the position opened
+    // — e.g. ETH SHORT showing +$2.95 implying ETH at $1319).
+    //
+    // Recompute live from two sources, in priority order:
+    //   1. BlueFin venue snapshot via `safeBluefinSnapshot` — markPrice
+    //      and unrealizedPnl come straight from the matching engine and
+    //      are the actual values the position has at the venue.
+    //   2. Spot price from market-data service — when BlueFin position
+    //      data isn't matchable (e.g. zombie DB row for a closed
+    //      position), recompute `(entry - mark) × size × sign` ourselves
+    //      so consumers at least see the correct sign + a near-live $.
+    //   3. DB column — last resort. Logged as a stale fallback.
+    let venuePositions: Array<{
+      symbol?: unknown; side?: unknown;
+      markPrice?: unknown; unrealizedProfit?: unknown; uPnL?: unknown;
+    }> = [];
+    try {
+      const { safeBluefinSnapshot } = await import('@/lib/services/sui/bluefin-read-safe');
+      const network: 'mainnet' | 'testnet' =
+        (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
+      const snap = await safeBluefinSnapshot({
+        network,
+        onChainHasExposure: baseRows.length > 0,
+      });
+      venuePositions = snap.positions as typeof venuePositions;
+    } catch (snapErr) {
+      logger.debug('[SUI-API] BlueFin snapshot unavailable for hedge overlay', {
+        error: snapErr instanceof Error ? snapErr.message : String(snapErr),
+      });
+    }
+
+    // Build a (symbol, side) → venue position lookup for fast matching.
+    const venueLookup = new Map<string, { markPrice: number; uPnL: number }>();
+    for (const p of venuePositions) {
+      const symbol = String(p.symbol || '').toUpperCase();
+      const side = String(p.side || '').toUpperCase();
+      if (!symbol) continue;
+      const markPrice = Number(p.markPrice ?? 0) || 0;
+      const uPnL = Number(p.unrealizedProfit ?? p.uPnL ?? 0) || 0;
+      if (markPrice > 0) {
+        venueLookup.set(`${symbol}|${side}`, { markPrice, uPnL });
+      }
+    }
+
+    // Cache spot prices once per request so each hedge doesn't re-fetch.
+    const spotPriceCache: Record<string, number> = {};
+    async function getSpotPrice(asset: string): Promise<number> {
+      const key = asset.toUpperCase();
+      if (spotPriceCache[key] !== undefined) return spotPriceCache[key];
+      try {
+        const { getMarketDataService } = await import(
+          '@/lib/services/market-data/RealMarketDataService'
+        );
+        const md = getMarketDataService();
+        const p = await md.getTokenPrice(key).catch(() => ({ price: 0 }));
+        const price = Number(p.price) || 0;
+        spotPriceCache[key] = price;
+        return price;
+      } catch {
+        spotPriceCache[key] = 0;
+        return 0;
+      }
+    }
+
+    const overlaid: PoolHedge[] = [];
+    for (const r of baseRows) {
+      const baseSymbol = r.market.replace(/-PERP$/i, '').toUpperCase();
+      const venue = venueLookup.get(`${r.market.toUpperCase()}|${r.side}`)
+        ?? venueLookup.get(`${baseSymbol}-PERP|${r.side}`);
+
+      let currentPrice: number | null = null;
+      let currentPnl: number;
+      let pnlSource: 'venue' | 'spot' | 'db' = 'db';
+
+      if (venue && venue.markPrice > 0) {
+        // Source 1: venue truth
+        currentPrice = venue.markPrice;
+        // venue uPnL already includes leverage + funding effects
+        currentPnl = venue.uPnL;
+        pnlSource = 'venue';
+      } else if (r.entryPrice > 0 && r.size > 0) {
+        // Source 2: recompute from spot
+        const spot = await getSpotPrice(baseSymbol);
+        if (spot > 0) {
+          currentPrice = spot;
+          const sign = r.side === 'SHORT' ? 1 : -1;
+          // Notional PnL = size × (entry − mark) × sign
+          // Leverage scales margin requirement, not PnL — the asset
+          // quantity already encodes the directional exposure.
+          currentPnl = r.size * (r.entryPrice - spot) * sign;
+          pnlSource = 'spot';
+        } else {
+          currentPrice = r.dbCurrentPrice;
+          currentPnl = r.dbCurrentPnl;
+        }
+      } else {
+        currentPrice = r.dbCurrentPrice;
+        currentPnl = r.dbCurrentPnl;
+      }
+
+      if (pnlSource === 'db') {
+        logger.warn('[SUI-API] hedge PnL falling back to stale DB row', {
+          market: r.market, side: r.side, dbPnl: r.dbCurrentPnl,
+        });
+      }
+
+      overlaid.push({
+        id: r.id,
+        market: r.market,
+        side: r.side,
+        size: r.size,
+        notionalValue: r.notionalValue,
+        leverage: r.leverage,
+        entryPrice: r.entryPrice,
+        currentPrice,
+        currentPnl: Number(currentPnl.toFixed(4)),
+        openedAt: r.openedAt,
+        source: r.source,
+      });
+    }
+    return overlaid;
   } catch (err) {
     logger.warn('[SUI-API] fetchActivePoolHedges failed', { error: err });
     return [];
