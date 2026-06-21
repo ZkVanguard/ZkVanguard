@@ -571,6 +571,26 @@ export class SafeExecutionGuard {
   }
 
   /**
+   * Reset runtime state for a fresh validation session.
+   * This is safe to call between tests or when re-initializing the guard.
+   */
+  resetState(): void {
+    this.activeExecutions.clear();
+    this.auditLogs = [];
+    this.pendingConsensus.clear();
+    this.dailyVolumeUSD = 0;
+    this.dailyVolumeResetDate = '';
+    this.lastExecutionTime = 0;
+    this.circuitBreaker = {
+      isOpen: false,
+      failureCount: 0,
+      lastFailure: null,
+      openedAt: null,
+    };
+    logger.info('🧹 SafeExecutionGuard state reset');
+  }
+
+  /**
    * Update limits (requires admin approval in production)
    */
   updateLimits(newLimits: Partial<ExecutionLimits>): void {
