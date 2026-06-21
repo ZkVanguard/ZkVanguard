@@ -5,14 +5,21 @@
  * flag. validateExecution is read-only w.r.t. cooldown/volume state, so calling
  * the fresh singleton against defaults is deterministic.
  */
-import { describe, it, expect, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { SafeExecutionGuard } from '@/agents/core/SafeExecutionGuard';
 
 const guard = SafeExecutionGuard.getInstance();
 const base = { executionId: 'test', agentId: 'tester', action: 'hedge' };
 
-// Reset breaker state after each test so the shared singleton can't bleed.
-afterEach(() => { (guard as unknown as { resetCircuitBreaker(): void }).resetCircuitBreaker(); });
+// Reset before AND after so leaked state from other test files (same JS
+// singleton across the whole bun-test process) can't fail us, and so we
+// leave a clean instance for the next file.
+const reset = () => {
+  (guard as unknown as { resetState(): void }).resetState();
+  (guard as unknown as { resetCircuitBreaker(): void }).resetCircuitBreaker();
+};
+beforeEach(reset);
+afterEach(reset);
 
 describe('SafeExecutionGuard.validateExecution', () => {
   it('accepts a clean, within-limits trade', async () => {

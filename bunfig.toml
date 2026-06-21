@@ -21,6 +21,9 @@ coverage = true
 coverageDir = "coverage"
 # Don't fail on coverage thresholds - rely on Jest config if needed
 coverageThreshold = { }
+# Match jest.config.js testTimeout — LLM/RPC calls in integration tests
+# routinely exceed bun's 5s default.
+timeout = 30000
 
 [install.cache]
 # Enable global cache for faster installs
