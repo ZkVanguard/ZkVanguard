@@ -356,6 +356,7 @@ export async function POST(request: NextRequest) {
           zkProofs: 'ZK-STARK verification',
         },
         totalExecutionTime: Date.now() - startTime,
+        aiPowered: false,
         timestamp: new Date().toISOString(),
         fallbackReason: 'Agent execution timeout or failure',
       });
@@ -532,6 +533,7 @@ export async function POST(request: NextRequest) {
         zkProofs: 'ZK-STARK verification',
       },
       totalExecutionTime,
+      aiPowered: true,
       timestamp: new Date().toISOString(),
     };
 

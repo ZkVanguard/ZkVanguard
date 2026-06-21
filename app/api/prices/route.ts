@@ -50,13 +50,18 @@ export async function GET(request: NextRequest) {
           }
         });
         
+        const priceMap = Object.fromEntries(
+          Object.entries(validatedPrices).map(([sym, price]) => [sym, price])
+        );
+
         return NextResponse.json({
           success: true,
-          data: Object.entries(validatedPrices).map(([sym, price]) => ({
+          data: Object.entries(priceMap).map(([sym, price]) => ({
             symbol: sym,
             price,
             source: 'cryptocom-exchange',
           })),
+          prices: priceMap,
           source: 'cryptocom-exchange',
           timestamp: new Date().toISOString(),
         }, {
@@ -78,6 +83,10 @@ export async function GET(request: NextRequest) {
           return false;
         });
         
+        const priceMap = Object.fromEntries(
+          validatedPrices.map(p => [p.symbol, p.price])
+        );
+
         return NextResponse.json({
           success: true,
           data: validatedPrices.map(p => ({
@@ -87,6 +96,7 @@ export async function GET(request: NextRequest) {
             volume24h: p.volume24h,
             source: p.source,
           })),
+          prices: priceMap,
           source: 'multi-source-fallback',
           timestamp: new Date().toISOString(),
         }, {

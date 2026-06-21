@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
         overallRisk: riskAssessment.overallRisk,
         factors: riskAssessment.factors,
         realAgent: aiService.isAvailable(),
+        aiPowered: aiService.isAvailable(),
         simulationMode: false,
         hackathonAPIs: {
           aiSDK: 'Crypto.com AI Agent SDK (FREE)',
@@ -190,6 +191,7 @@ export async function POST(request: NextRequest) {
         marketData: 'Crypto.com MCP (FREE with historical data)',
       },
       realAgent: aiService.isAvailable(),
+      aiPowered: aiService.isAvailable(),
       realMarketData: true,
       timestamp: new Date().toISOString()
     };
