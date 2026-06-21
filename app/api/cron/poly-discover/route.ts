@@ -32,6 +32,10 @@ import {
   MultiAssetSignalService,
   getTrackedAssetList,
 } from '@/lib/services/market-data/MultiAssetSignalService';
+import {
+  fetchBroadCryptoMarkets,
+  summarize as summarizeBroad,
+} from '@/lib/services/market-data/PolymarketBroadMarketsService';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,6 +56,15 @@ interface CronResult {
   newSinceLastTick?: string[];
   trackedButMissing?: string[];
   trackedList?: string[];
+  broad?: {
+    summary: {
+      total: number;
+      byHorizon: Record<string, number>;
+      byType: Record<string, number>;
+      byAsset: Record<string, number>;
+    };
+    newHighImpactCount: number;
+  };
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<CronResult>> {
@@ -67,9 +80,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
   }
 
   try {
-    const discovery = await MultiAssetSignalService.discoverAvailableAssets();
+    const [discovery, broad] = await Promise.all([
+      MultiAssetSignalService.discoverAvailableAssets(),
+      fetchBroadCryptoMarkets({ bypassCache: true }),
+    ]);
     const tracked = new Set(getTrackedAssetList());
     const seenBefore = new Set(await getCronStateOr<string[]>(CRON_KEY_SEEN, []));
+    const seenBroadSlugs = new Set(await getCronStateOr<string[]>('poly-discover:seenBroadSlugs', []));
 
     const discoveredAssets = discovery.assets;
     const newAssets = discoveredAssets.filter(a => !tracked.has(a));
@@ -102,6 +119,50 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       );
     }
 
+    // ── Broad-market discovery (hourly / daily / weekly / price-target /
+    //    event). The 5-min loop only catches `*-updown-5m-*` slugs; this
+    //    captures everything else and alerts on new HIGH-impact markets.
+    const broadSummary = summarizeBroad(broad);
+    const newBroadHigh = broad
+      .filter(m => m.horizon !== '5min')
+      .filter(m => !seenBroadSlugs.has(m.slug))
+      // HIGH-impact threshold: $50k 24h volume — keeps the Discord channel
+      // signal-rich. Lower-volume markets still feed into AIMarketIntelligence;
+      // they just don't page anyone.
+      .filter(m => m.volume24hr >= 50_000)
+      .sort((a, b) => b.volume24hr - a.volume24hr)
+      .slice(0, 5);
+
+    if (newBroadHigh.length > 0) {
+      const lines = newBroadHigh
+        .map(m =>
+          `${m.assets.join('/')} ${m.horizon} ${m.marketType}: ` +
+          `"${m.question.substring(0, 80)}${m.question.length > 80 ? '…' : ''}" ` +
+          `(p=${m.probability.toFixed(0)}%, vol=$${(m.volume24hr / 1000).toFixed(0)}k)`,
+        )
+        .join('\n');
+      await notifyDiscord(
+        `New HIGH-impact crypto markets on Polymarket:\n${lines}`,
+        'INFO',
+        {
+          markets: newBroadHigh.map(m => ({ slug: m.slug, horizon: m.horizon, type: m.marketType, vol: m.volume24hr })),
+          totals: broadSummary,
+        },
+      );
+    }
+
+    // Persist the union of seen broad slugs so the alert only fires once
+    // per market across its lifetime.
+    const seenBroadAfter = Array.from(new Set([
+      ...seenBroadSlugs,
+      ...broad.filter(m => m.horizon !== '5min').map(m => m.slug),
+    ]));
+    await setCronState('poly-discover:seenBroadSlugs', seenBroadAfter).catch(() => {});
+    await setCronState('poly-discover:lastBroadSummary', {
+      ts: Date.now(),
+      summary: broadSummary,
+    }).catch(() => {});
+
     if (trackedButMissing.length > 0) {
       logger.warn('[PolyDiscover] tracked assets missing from current Polymarket window', {
         trackedButMissing,
@@ -112,6 +173,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       discoveredCount: discoveredAssets.length,
       newSinceLastTickCount: newSinceLastTick.length,
       trackedCount: tracked.size,
+      broadTotal: broadSummary.total,
+      newBroadHigh: newBroadHigh.length,
     });
 
     return NextResponse.json({
@@ -123,6 +186,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       newSinceLastTick,
       trackedButMissing,
       trackedList: Array.from(tracked).sort(),
+      broad: {
+        summary: broadSummary,
+        newHighImpactCount: newBroadHigh.length,
+      },
     });
   } catch (err) {
     const error = errMsg(err);

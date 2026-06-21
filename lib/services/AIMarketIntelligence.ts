@@ -143,6 +143,36 @@ export interface AIMarketContext {
     strongCount: number;
     avgConfidence: number;
   };
+
+  /**
+   * Broad-horizon Polymarket markets BEYOND the 5-min binaries — hourly,
+   * daily, weekly, price-target, range, event. Lets the AI see what
+   * traders think about horizons that match the cron's 30-min rebalance
+   * cadence and the daily-cap reset window. Already classified +
+   * deduped by `PolymarketBroadMarketsService`.
+   */
+  broadMarkets: {
+    total: number;
+    byHorizon: Record<string, number>;
+    byType: Record<string, number>;
+    byAsset: Record<string, number>;
+    /** Top markets sorted by 24h volume — these get folded into `predictions`. */
+    top: Array<{
+      id: string;
+      slug: string;
+      question: string;
+      horizon: string;
+      marketType: string;
+      probability: number;
+      direction: 'UP' | 'DOWN' | 'NEUTRAL';
+      volume24hr: number;
+      liquidity: number;
+      assets: string[];
+      targetPrice: number | null;
+      targetDate: string | null;
+      sourceUrl: string;
+    }>;
+  };
   
   /** Overall market sentiment */
   marketSentiment: {
@@ -232,23 +262,31 @@ export class AIMarketIntelligence {
     // to N, so the AI/cron can spot cross-asset agreement (high conviction)
     // vs divergence (low conviction) instead of being driven by a single
     // market.
+    // Tracked-asset list for 5-min binaries — sourced from
+    // POLYMARKET_TRACKED_ASSETS env (default BTC,ETH,SOL,XRP,DOGE), plus
+    // any pool-tracked asset Polymarket might also list as a binary.
+    const { getTrackedAssetList } = await import('./market-data/MultiAssetSignalService');
     const multiAssetTargets = (() => {
-      const targets = new Set<string>();
-      // Always include the 3 most liquid 5-min binaries
-      for (const a of ['BTC', 'ETH', 'SOL']) targets.add(a);
-      // Plus any pool-tracked asset Polymarket might also list
+      const targets = new Set<string>(getTrackedAssetList());
       for (const a of assets) {
         const up = a.toUpperCase();
-        if (up === 'BTC' || up === 'ETH' || up === 'SOL') targets.add(up);
+        // Add pool-tracked assets only if they could plausibly have a 5-min
+        // binary (otherwise the per-asset fetch wastes a slot).
+        if (['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'AVAX', 'LINK', 'MATIC'].includes(up)) {
+          targets.add(up);
+        }
       }
       return Array.from(targets);
     })();
+
+    const { fetchBroadCryptoMarkets, summarize: summarizeBroad } = await import('./market-data/PolymarketBroadMarketsService');
 
     const [
       fiveMinSignal,
       predictions,
       priceData,
       multiAssetAgg,
+      broadAll,
     ] = await Promise.all([
       Polymarket5MinService.getLatest5MinSignal().catch((err) => { logger.warn('[AIMarketIntelligence] 5min signal fetch failed', { error: err }); return null; }),
       DelphiMarketService.getRelevantMarkets(assets).catch((err) => { logger.warn('[AIMarketIntelligence] Predictions fetch failed', { error: err }); return []; }),
@@ -257,7 +295,38 @@ export class AIMarketIntelligence {
         logger.warn('[AIMarketIntelligence] Multi-asset signal fetch failed', { error: err });
         return { netScore: 0, bullishCount: 0, bearishCount: 0, strongCount: 0, avgConfidence: 0, perAsset: {} as Record<string, MultiAssetSignal | null> };
       }),
+      fetchBroadCryptoMarkets().catch((err) => {
+        logger.warn('[AIMarketIntelligence] Broad markets fetch failed', { error: err });
+        return [] as Awaited<ReturnType<typeof fetchBroadCryptoMarkets>>;
+      }),
     ]);
+
+    // Fold the top broad markets (by 24h volume) into `predictions` so the
+    // existing SuiPoolAgent loop at agents/specialized/SuiPoolAgent.ts:402
+    // (`for (const pred of context.predictions.slice(0, 10))`) gets a
+    // mix of horizons instead of being all 5-min-flavored or all Delphi-
+    // generated. Cap at 15 so the slice still hits meaningful breadth.
+    const broadAsPredictions: PredictionMarket[] = broadAll
+      .filter(b => b.horizon !== '5min') // 5-min already covered by per-asset signals
+      .sort((a, b) => b.volume24hr - a.volume24hr)
+      .slice(0, 15)
+      .map(b => ({
+        id: `broad-${b.id}`,
+        question: b.question,
+        category: (b.marketType === 'event' ? 'event'
+          : b.marketType === 'price-target' || b.marketType === 'price-range' ? 'price'
+          : b.marketType === 'binary-direction' ? 'price'
+          : 'market') as PredictionMarket['category'],
+        probability: b.probability,
+        volume: `$${(b.volume24hr / 1000).toFixed(1)}K 24h`,
+        impact: (b.volume24hr > 100_000 ? 'HIGH' : b.volume24hr > 10_000 ? 'MODERATE' : 'LOW') as PredictionMarket['impact'],
+        relatedAssets: b.assets,
+        lastUpdate: Date.now(),
+        confidence: Math.round(50 + Math.abs(b.probability - 50)),
+        recommendation: 'MONITOR' as const,
+        source: 'polymarket' as const,
+      }));
+    const mergedPredictions = [...predictions, ...broadAsPredictions];
 
     const signalHistory = Polymarket5MinService.getSignalHistory();
 
@@ -268,10 +337,10 @@ export class AIMarketIntelligence {
       signalHistory,
       streaks: this.analyzeStreaks(signalHistory),
       correlation: this.analyzeCorrelation(priceData, fiveMinSignal),
-      riskCascade: this.detectRiskCascade(fiveMinSignal, signalHistory, predictions),
-      liquidity: this.analyzeLiquidity(fiveMinSignal, predictions),
+      riskCascade: this.detectRiskCascade(fiveMinSignal, signalHistory, mergedPredictions),
+      liquidity: this.analyzeLiquidity(fiveMinSignal, mergedPredictions),
       impliedMove: this.calculateImpliedMove(fiveMinSignal, signalHistory, priceData),
-      predictions: this.enhancePredictions(predictions, fiveMinSignal),
+      predictions: this.enhancePredictions(mergedPredictions, fiveMinSignal),
       multiAssetSignals: {
         perAsset: multiAssetAgg.perAsset,
         netScore: multiAssetAgg.netScore,
@@ -280,8 +349,29 @@ export class AIMarketIntelligence {
         strongCount: multiAssetAgg.strongCount,
         avgConfidence: multiAssetAgg.avgConfidence,
       },
-      marketSentiment: this.calculateSentiment(fiveMinSignal, signalHistory, predictions, priceData),
-      summary: this.generateSummary(fiveMinSignal, signalHistory, predictions),
+      broadMarkets: {
+        ...summarizeBroad(broadAll),
+        top: broadAll
+          .sort((a, b) => b.volume24hr - a.volume24hr)
+          .slice(0, 25)
+          .map(b => ({
+            id: b.id,
+            slug: b.slug,
+            question: b.question,
+            horizon: b.horizon,
+            marketType: b.marketType,
+            probability: b.probability,
+            direction: b.direction,
+            volume24hr: b.volume24hr,
+            liquidity: b.liquidity,
+            assets: b.assets,
+            targetPrice: b.targetPrice,
+            targetDate: b.targetDate,
+            sourceUrl: b.sourceUrl,
+          })),
+      },
+      marketSentiment: this.calculateSentiment(fiveMinSignal, signalHistory, mergedPredictions, priceData),
+      summary: this.generateSummary(fiveMinSignal, signalHistory, mergedPredictions),
     };
 
     const duration = Date.now() - startTime;
