@@ -2649,6 +2649,32 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // Update rate limit timestamp on success
     lastSuccessfulRunTimestamp = Date.now();
 
+    // Piggy-back poly-discover at the tail. QStash free-tier is at its
+    // 10-schedule cap so we run discovery + momentum + relevance + theme
+    // analysis here instead of a standalone cron — same 30-min cadence
+    // either way, plus we always run after the AI allocation tick that
+    // would actually use the data. Wrapped in try/catch so a Polymarket
+    // outage can never fail the SUI cron.
+    try {
+      const { runPolyDiscoverTick } = await import('@/lib/services/market-data/poly-discover-tick');
+      const polyResult = await runPolyDiscoverTick();
+      // Heartbeat for /api/health/production cron-freshness check on the
+      // poly-discover key, so ops can still tell discovery is running.
+      const { setCronState } = await import('@/lib/db/cron-state');
+      void setCronState('cron:lastRun:poly-discover', Date.now()).catch(() => {});
+      logger.info('[SUI Cron] poly-discover (inlined) complete', {
+        discovered: polyResult.discoveredCount,
+        newAssets: polyResult.newSinceLastTick.length,
+        newHighImpact: polyResult.broad.newHighImpactCount,
+        hotMovers: polyResult.broad.hotMoversCount,
+        themesAlerted: polyResult.broad.themesAlerted,
+      });
+    } catch (polyErr) {
+      logger.warn('[SUI Cron] inlined poly-discover failed (non-fatal)', {
+        error: polyErr instanceof Error ? polyErr.message : String(polyErr),
+      });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
