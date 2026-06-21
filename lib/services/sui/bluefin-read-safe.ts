@@ -99,8 +99,12 @@ export async function safeBluefinSnapshot(opts: {
   const adminKey = (process.env.BLUEFIN_PRIVATE_KEY || process.env.SUI_POOL_ADMIN_KEY || '').trim();
   if (!adminKey) {
     const { cached, ageMs } = await readCache();
-    if (cached && ageMs < CACHE_TTL_MS) {
-      return snapshotFromCache(cached, ageMs, 'no adminKey configured — using cache');
+    if (cached) {
+      const stale = ageMs >= CACHE_TTL_MS;
+      const warning = stale
+        ? `STALE cache (${Math.round(ageMs / 60_000)}min): no adminKey configured`
+        : 'no adminKey configured — using cache';
+      return snapshotFromCache(cached, ageMs, warning);
     }
     return {
       free: 0, lockedMargin: 0, upnl: 0, totalValue: 0,
@@ -157,10 +161,18 @@ export async function safeBluefinSnapshot(opts: {
     }
 
     // Suspicious read: venue says empty but chain says exposure, OR a sub-
-    // fetch rejected. Prefer the cache.
+    // fetch rejected. Prefer the cache; if cache TTL is expired but a value
+    // exists, STILL use it (marked source: 'cache' with a stale warning)
+    // rather than dropping the BlueFin component from NAV. A stale read
+    // that's hours old is dramatically better than reporting $0 and
+    // tanking the share price for every dashboard viewer.
     const { cached, ageMs } = await readCache();
-    if (cached && ageMs < CACHE_TTL_MS) {
-      logger.warn('[BluefinReadSafe] suspicious live read — using last-good cache', {
+    if (cached) {
+      const stale = ageMs >= CACHE_TTL_MS;
+      const warning = stale
+        ? `STALE cache (${Math.round(ageMs / 60_000)}min old) — live read failed AND TTL expired`
+        : 'live read looked empty while on-chain has exposure';
+      logger[stale ? 'error' : 'warn']('[BluefinReadSafe] suspicious live read — using cache', {
         bothOk,
         freeRead: freeRes.status,
         posRead: posRes.status,
@@ -169,34 +181,39 @@ export async function safeBluefinSnapshot(opts: {
         onChainHasExposure: opts.onChainHasExposure,
         cachedValue: cached.value,
         cacheAgeMs: ageMs,
+        stale,
       });
-      return snapshotFromCache(cached, ageMs, 'live read looked empty while on-chain has exposure');
+      return snapshotFromCache(cached, ageMs, warning);
     }
 
-    logger.error('[BluefinReadSafe] suspicious live read AND no fresh cache — surfacing unknown', {
+    logger.error('[BluefinReadSafe] suspicious live read AND no cache ever — surfacing unknown', {
       bothOk,
       freeRead: freeRes.status,
       posRead: posRes.status,
       onChainHasExposure: opts.onChainHasExposure,
-      cacheAgeMs: cached ? ageMs : null,
     });
     return {
       free, lockedMargin, upnl, totalValue: computed,
       positions, positionsCount: positions.length,
       source: 'unknown',
-      warning: 'venue read suspicious and no fresh cache',
+      warning: 'venue read suspicious and cache never populated',
     };
   } catch (err) {
     const { cached, ageMs } = await readCache();
-    if (cached && ageMs < CACHE_TTL_MS) {
-      logger.warn('[BluefinReadSafe] read threw — using last-good cache', {
+    if (cached) {
+      const stale = ageMs >= CACHE_TTL_MS;
+      const warning = stale
+        ? `STALE cache (${Math.round(ageMs / 60_000)}min old): read threw: ${err instanceof Error ? err.message : String(err)}`
+        : `read threw: ${err instanceof Error ? err.message : String(err)}`;
+      logger[stale ? 'error' : 'warn']('[BluefinReadSafe] read threw — using cache', {
         error: err instanceof Error ? err.message : String(err),
         cachedValue: cached.value,
         cacheAgeMs: ageMs,
+        stale,
       });
-      return snapshotFromCache(cached, ageMs, `read threw: ${err instanceof Error ? err.message : String(err)}`);
+      return snapshotFromCache(cached, ageMs, warning);
     }
-    logger.error('[BluefinReadSafe] read threw and no fresh cache', {
+    logger.error('[BluefinReadSafe] read threw and cache never populated', {
       error: err instanceof Error ? err.message : String(err),
     });
     return {
