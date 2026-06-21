@@ -63,6 +63,29 @@ const EXTENDED_OFFSETS = [900, 1200, 1500, 1800, 2100, 2400, 2700, 3000, 3300, 3
 const POLYMARKET_API = 'https://gamma-api.polymarket.com';
 const TIME_WINDOW_RE = /(\d{1,2}(?::\d{2})?(?:AM|PM)?)\s*[-–]\s*(\d{1,2}:\d{2}(?:AM|PM))\s*(ET|EST|UTC)?/i;
 
+// Discovery: matches Polymarket 5-min binary slugs like `btc-updown-5m-1782057000`.
+// Captures the asset symbol (lowercase) and the window epoch separately so a
+// single broad gamma query can be diff'd against our tracked-asset list.
+const FIVE_MIN_SLUG_RE = /^([a-z0-9]{2,8})-updown-5m-(\d{10})$/;
+
+/**
+ * The default asset list for the SUI pool's prediction-signal aggregator.
+ * Overridable via `POLYMARKET_TRACKED_ASSETS` (comma-separated, e.g.
+ * "BTC,ETH,SOL,XRP,DOGE"). Keep this in sync with the assets the cron
+ * actually cares about — adding too many makes each sentiment aggregation
+ * pay for fetches that won't change any allocation decision.
+ */
+export function getTrackedAssetList(): string[] {
+  const raw = (process.env.POLYMARKET_TRACKED_ASSETS || '').trim();
+  if (raw) {
+    return raw
+      .split(',')
+      .map(s => s.trim().toUpperCase())
+      .filter(Boolean);
+  }
+  return ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
+}
+
 export class MultiAssetSignalService {
   // Per-asset signal cache
   private static signalCache: Map<string, { signal: MultiAssetSignal | null; ts: number }> = new Map();
@@ -75,7 +98,7 @@ export class MultiAssetSignalService {
    * any asset where Polymarket doesn't currently list a 5-min binary.
    */
   static async getLatestSignals(
-    assets: string[] = ['BTC', 'ETH', 'SOL'],
+    assets: string[] = getTrackedAssetList(),
   ): Promise<Record<string, MultiAssetSignal | null>> {
     const results = await Promise.all(
       assets.map(async (asset) => {
@@ -109,7 +132,7 @@ export class MultiAssetSignalService {
    * net BEARISH, magnitude is overall confidence (0-100).
    */
   static async getAggregatedSentiment(
-    assets: string[] = ['BTC', 'ETH', 'SOL'],
+    assets: string[] = getTrackedAssetList(),
   ): Promise<{
     netScore: number;                  // -100 (all bearish) → +100 (all bullish)
     bullishCount: number;
@@ -147,6 +170,84 @@ export class MultiAssetSignalService {
       strongCount,
       avgConfidence: confN > 0 ? confSum / confN : 0,
       perAsset: signals,
+    };
+  }
+
+  // ── Discovery: surface every 5-min binary Polymarket currently lists ─
+
+  /**
+   * Discover every `*-updown-5m-{epoch}` market Polymarket has listed in
+   * (and around) the current 5-min window. Returns the unique uppercase
+   * asset symbols found, the raw slugs they came from, and the highest
+   * 24h volume per asset so callers can prioritize what to add to the
+   * tracked-asset list.
+   *
+   * Single broad gamma query — much cheaper than probing slugs per asset.
+   * The same response covers BTC + ETH + every other binary Polymarket
+   * is running this window, so we discover new listings the moment they
+   * appear without burning a per-asset fetch budget.
+   */
+  static async discoverAvailableAssets(opts: { lookaheadWindows?: number } = {}): Promise<{
+    assets: string[];
+    perAsset: Record<string, { slug: string; volume24hr: number; liquidity: number; endDate?: string }>;
+    fetchedAt: number;
+  }> {
+    const lookaheadWindows = Math.max(1, Math.min(12, opts.lookaheadWindows ?? 6));
+    const nowEpoch = Math.floor(Date.now() / 1000);
+    const windowStart = Math.floor(nowEpoch / WINDOW_SECONDS) * WINDOW_SECONDS;
+    const windowEnd = windowStart + lookaheadWindows * WINDOW_SECONDS;
+
+    // Gamma API supports active+order; we pull a large batch and filter
+    // client-side so new asset symbols can't be missed by a stale allow-list.
+    const url = `${POLYMARKET_API}/markets?active=true&closed=false&limit=500&order=volume24hr&ascending=false`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    let raw: unknown = [];
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error(`gamma ${res.status}`);
+      raw = await res.json();
+    } catch (err) {
+      logger.warn('[MultiAssetSignal] discovery fetch failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { assets: [], perAsset: {}, fetchedAt: Date.now() };
+    } finally {
+      clearTimeout(timeout);
+    }
+    const markets: Array<Record<string, unknown>> = Array.isArray(raw)
+      ? (raw as Array<Record<string, unknown>>)
+      : Array.isArray((raw as { data?: unknown }).data)
+        ? ((raw as { data: Array<Record<string, unknown>> }).data)
+        : [];
+
+    const perAsset: Record<string, { slug: string; volume24hr: number; liquidity: number; endDate?: string }> = {};
+    for (const m of markets) {
+      const slug = String(m.slug || '').toLowerCase();
+      const match = FIVE_MIN_SLUG_RE.exec(slug);
+      if (!match) continue;
+      const asset = match[1].toUpperCase();
+      const epoch = Number(match[2]);
+      // Only count windows in or near the current one — historical resolved
+      // markets are noise.
+      if (epoch < windowStart - WINDOW_SECONDS || epoch > windowEnd) continue;
+      if (m.closed || m.archived || m.resolved) continue;
+      const vol = Number(m.volume24hr ?? m.volumeNum ?? m.volume ?? 0) || 0;
+      const liq = Number(m.liquidityNum ?? m.liquidity ?? 0) || 0;
+      const prev = perAsset[asset];
+      if (!prev || vol > prev.volume24hr) {
+        perAsset[asset] = {
+          slug,
+          volume24hr: vol,
+          liquidity: liq,
+          endDate: (m.endDate as string) || (m.endDateIso as string) || undefined,
+        };
+      }
+    }
+    return {
+      assets: Object.keys(perAsset).sort(),
+      perAsset,
+      fetchedAt: Date.now(),
     };
   }
 
