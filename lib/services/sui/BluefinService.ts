@@ -253,9 +253,16 @@ export class BluefinService {
       
       // Try to authenticate with BlueFin API
       const authSuccess = await this.authenticate();
-      
+
       if (!authSuccess) {
-        logger.warn('⚠️ BlueFin auth failed — service will retry auth on next API call');
+        // Do NOT mark this client as initialized when auth failed — otherwise
+        // the singleton looks ready and subsequent getBalance/getPositions
+        // calls hit an unauthenticated client, where apiRequest silently
+        // surfaces 401s as `null` and getBalance returns 0. That's the cold-
+        // lambda "fake zero NAV" failure mode. Throw so ensureInitializedAsync
+        // retries auth on the next call, and so explicit init() paths surface
+        // the failure to their fallback logic.
+        throw new Error('BlueFin auth failed during initialize — refusing to mark initialized');
       }
 
       // C4: Verify account is onboarded (fail-fast at init, not at first trade)

@@ -1083,148 +1083,39 @@ export class SuiUsdcPoolService {
         // exchange margin bank instead. Without this read, NAV under-counts
         // by the entire deployed-to-BlueFin amount.
         //
-        // Failure mode being defended against (2026-06-16 incident): the
-        // BlueFin SDK init / getBalance / getPositions occasionally fails
-        // transiently on Vercel lambdas (cold start, auth handshake race,
-        // venue API blip). The prior code silently caught the error and
-        // shipped NAV with a $0 BlueFin component, which dropped the live
-        // NAV from ~$54 to ~$25 across consecutive ticks — causing share
-        // price, drift-rebalance budget, and external_nav oracle attestation
-        // to all underflow until the next successful read.
-        //
-        // Fix: a 5-minute last-good cache in `cron_state` lets the next
-        // tick fall back to the previous successful read instead of
-        // shipping $0. Sentinel for "we read but BlueFin is genuinely
-        // empty": free=0 AND no positions AND on-chain hedge_state shows
-        // no active hedges. That's the only state where we trust $0.
-        let bluefinValueUsdc = 0;
-        let bluefinIncluded = false;
-        let bluefinFellBack = false;
-        const BLUEFIN_NAV_CACHE_KEY = 'bluefin:nav-last-good';
-        const BLUEFIN_NAV_CACHE_TTL_MS = 5 * 60 * 1000;
-        let bluefinReadOk = false;
-        try {
-          const bfKey = (process.env.BLUEFIN_PRIVATE_KEY || process.env.SUI_POOL_ADMIN_KEY || '').trim();
-          if (bfKey) {
-            const { BluefinService } = await import('@/lib/services/sui/BluefinService');
-            const bf = BluefinService.getInstance();
-            await bf.initialize(bfKey, this.network === 'mainnet' ? 'mainnet' : 'testnet');
-            const [freeRes, posRes] = await Promise.allSettled([
-              bf.getBalance(),
-              bf.getPositions(),
-            ]);
-            const free = freeRes.status === 'fulfilled' ? Number(freeRes.value) || 0 : 0;
-            const positions: Array<Record<string, unknown>> = posRes.status === 'fulfilled'
-              ? (posRes.value as unknown as Array<Record<string, unknown>>)
-              : [];
-            // Both calls must have succeeded for a confident read. If either
-            // rejected, we'll consider the read failed and fall back.
-            const bothOk = freeRes.status === 'fulfilled' && posRes.status === 'fulfilled';
+        // All the "live read failed / venue looks empty / cache fallback"
+        // logic now lives in `safeBluefinSnapshot`. See bluefin-read-safe.ts
+        // for the full failure-mode table.
+        const onChainHedgedRaw = Number(fields.hedge_state?.fields?.total_hedged_value || 0);
+        const onChainActiveCount =
+          (fields.hedge_state?.fields?.active_hedges as unknown[] | undefined)?.length ?? 0;
+        const onChainHasExposure = onChainHedgedRaw > 0 || onChainActiveCount > 0;
 
-            let lockedMargin = 0;
-            let upnl = 0;
-            for (const p of positions) {
-              lockedMargin += Number((p as Record<string, unknown>).margin || 0) || 0;
-              upnl +=
-                Number(
-                  (p as Record<string, unknown>).unrealizedProfit ||
-                    (p as Record<string, unknown>).uPnL ||
-                    0,
-                ) || 0;
-            }
-            const computed = free + lockedMargin + upnl;
-
-            // Check if on-chain hedge state says there SHOULD be exposure.
-            // If yes but BlueFin returned $0/[], treat as a venue-side blip
-            // and fall back to the last-good cache.
-            const onChainHedgedRaw = Number(fields.hedge_state?.fields?.total_hedged_value || 0);
-            const onChainActiveCount =
-              (fields.hedge_state?.fields?.active_hedges as unknown[] | undefined)?.length ?? 0;
-            const onChainHasExposure = onChainHedgedRaw > 0 || onChainActiveCount > 0;
-            const venueLooksEmpty = free === 0 && positions.length === 0;
-
-            if (bothOk && !venueLooksEmpty) {
-              bluefinValueUsdc = computed;
-              bluefinIncluded = true;
-              bluefinReadOk = true;
-              logger.info('[SuiUsdcPool] BlueFin component included in NAV', {
-                freeCollateral: free.toFixed(4),
-                lockedMargin: lockedMargin.toFixed(4),
-                uPnL: upnl.toFixed(4),
-                total: bluefinValueUsdc.toFixed(4),
-                positions: positions.length,
-              });
-              // Persist last-good for the next tick to fall back to if needed.
-              const { setCronState } = await import('@/lib/db/cron-state');
-              await setCronState(BLUEFIN_NAV_CACHE_KEY, {
-                value: bluefinValueUsdc,
-                free, lockedMargin, upnl,
-                positions: positions.length,
-                ts: Date.now(),
-              }).catch(() => { /* best-effort */ });
-            } else if (bothOk && venueLooksEmpty && !onChainHasExposure) {
-              // Trust the $0 — wallet really has nothing and chain agrees.
-              bluefinValueUsdc = 0;
-              bluefinIncluded = true;
-              bluefinReadOk = true;
-            } else {
-              // Suspicious empty read OR a sub-fetch rejected → consult cache.
-              const { getCronStateOr } = await import('@/lib/db/cron-state');
-              const cached = await getCronStateOr<{
-                value: number; ts: number; positions?: number;
-              } | null>(BLUEFIN_NAV_CACHE_KEY, null);
-              const age = cached ? Date.now() - cached.ts : Infinity;
-              if (cached && age < BLUEFIN_NAV_CACHE_TTL_MS) {
-                bluefinValueUsdc = cached.value;
-                bluefinIncluded = true;
-                bluefinFellBack = true;
-                logger.warn('[SuiUsdcPool] BlueFin read suspicious — falling back to last-good cache', {
-                  bothOk,
-                  freeRead: freeRes.status,
-                  posRead: posRes.status,
-                  rawFree: free, rawPositions: positions.length,
-                  onChainHedged: onChainHedgedRaw,
-                  onChainActiveCount,
-                  cachedValue: cached.value,
-                  cacheAgeMs: age,
-                });
-              } else {
-                logger.error('[SuiUsdcPool] BlueFin read failed AND no fresh cache — NAV will under-count', {
-                  bothOk, freeRead: freeRes.status, posRead: posRes.status,
-                  onChainHedged: onChainHedgedRaw, onChainActiveCount,
-                  cacheAge: cached ? age : null,
-                });
-              }
-            }
-          }
-        } catch (bfErr) {
-          // Cache lookup as last resort on any unexpected throw
-          try {
-            const { getCronStateOr } = await import('@/lib/db/cron-state');
-            const cached = await getCronStateOr<{ value: number; ts: number } | null>(
-              BLUEFIN_NAV_CACHE_KEY, null,
-            );
-            if (cached && Date.now() - cached.ts < BLUEFIN_NAV_CACHE_TTL_MS) {
-              bluefinValueUsdc = cached.value;
-              bluefinIncluded = true;
-              bluefinFellBack = true;
-              logger.warn('[SuiUsdcPool] BlueFin read threw — using last-good cache', {
-                error: bfErr instanceof Error ? bfErr.message : String(bfErr),
-                cachedValue: cached.value,
-                ageMs: Date.now() - cached.ts,
-              });
-            } else {
-              logger.error('[SuiUsdcPool] BlueFin read threw, no fresh cache', {
-                error: bfErr instanceof Error ? bfErr.message : String(bfErr),
-              });
-            }
-          } catch {
-            logger.error('[SuiUsdcPool] BlueFin read threw, cache lookup also failed', {
-              error: bfErr instanceof Error ? bfErr.message : String(bfErr),
-            });
-          }
+        const { safeBluefinSnapshot } = await import('@/lib/services/sui/bluefin-read-safe');
+        const bfSnap = await safeBluefinSnapshot({
+          network: this.network === 'mainnet' ? 'mainnet' : 'testnet',
+          onChainHasExposure,
+        });
+        const bluefinValueUsdc = bfSnap.totalValue;
+        if (bfSnap.source === 'live') {
+          logger.info('[SuiUsdcPool] BlueFin component included in NAV', {
+            freeCollateral: bfSnap.free.toFixed(4),
+            lockedMargin: bfSnap.lockedMargin.toFixed(4),
+            uPnL: bfSnap.upnl.toFixed(4),
+            total: bluefinValueUsdc.toFixed(4),
+            positions: bfSnap.positionsCount,
+          });
+        } else if (bfSnap.source === 'cache') {
+          logger.warn('[SuiUsdcPool] BlueFin component sourced from cache', {
+            total: bluefinValueUsdc.toFixed(4),
+            ageMs: bfSnap.ageMs,
+            warning: bfSnap.warning,
+          });
+        } else {
+          logger.error('[SuiUsdcPool] BlueFin component unknown — NAV will under-count', {
+            warning: bfSnap.warning,
+          });
         }
-        void bluefinReadOk;
 
         // If we successfully read admin wallet, use real market value (admin USDC + admin assets).
         // Otherwise fall back to recorded `hedged_value` (cost basis only).

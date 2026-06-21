@@ -130,43 +130,78 @@ async function checkBluefin(): Promise<Component & {
   positionsCount?: number;
   totalMarginUsd?: number;
   positionsSummary?: string;
+  source?: 'live' | 'cache' | 'unknown';
+  cacheAgeMs?: number;
 }> {
   const start = Date.now();
   try {
-    const { BluefinService } = await import('@/lib/services/sui/BluefinService');
-    const bf = BluefinService.getInstance();
-    const [balance, positions] = await Promise.all([
-      bf.getBalance(),
-      bf.getPositions(),
-    ]);
-    if (!Number.isFinite(balance)) return { status: 'warn', detail: 'getBalance returned non-finite' };
+    const network: 'mainnet' | 'testnet' =
+      (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
+    // Read the canonical on-chain hedge state so the safe-snapshot helper can
+    // distinguish "venue truly empty" from "venue read suspicious." Best-effort;
+    // health endpoint shouldn't fail just because RPC is slow.
+    let onChainHasExposure = false;
+    try {
+      const poolStateId = (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE
+        || process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE
+        || '').trim();
+      if (poolStateId) {
+        const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+        const rpcUrl = (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim();
+        const client = new SuiClient({ url: rpcUrl });
+        const obj = await client.getObject({ id: poolStateId, options: { showContent: true } });
+        type SuiContentFields = { hedge_state?: { fields?: { total_hedged_value?: string; active_hedges?: unknown[] } } };
+        const fields = (obj.data?.content as { fields?: SuiContentFields } | null)?.fields;
+        const hedgedRaw = Number(fields?.hedge_state?.fields?.total_hedged_value || 0);
+        const activeCount = fields?.hedge_state?.fields?.active_hedges?.length ?? 0;
+        onChainHasExposure = hedgedRaw > 0 || activeCount > 0;
+      }
+    } catch { /* best-effort */ }
 
-    const totalMargin = positions.reduce((sum, p) => {
-      const pp = p as unknown as Record<string, unknown>;
-      const m = Number(pp.margin ?? pp.marginUsed ?? 0);
-      return sum + (Number.isFinite(m) ? m : 0);
-    }, 0);
-    const summary = positions
+    const { safeBluefinSnapshot } = await import('@/lib/services/sui/bluefin-read-safe');
+    const snap = await safeBluefinSnapshot({ network, onChainHasExposure });
+
+    if (snap.source === 'unknown') {
+      return {
+        status: 'down',
+        latencyMs: Date.now() - start,
+        detail: snap.warning || 'BlueFin snapshot unavailable',
+        freeCollateral: 0,
+        positionsCount: 0,
+        totalMarginUsd: 0,
+        positionsSummary: 'unavailable',
+        source: snap.source,
+      };
+    }
+
+    const balance = snap.free;
+    const positionsCount = snap.positionsCount;
+    const totalMargin = snap.lockedMargin;
+    const summary = snap.positions
       .map(p => {
         const pp = p as unknown as Record<string, unknown>;
         return `${pp.symbol || '?'} ${pp.side || '?'} ${Number(pp.size ?? 0).toFixed(4)}`;
       })
-      .join(', ') || 'none';
+      .join(', ') || (snap.source === 'cache' ? `${positionsCount} cached` : 'none');
 
-    // Floor check — warn when free collateral drops below configured floor
-    // AND positions are open (open positions + tiny free = liquidation risk).
-    const tooLow = balance < COLLATERAL_FLOOR_USD && positions.length > 0;
-    const status: CompStatus = tooLow ? 'warn' : 'ok';
-    const detail = `freeCollateral=$${balance.toFixed(2)}, positions=${positions.length}, margin=$${totalMargin.toFixed(2)}${tooLow ? ` (BELOW FLOOR $${COLLATERAL_FLOOR_USD} with positions open)` : ''}`;
+    const tooLow = balance < COLLATERAL_FLOOR_USD && positionsCount > 0;
+    const cacheWarn = snap.source === 'cache';
+    const status: CompStatus = tooLow || cacheWarn ? 'warn' : 'ok';
+    const detail =
+      `freeCollateral=$${balance.toFixed(2)}, positions=${positionsCount}, margin=$${totalMargin.toFixed(2)}` +
+      (tooLow ? ` (BELOW FLOOR $${COLLATERAL_FLOOR_USD} with positions open)` : '') +
+      (cacheWarn ? ` (source=cache, age=${Math.round((snap.ageMs ?? 0) / 1000)}s)` : '');
 
     return {
       status,
       latencyMs: Date.now() - start,
       detail,
       freeCollateral: balance,
-      positionsCount: positions.length,
+      positionsCount,
       totalMarginUsd: Number(totalMargin.toFixed(4)),
       positionsSummary: summary,
+      source: snap.source,
+      ...(snap.ageMs !== undefined ? { cacheAgeMs: snap.ageMs } : {}),
     };
   } catch (e: any) {
     return { status: 'down', error: e?.message?.slice(0, 100) };
