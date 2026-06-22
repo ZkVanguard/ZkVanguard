@@ -36,24 +36,53 @@ export async function GET(): Promise<NextResponse> {
   const network: 'mainnet' | 'testnet' =
     (process.env.SUI_NETWORK as 'mainnet' | 'testnet') === 'testnet' ? 'testnet' : 'mainnet';
 
-  try {
-    const [dbRows, snap, cached, consecutiveEmpty] = await Promise.all([
-      query<{
-        id: number; market: string; side: string;
-        size: string | number; notional_value: string | number;
-        entry_price: string | number | null; current_pnl: string | number;
-      }>(
-        `SELECT id, market, side, size, notional_value, entry_price, current_pnl
-           FROM hedges
-          WHERE chain = 'sui' AND status = 'active' AND market LIKE '%-PERP'
-          ORDER BY notional_value DESC`,
-      ),
-      // Live snapshot — fresh attempt, may use cache fallback internally
-      safeBluefinSnapshot({ network, onChainHasExposure: true }),
-      getCronStateOr<CachedSnapshot | null>('bluefin:nav-last-good', null),
-      getCronStateOr<number>('bluefin:consecutiveEmptyReads', 0),
-    ]);
+  // SERIALIZED queries — Aiven's plan-wide connection_limit (20) is
+  // shared across every Vercel lambda, so a Promise.all of 4 DB-touching
+  // operations from a single request can tip the pool into "remaining
+  // connection slots reserved for SUPERUSER" while other lambdas are
+  // mid-query. Sequential adds ~600ms total but never causes the 500
+  // we hit on first deploy. See CLAUDE.md "Aiven plan-wide pool".
+  let dbRows: Array<{
+    id: number; market: string; side: string;
+    size: string | number; notional_value: string | number;
+    entry_price: string | number | null; current_pnl: string | number;
+  }> = [];
+  let snap: Awaited<ReturnType<typeof safeBluefinSnapshot>> | null = null;
+  let cached: CachedSnapshot | null = null;
+  let consecutiveEmpty = 0;
 
+  try {
+    dbRows = await query(
+      `SELECT id, market, side, size, notional_value, entry_price, current_pnl
+         FROM hedges
+        WHERE chain = 'sui' AND status = 'active' AND market LIKE '%-PERP'
+        ORDER BY notional_value DESC`,
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { success: false, error: `db unavailable: ${errMsg(e)}`, hint: 'Aiven pool likely saturated; retry in 5s' },
+      { status: 503 },
+    );
+  }
+
+  try {
+    cached = await getCronStateOr<CachedSnapshot | null>('bluefin:nav-last-good', null);
+  } catch { /* fall back to null */ }
+  try {
+    consecutiveEmpty = await getCronStateOr<number>('bluefin:consecutiveEmptyReads', 0);
+  } catch { /* fall back to 0 */ }
+  try {
+    snap = await safeBluefinSnapshot({ network, onChainHasExposure: dbRows.length > 0 });
+  } catch (e) {
+    snap = {
+      free: 0, lockedMargin: 0, upnl: 0, totalValue: 0,
+      positions: [], positionsCount: 0,
+      source: 'unknown', warning: `snapshot threw: ${errMsg(e)}`,
+    };
+  }
+
+  // Pure-compute section below — no I/O — so no try/catch needed.
+  {
     const dbHedges = dbRows.map(r => ({
       id: r.id,
       market: String(r.market).toUpperCase(),
@@ -137,10 +166,5 @@ export async function GET(): Promise<NextResponse> {
         warning: snap.warning,
       },
     });
-  } catch (err) {
-    return NextResponse.json(
-      { success: false, error: errMsg(err) },
-      { status: 500 },
-    );
   }
 }
