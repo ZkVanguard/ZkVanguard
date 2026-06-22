@@ -179,41 +179,46 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
       let currentPnl: number;
       let pnlSource: 'venue' | 'spot' | 'db' = 'db';
       // Overlay defaults: start from DB row, replace with venue truth
-      // where available. Keeps every consumer reading honest values.
+      // where available. Spot price ALWAYS computed in parallel so the
+      // displayed mark is never older than the venue's last update —
+      // even when venue read succeeded, spot is usually fresher (sub-
+      // second tickers vs venue's ~30s mark price refresh).
       let effectiveEntry = r.entryPrice;
       let effectiveSize = r.size;
       let effectiveLeverage = r.leverage;
       let effectiveNotional = r.notionalValue;
+      const spot = (r.entryPrice > 0 && r.size > 0) ? await getSpotPrice(baseSymbol) : 0;
 
       if (venue && venue.markPrice > 0) {
-        // Source 1: venue truth — mark, uPnL, entry, size, leverage all
-        // come from the matching engine.
-        currentPrice = venue.markPrice;
-        currentPnl = venue.uPnL;
-        pnlSource = 'venue';
+        // Source 1: venue truth — preferred for uPnL (includes funding,
+        // matches matching-engine settlement). Mark price comes from
+        // whichever source is fresher: spot vs venue mark.
+        currentPrice = spot > 0 ? spot : venue.markPrice;
+        // venue uPnL includes funding settlement; if spot price has
+        // moved since venue computed uPnL, fold the delta in so the
+        // displayed PnL matches the displayed mark.
+        if (spot > 0 && spot !== venue.markPrice) {
+          const sign = r.side === 'SHORT' ? 1 : -1;
+          const spotDelta = (venue.markPrice - spot) * (venue.size > 0 ? venue.size : r.size) * sign;
+          currentPnl = venue.uPnL + spotDelta;
+          pnlSource = 'venue';
+        } else {
+          currentPnl = venue.uPnL;
+          pnlSource = 'venue';
+        }
         if (venue.entryPrice > 0) effectiveEntry = venue.entryPrice;
         if (venue.size > 0) effectiveSize = venue.size;
         if (venue.leverage > 0) effectiveLeverage = venue.leverage;
-        // Recompute notional from venue values so the displayed
-        // size × mark math always reconciles.
-        if (effectiveSize > 0 && venue.markPrice > 0) {
-          effectiveNotional = effectiveSize * venue.markPrice;
+        if (effectiveSize > 0 && currentPrice > 0) {
+          effectiveNotional = effectiveSize * currentPrice;
         }
-      } else if (r.entryPrice > 0 && r.size > 0) {
-        // Source 2: recompute from spot
-        const spot = await getSpotPrice(baseSymbol);
-        if (spot > 0) {
-          currentPrice = spot;
-          const sign = r.side === 'SHORT' ? 1 : -1;
-          // Notional PnL = size × (entry − mark) × sign
-          // Leverage scales margin requirement, not PnL — the asset
-          // quantity already encodes the directional exposure.
-          currentPnl = r.size * (r.entryPrice - spot) * sign;
-          pnlSource = 'spot';
-        } else {
-          currentPrice = r.dbCurrentPrice;
-          currentPnl = r.dbCurrentPnl;
-        }
+      } else if (r.entryPrice > 0 && r.size > 0 && spot > 0) {
+        // Source 2: pure spot recompute (no venue data)
+        currentPrice = spot;
+        const sign = r.side === 'SHORT' ? 1 : -1;
+        currentPnl = r.size * (r.entryPrice - spot) * sign;
+        effectiveNotional = r.size * spot;
+        pnlSource = 'spot';
       } else {
         currentPrice = r.dbCurrentPrice;
         currentPnl = r.dbCurrentPnl;

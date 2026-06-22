@@ -132,6 +132,33 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
     if (freeCollateralUsdc !== null) {
       canTrade = true;
     }
+
+    // Refresh the shared `bluefin:nav-last-good` cache so the NAV path,
+    // pool API, dashboard, and every other safeBluefinSnapshot consumer
+    // gets a max-5-min staleness instead of waiting for the 30-min
+    // sui-community-pool cron. Only write when we got a CLEAN read —
+    // both probes succeeded AND at least one is non-empty (or both
+    // empty in agreement with no on-chain exposure expected).
+    if (freeCollateralUsdc !== null && positionsCount !== null) {
+      const venueLooksEmpty = freeCollateralUsdc === 0 && positionsCount === 0;
+      if (!venueLooksEmpty) {
+        let lockedMargin = 0;
+        let upnl = 0;
+        for (const p of positions) {
+          const pp = p as unknown as Record<string, unknown>;
+          lockedMargin += Number(pp.margin ?? 0) || 0;
+          upnl += Number(pp.unrealizedPnl ?? 0) || 0;
+        }
+        await setCronState('bluefin:nav-last-good', {
+          value: freeCollateralUsdc + lockedMargin + upnl,
+          free: freeCollateralUsdc,
+          lockedMargin,
+          upnl,
+          positions: positionsCount,
+          ts: Date.now(),
+        }).catch(() => { /* best-effort */ });
+      }
+    }
   } catch (probeErr) {
     apiError = errMsg(probeErr);
   }
