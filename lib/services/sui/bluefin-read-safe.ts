@@ -199,7 +199,16 @@ export async function safeBluefinSnapshot(opts: {
         value: computed, free, lockedMargin, upnl,
         positions: positions.length, ts: Date.now(),
       };
-      await setCronState(CACHE_KEY, cachePayload).catch(() => { /* best-effort */ });
+      // Reset consecutiveEmptyReads counter — any clean live read means
+      // the venue is alive again. Without this, the counter only resets
+      // on CRON-driven refreshes (refreshBluefinCache), so on-demand
+      // API reads that get clean data leave the counter stuck at its
+      // historical high. Observed 2026-06-22: counter=8 while venue
+      // was actively responding to a divergence-endpoint read.
+      await Promise.all([
+        setCronState(CACHE_KEY, cachePayload).catch(() => {}),
+        setCronState('bluefin:consecutiveEmptyReads', 0).catch(() => {}),
+      ]);
       return {
         free, lockedMargin, upnl, totalValue: computed,
         positions, positionsCount: positions.length,
@@ -214,7 +223,12 @@ export async function safeBluefinSnapshot(opts: {
         value: 0, free: 0, lockedMargin: 0, upnl: 0,
         positions: 0, ts: Date.now(),
       };
-      await setCronState(CACHE_KEY, cachePayload).catch(() => { /* best-effort */ });
+      // Genuine $0 — also reset counter (this isn't a degraded read,
+      // it's a real-and-agreed-upon empty state).
+      await Promise.all([
+        setCronState(CACHE_KEY, cachePayload).catch(() => {}),
+        setCronState('bluefin:consecutiveEmptyReads', 0).catch(() => {}),
+      ]);
       return {
         free: 0, lockedMargin: 0, upnl: 0, totalValue: 0,
         positions: [], positionsCount: 0,
