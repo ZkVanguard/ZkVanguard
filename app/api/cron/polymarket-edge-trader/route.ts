@@ -68,8 +68,15 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 // ── Tunables (env-overridable) ─────────────────────────────────────────────
-const MIN_CONFIDENCE = Number(process.env.POLYMARKET_EDGE_MIN_CONFIDENCE || 60);
-const MIN_CONSENSUS = Number(process.env.POLYMARKET_EDGE_MIN_CONSENSUS || 60);
+// Defaults lowered 2026-06-22 from 60/60 → 55/50. Trader had been
+// returning action='no-edge' every 5-min tick because BTC/ETH 5-min
+// binaries rarely hit BOTH thresholds at 60 simultaneously in normal
+// market regimes. Loosening lets the cron act on moderate-conviction
+// signals (still rejects WEAK), and the per-trade size + daily-loss-
+// cap + 24h kill switch still cap downside. Env override remains for
+// emergency tightening without a deploy.
+const MIN_CONFIDENCE = Number(process.env.POLYMARKET_EDGE_MIN_CONFIDENCE || 55);
+const MIN_CONSENSUS = Number(process.env.POLYMARKET_EDGE_MIN_CONSENSUS || 50);
 const MIN_FREE_COLLATERAL_USD = Number(process.env.POLYMARKET_EDGE_MIN_COLLATERAL || 15);
 const BASE_STAKE_USD = Number(process.env.POLYMARKET_EDGE_BASE_STAKE_USD || 5);
 const MAX_STAKE_USD = Number(process.env.POLYMARKET_EDGE_MAX_STAKE_USD || 500);

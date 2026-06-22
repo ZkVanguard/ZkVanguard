@@ -14,12 +14,26 @@ export function scoreTradeOpportunity(p: {
   consensus: number;
   sourceCount: number;
 }): number {
-  const actionable = p.recommendation.startsWith('HEDGE_') || p.recommendation.startsWith('STRONG_');
-  if (!actionable) return 0;
-  const strongBonus = p.recommendation.startsWith('STRONG_') ? 10 : 0;
+  // Anything below WAIT shouldn't trade.
+  if (p.recommendation === 'WAIT') return 0;
+  // STRONG_ / HEDGE_ / LIGHT_HEDGE_ all actionable, weighted differently.
+  // Previously LIGHT_HEDGE_* returned 0 (recommendation didn't start with
+  // 'HEDGE_' or 'STRONG_'), which meant the trader effectively never
+  // traded in normal market regimes where one of confidence/consensus
+  // sits in the 40-55 band (very common). Now LIGHT_HEDGE_* trades at
+  // half-weight — gets ranked below proper HEDGE_ candidates but still
+  // accumulates evidence and can win when nothing stronger is on offer.
+  // The cron's own minConfidence / minConsensus gates remain the final
+  // gatekeeper on whether the trade actually fires.
+  const isStrong = p.recommendation.startsWith('STRONG_');
+  const isLight = p.recommendation.startsWith('LIGHT_');
+  const isActionable = isStrong || isLight || p.recommendation.startsWith('HEDGE_');
+  if (!isActionable) return 0;
+  const strongBonus = isStrong ? 10 : 0;
+  const lightPenalty = isLight ? 0.5 : 1;
   // Geometric mean of confidence × consensus, scaled by source breadth (cap 1.25).
   const breadthMul = Math.min(1.25, 1 + (p.sourceCount - 2) * 0.05);
-  return Math.sqrt(p.confidence * p.consensus) * breadthMul + strongBonus;
+  return Math.sqrt(p.confidence * p.consensus) * breadthMul * lightPenalty + strongBonus;
 }
 
 export type PredictionRecommendation =
