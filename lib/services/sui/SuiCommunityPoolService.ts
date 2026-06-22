@@ -1086,15 +1086,40 @@ export class SuiUsdcPoolService {
         // All the "live read failed / venue looks empty / cache fallback"
         // logic now lives in `safeBluefinSnapshot`. See bluefin-read-safe.ts
         // for the full failure-mode table.
+        // "Expected exposure" check — should the venue have positions?
+        // OR together every source we know about:
+        //   1. On-chain Move state's hedge_state.active_hedges (catches
+        //      operational micro-hedges + future on-chain-only flows).
+        //   2. DB hedges table where chain='sui' AND status='active'
+        //      (catches venue-only perp hedges like our ETH SHORT,
+        //      SUI LONG, BTC SHORT — these don't touch on-chain Move
+        //      state but we definitely expect them at the venue).
+        // Without the DB check, safeBluefinSnapshot's trust-path-2
+        // ("venue empty + on-chain empty = real zero") fires on cold-
+        // lambda+empty-venue reads, CACHES 0 as legitimate state,
+        // and NAV craters by the BlueFin component until the next
+        // good cron tick (~5min, but cache holds 0 for 30min). Caused
+        // the 2026-06-22 05:03 NAV-$23.63 incident even after batch 13.
         const onChainHedgedRaw = Number(fields.hedge_state?.fields?.total_hedged_value || 0);
         const onChainActiveCount =
           (fields.hedge_state?.fields?.active_hedges as unknown[] | undefined)?.length ?? 0;
         const onChainHasExposure = onChainHedgedRaw > 0 || onChainActiveCount > 0;
 
+        let dbHasActiveHedges = false;
+        try {
+          const { query } = await import('@/lib/db/postgres');
+          const rows = await query<{ n: string | number }>(
+            `SELECT COUNT(*)::text AS n FROM hedges WHERE chain = 'sui' AND status = 'active' AND market LIKE '%-PERP'`,
+          );
+          dbHasActiveHedges = Number(rows[0]?.n ?? 0) > 0;
+        } catch { /* defensive — if DB read fails, fall back to on-chain only */ }
+
+        const hasExpectedExposure = onChainHasExposure || dbHasActiveHedges;
+
         const { safeBluefinSnapshot } = await import('@/lib/services/sui/bluefin-read-safe');
         const bfSnap = await safeBluefinSnapshot({
           network: this.network === 'mainnet' ? 'mainnet' : 'testnet',
-          onChainHasExposure,
+          onChainHasExposure: hasExpectedExposure,
         });
         const bluefinValueUsdc = bfSnap.totalValue;
         if (bfSnap.source === 'live') {

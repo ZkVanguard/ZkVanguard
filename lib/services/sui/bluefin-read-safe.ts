@@ -216,19 +216,13 @@ export async function safeBluefinSnapshot(opts: {
       };
     }
 
-    // Trust path 2: both fetches succeeded, venue truly empty, AND on-chain
-    // agrees. Real zero — also cache it so consecutive cold reads don't churn.
+    // Trust path 2: both fetches succeeded, venue truly empty, AND no
+    // exposure expected. Return live $0 but DO NOT cache the zero —
+    // cache is reserved for positive snapshots so consecutive cold-
+    // lambda + empty-venue glitches can't poison it. Reset counter
+    // because this IS a clean read (not degraded).
     if (bothOk && venueLooksEmpty && !opts.onChainHasExposure) {
-      const cachePayload: CachedSnapshot = {
-        value: 0, free: 0, lockedMargin: 0, upnl: 0,
-        positions: 0, ts: Date.now(),
-      };
-      // Genuine $0 — also reset counter (this isn't a degraded read,
-      // it's a real-and-agreed-upon empty state).
-      await Promise.all([
-        setCronState(CACHE_KEY, cachePayload).catch(() => {}),
-        setCronState('bluefin:consecutiveEmptyReads', 0).catch(() => {}),
-      ]);
+      await setCronState('bluefin:consecutiveEmptyReads', 0).catch(() => {});
       return {
         free: 0, lockedMargin: 0, upnl: 0, totalValue: 0,
         positions: [], positionsCount: 0,
