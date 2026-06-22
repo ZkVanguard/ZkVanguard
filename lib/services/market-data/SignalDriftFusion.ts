@@ -58,8 +58,9 @@ export interface AlignmentSnapshot {
   downCount: number;
   neutralCount: number;
   totalAssets: number;
+  directionalVoters: number;              // upCount + downCount
   dominantDirection: 'UP' | 'DOWN' | 'NEUTRAL';
-  dominancePct: number;                   // 0-100
+  dominancePct: number;                   // 0-100 — over directional voters
   meanConfidence: number;
 }
 
@@ -280,7 +281,14 @@ export class SignalDriftFusion {
     }
     const totalAssets = upCount + downCount + neutralCount;
     const dominantCount = Math.max(upCount, downCount);
-    const dominancePct = totalAssets > 0 ? (dominantCount / totalAssets) * 100 : 0;
+    // Dominance over DIRECTIONAL voters only (not total). Neutrals
+    // represent "no opinion," not "opinion against" — including them in
+    // the divisor would let 2 neutrals + 0 opposition kill a 3-UP signal
+    // (e.g. 3UP/0DOWN/2NEUTRAL = 60% dilute → below 67% threshold even
+    // though 100% of directional voters agree). Counting only directional
+    // voters reads "3 of 3 say UP" as 100% consensus.
+    const directionalVoters = upCount + downCount;
+    const dominancePct = directionalVoters > 0 ? (dominantCount / directionalVoters) * 100 : 0;
     const dominantDirection: 'UP' | 'DOWN' | 'NEUTRAL' =
       upCount === downCount ? 'NEUTRAL'
       : upCount > downCount ? 'UP' : 'DOWN';
@@ -290,6 +298,7 @@ export class SignalDriftFusion {
       downCount,
       neutralCount,
       totalAssets,
+      directionalVoters,
       dominantDirection,
       dominancePct,
       meanConfidence: confN > 0 ? confSum / confN : 0,

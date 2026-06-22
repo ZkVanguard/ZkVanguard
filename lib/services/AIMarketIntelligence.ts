@@ -354,6 +354,7 @@ export class AIMarketIntelligence {
     const upgrades: Record<string, FusionUpgrade> = {};
     let alignment: AlignmentSnapshot = {
       upCount: 0, downCount: 0, neutralCount: 0, totalAssets: 0,
+      directionalVoters: 0,
       dominantDirection: 'NEUTRAL', dominancePct: 0, meanConfidence: 0,
     };
     for (const [asset, pred] of Object.entries(fusedPerAsset)) {
