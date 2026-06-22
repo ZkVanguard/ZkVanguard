@@ -89,6 +89,60 @@ async function testB() {
   else if (!btcUpgrade.upgradedToStrong) fail(`BTC should upgrade to STRONG given drift+alignment+funding, reasons=${btcUpgrade.reasons.join('|')}`);
   else ok(`BTC synthetic STRONG conf=${btcUpgrade.syntheticConfidence.toFixed(0)} reasons=${btcUpgrade.reasons.length}`);
 
+  // B2: Price-drift parallel path — Polymarket binaries flat at 50/50 but
+  // spot prices drifting UP should still trigger synthetic STRONG (the
+  // "quiet Polymarket but moving spot" silence-rescue case).
+  SignalDriftFusion.__resetForTests();
+  const baseTs2 = Date.now() - 60_000;
+  const flatProbAssets = ['BTC', 'ETH', 'SOL', 'XRP'];
+  for (const a of flatProbAssets) {
+    // Single sample at 50.5 — no probability drift available
+    SignalDriftFusion.recordSample(a, {
+      asset: a, marketId: 'x', slug: 'x', windowLabel: 'x',
+      direction: 'UP', probability: 50.5, upProbability: 50.5, downProbability: 49.5,
+      currentPrice: 0, priceToBeat: 0, volume: 100, liquidity: 1000,
+      confidence: 45, signalStrength: 'WEAK', recommendation: 'WAIT',
+      timeRemainingSeconds: 200, windowEndTime: Date.now() + 200_000,
+      fetchedAt: baseTs2, question: '', sourceUrl: '',
+    } as any);
+  }
+  // BTC price drifts UP through 5 samples at 65000 → 65500 (+0.77% over the window)
+  const btcPrices = [65000, 65100, 65200, 65300, 65500];
+  for (let i = 0; i < btcPrices.length; i++) {
+    SignalDriftFusion.recordPriceTick('BTC', btcPrices[i], baseTs2 + i * 30_000);
+    // Also drift the other assets so alignment fires
+    SignalDriftFusion.recordPriceTick('ETH', 3000 + i * 5, baseTs2 + i * 30_000);
+    SignalDriftFusion.recordPriceTick('SOL', 140 + i * 0.3, baseTs2 + i * 30_000);
+    SignalDriftFusion.recordPriceTick('XRP', 0.5 + i * 0.001, baseTs2 + i * 30_000);
+  }
+
+  const btcPriceDrift = SignalDriftFusion.computePriceDrift('BTC');
+  if (!btcPriceDrift || btcPriceDrift.driftDirection !== 'UP') {
+    fail(`BTC price-drift should be UP, got ${btcPriceDrift?.driftDirection}`);
+  } else {
+    ok(`BTC price-drift UP +${btcPriceDrift.netDelta.toFixed(2)}% over ${btcPriceDrift.samples} samples`);
+  }
+
+  // Now refuse — same flat-probability signals + the price drift we just recorded
+  const flatSignals2: Record<string, any> = {};
+  for (const a of flatProbAssets) {
+    flatSignals2[a] = {
+      asset: a, marketId: 'x', slug: 'x', windowLabel: 'x',
+      direction: 'UP', probability: 50.5, upProbability: 50.5, downProbability: 49.5,
+      currentPrice: 0, priceToBeat: 0, volume: 100, liquidity: 1000,
+      confidence: 45, signalStrength: 'WEAK', recommendation: 'WAIT',
+      timeRemainingSeconds: 200, windowEndTime: Date.now() + 200_000,
+      fetchedAt: Date.now(), question: '', sourceUrl: '',
+    };
+  }
+  const result3 = SignalDriftFusion.fuseAll(flatSignals2, {});
+  const btcUp3 = result3.upgrades['BTC'];
+  if (!btcUp3?.upgradedToStrong) {
+    fail(`BTC should upgrade via price-drift even when prob is flat, reasons=${btcUp3?.reasons.join('|')}`);
+  } else {
+    ok(`BTC synthetic STRONG via price-drift (no prob drift), conf=${btcUp3.syntheticConfidence}, reasons=${btcUp3.reasons.length}`);
+  }
+
   // Negative test: NO drift, NO alignment → no upgrade
   SignalDriftFusion.__resetForTests();
   const flatSignals: Record<string, any> = { ...signals };

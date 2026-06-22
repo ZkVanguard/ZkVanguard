@@ -69,7 +69,8 @@ export interface FusionUpgrade {
   upgradedToStrong: boolean;
   syntheticConfidence: number;            // final confidence after fusion
   reasons: string[];
-  drift: AssetDrift | null;
+  drift: AssetDrift | null;               // probability drift (Polymarket moves)
+  priceDrift: AssetDrift | null;          // spot-price momentum drift
   alignment: AlignmentSnapshot | null;
   fundingAlign: 'CONFIRMS' | 'CONFLICTS' | 'NEUTRAL';
 }
@@ -81,8 +82,14 @@ interface SignalSample {
   confidence: number;
 }
 
+interface PriceSample {
+  ts: number;
+  price: number;
+}
+
 export class SignalDriftFusion {
   private static history: Map<string, SignalSample[]> = new Map();
+  private static priceHistory: Map<string, PriceSample[]> = new Map();
 
   /**
    * Record a fresh signal sample for an asset. Called by the aggregator
@@ -113,6 +120,76 @@ export class SignalDriftFusion {
     });
     while (arr.length > HISTORY_MAX) arr.shift();
     this.history.set(key, arr);
+  }
+
+  /**
+   * Record a spot-price tick for an asset. The parallel-drift layer that
+   * runs alongside probability drift. On quiet days when Polymarket
+   * binaries are stuck at 50/50 because no one's betting, spot prices
+   * still move — that's directional information our drift component
+   * would otherwise miss.
+   *
+   * Dedup by ts the same way probability samples do.
+   */
+  static recordPriceTick(asset: string, price: number, ts: number = Date.now()): void {
+    if (!Number.isFinite(price) || price <= 0) return;
+    const key = asset.toUpperCase();
+    const arr = this.priceHistory.get(key) ?? [];
+    const last = arr[arr.length - 1];
+    if (last && ts <= last.ts) return;
+    arr.push({ ts, price });
+    while (arr.length > HISTORY_MAX) arr.shift();
+    this.priceHistory.set(key, arr);
+  }
+
+  /**
+   * Drift derived from spot-price log returns. Same shape as computeDrift
+   * so the upgrade decision can treat them interchangeably.
+   *
+   * Threshold for "non-zero" is tighter here than for probability drift:
+   * a 5-bps (0.05%) move per sample counts as directional. Most crypto
+   * tickers move > 0.1% in any given 30s, so this is a low bar that
+   * still filters noise.
+   */
+  static computePriceDrift(asset: string): AssetDrift | null {
+    const key = asset.toUpperCase();
+    const samples = this.priceHistory.get(key) ?? [];
+    if (samples.length < DRIFT_MIN_SAMPLES) return null;
+
+    // Log returns between consecutive samples (sign-robust to magnitude).
+    const returns: number[] = [];
+    for (let i = 1; i < samples.length; i++) {
+      const prev = samples[i - 1].price;
+      const curr = samples[i].price;
+      if (prev > 0 && curr > 0) returns.push(Math.log(curr / prev));
+    }
+    if (returns.length === 0) return null;
+
+    let pos = 0, neg = 0;
+    const NOISE_THRESHOLD = 0.0005;            // 5 bps per sample
+    for (const r of returns) {
+      if (r > NOISE_THRESHOLD) pos++;
+      else if (r < -NOISE_THRESHOLD) neg++;
+    }
+    const dominant = pos > neg ? pos : neg;
+    const directionConsistency = dominant / returns.length;
+    const driftDirection: DriftDirection =
+      directionConsistency < DRIFT_CONSISTENT_THRESHOLD ? 'FLAT'
+      : pos >= neg ? 'UP' : 'DOWN';
+
+    const firstPrice = samples[0].price;
+    const lastPrice = samples[samples.length - 1].price;
+    const netDelta = firstPrice > 0 ? ((lastPrice - firstPrice) / firstPrice) * 100 : 0;
+    const recentSlope = returns.reduce((s, r) => s + r, 0) / returns.length * 100;
+
+    return {
+      asset: key,
+      samples: samples.length,
+      directionConsistency,
+      netDelta,
+      recentSlope,
+      driftDirection,
+    };
   }
 
   /**
@@ -213,6 +290,7 @@ export class SignalDriftFusion {
     fundingRates: Record<string, number>,
   ): FusionUpgrade {
     const drift = this.computeDrift(asset);
+    const priceDrift = this.computePriceDrift(asset);
     const alignment = this.computeAlignment(allSignals);
     const reasons: string[] = [];
     const fundingRate = fundingRates[asset.toUpperCase()];
@@ -229,13 +307,26 @@ export class SignalDriftFusion {
       fundingAlign = fundingMeanReversion === predDir ? 'CONFIRMS' : 'CONFLICTS';
     }
 
-    // Drift check
-    const driftMatches = drift && drift.driftDirection !== 'FLAT' && drift.driftDirection === predDir;
-    if (drift && driftMatches) {
+    // Probability-drift check (Polymarket binary moves)
+    const probDriftMatches = drift && drift.driftDirection !== 'FLAT' && drift.driftDirection === predDir;
+    if (drift && probDriftMatches) {
       reasons.push(
-        `drift ${drift.driftDirection} consistency=${(drift.directionConsistency * 100).toFixed(0)}% over ${drift.samples} samples`,
+        `prob-drift ${drift.driftDirection} consistency=${(drift.directionConsistency * 100).toFixed(0)}% over ${drift.samples} samples`,
       );
     }
+
+    // Price-drift check (spot-momentum — fires when Polymarket is flat but
+    // the underlying spot is still moving directionally).
+    const priceDriftMatches = priceDrift && priceDrift.driftDirection !== 'FLAT' && priceDrift.driftDirection === predDir;
+    if (priceDrift && priceDriftMatches) {
+      reasons.push(
+        `price-drift ${priceDrift.driftDirection} ${priceDrift.netDelta >= 0 ? '+' : ''}${priceDrift.netDelta.toFixed(2)}% over ${priceDrift.samples} samples`,
+      );
+    }
+
+    // Drift requirement = EITHER source matches direction. Quiet days where
+    // Polymarket is silent but spot is moving still let alignment work.
+    const driftMatches = Boolean(probDriftMatches) || Boolean(priceDriftMatches);
 
     // Alignment check
     const alignmentMatches =
@@ -256,17 +347,24 @@ export class SignalDriftFusion {
 
     const upgradeable =
       currentSignal.signalStrength !== 'STRONG'
-      && Boolean(driftMatches)
+      && driftMatches
       && alignmentMatches
       && fundingAlign !== 'CONFLICTS';
 
-    const syntheticConfidence = upgradeable
+    // Confidence floor + bonuses. Each independent confirmation adds a
+    // small boost — both drift sources agreeing is meaningfully stronger
+    // than just one.
+    let syntheticConfidence = upgradeable
       ? Math.max(
           SYNTHETIC_CONFIDENCE_FLOOR,
           currentSignal.confidence,
           alignment.meanConfidence,
-        ) + (fundingAlign === 'CONFIRMS' ? 5 : 0)
+        )
       : currentSignal.confidence;
+    if (upgradeable) {
+      if (probDriftMatches && priceDriftMatches) syntheticConfidence += 8;
+      if (fundingAlign === 'CONFIRMS') syntheticConfidence += 5;
+    }
 
     return {
       asset: asset.toUpperCase(),
@@ -275,6 +373,7 @@ export class SignalDriftFusion {
       syntheticConfidence: Math.min(100, syntheticConfidence),
       reasons,
       drift,
+      priceDrift,
       alignment,
       fundingAlign,
     };
@@ -321,14 +420,21 @@ export class SignalDriftFusion {
    * For diagnostics — exposes the rolling history so the test script
    * and any future debug endpoint can verify samples are accruing.
    */
-  static getHistorySnapshot(): Record<string, number> {
-    const out: Record<string, number> = {};
-    for (const [k, v] of this.history.entries()) out[k] = v.length;
+  static getHistorySnapshot(): Record<string, { prob: number; price: number }> {
+    const out: Record<string, { prob: number; price: number }> = {};
+    const keys = new Set([...this.history.keys(), ...this.priceHistory.keys()]);
+    for (const k of keys) {
+      out[k] = {
+        prob: this.history.get(k)?.length ?? 0,
+        price: this.priceHistory.get(k)?.length ?? 0,
+      };
+    }
     return out;
   }
 
   /** Test-only reset hook. */
   static __resetForTests(): void {
     this.history.clear();
+    this.priceHistory.clear();
   }
 }

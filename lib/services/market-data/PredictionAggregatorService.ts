@@ -368,22 +368,41 @@ export class PredictionAggregatorService {
     }
   }
 
-  private static async fetchCryptoComData(): Promise<{
+  private static async fetchCryptoComData(assets: string[] = ['BTC', 'ETH']): Promise<{
     btc: { price: number; change24h: number; volume: number } | null;
     eth: { price: number; change24h: number; volume: number } | null;
+    perAsset: Record<string, { price: number; change24h: number; volume: number }>;
   }> {
     try {
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         signal: AbortSignal.timeout(5000),
       });
-      
+
       if (!response.ok) throw new Error('Crypto.com API unavailable');
-      
+
       const data = await response.json();
-      const tickers = data.result?.data || [];
-      
-      const btcTicker = tickers.find((t: Record<string, string>) => t.i === 'BTC_USDT');
-      const ethTicker = tickers.find((t: Record<string, string>) => t.i === 'ETH_USDT');
+      const tickers: Array<Record<string, string>> = data.result?.data || [];
+
+      // Build a per-asset map. Crypto.com instrument names are SYMBOL_USDT.
+      const perAsset: Record<string, { price: number; change24h: number; volume: number }> = {};
+      const tickerMap: Record<string, Record<string, string>> = {};
+      for (const t of tickers) tickerMap[String(t.i || '')] = t;
+
+      for (const rawAsset of assets) {
+        const asset = rawAsset.toUpperCase();
+        const t = tickerMap[`${asset}_USDT`];
+        if (!t) continue;
+        const price = parseFloat(t.a || '0');
+        if (!Number.isFinite(price) || price <= 0) continue;
+        perAsset[asset] = {
+          price,
+          change24h: parseFloat(t.c || '0') * 100,
+          volume: parseFloat(t.v || '0') * price,
+        };
+      }
+
+      const btcTicker = tickerMap['BTC_USDT'];
+      const ethTicker = tickerMap['ETH_USDT'];
 
       return {
         btc: btcTicker ? {
@@ -396,10 +415,11 @@ export class PredictionAggregatorService {
           change24h: parseFloat(ethTicker.c || '0') * 100,
           volume: parseFloat(ethTicker.v || '0') * parseFloat(ethTicker.a || '0'),
         } : null,
+        perAsset,
       };
     } catch (error) {
       logger.debug('[PredictionAggregator] Crypto.com fetch failed', { error });
-      return { btc: null, eth: null };
+      return { btc: null, eth: null, perAsset: {} };
     }
   }
 
@@ -515,15 +535,26 @@ export class PredictionAggregatorService {
     const [polymarketSignal, delphiPredictions, cryptoComData, fundingRates, multiAssetSignals, manifoldMarkets] = await Promise.all([
       this.fetchPolymarketSignal(),
       this.fetchDelphiPredictions(),
-      this.fetchCryptoComData(),
+      this.fetchCryptoComData(upperAssets),
       this.fetchBluefinFundingRates(assets),
       MultiAssetSignalService.getLatestSignals(upperAssets).catch(() => ({} as Record<string, MultiAssetSignal | null>)),
       ManifoldMarketService.getCryptoMarkets(upperAssets).catch(() => [] as PredictionMarket[]),
     ]);
 
+    // Feed real spot prices into the drift fusion's price-history channel.
+    // This is the source the price-momentum drift component reads — it
+    // lets synthetic STRONG fire on quiet-Polymarket days when binaries
+    // are stuck at 50/50 but spot prices are still moving directionally.
+    const nowTs = Date.now();
+    for (const [asset, t] of Object.entries(cryptoComData.perAsset)) {
+      if (t && t.price > 0) {
+        SignalDriftFusion.recordPriceTick(asset, t.price, nowTs);
+      }
+    }
+
     // Run drift-fusion over the multi-asset signal map. Returns per-asset
-    // upgrade decisions: where alignment + drift + funding line up, the
-    // asset's WEAK/MODERATE signal is treated as STRONG.
+    // upgrade decisions: where alignment + (prob-drift OR price-drift) +
+    // funding line up, the asset's WEAK/MODERATE signal is treated as STRONG.
     const fusionResult = SignalDriftFusion.fuseAll(multiAssetSignals, fundingRates);
 
     const out: Record<string, AggregatedPrediction> = {};
