@@ -231,11 +231,40 @@ function parseMarket(m: Record<string, unknown>): BroadMarket | null {
 }
 
 /**
- * Single gamma query that pulls the top 500 active markets by 24h volume,
- * parses + crypto-filters them into structured BroadMarket records.
+ * Multi-query gamma fan-out + dedup. A single `?limit=500&order=volume24hr`
+ * call gets dominated by politics/sports/entertainment markets and leaves
+ * very few crypto markets after the filter — observed in production
+ * (only 1 crypto market discovered from 500 returned). To get real
+ * coverage, fan out across complementary sort orders + keyword searches,
+ * dedup by id, then crypto-filter the union.
  *
- * Cached 60 s so the SUI cron and any UI consumer share the same fetch.
+ * Queries (all run in parallel via Promise.allSettled):
+ *   1. Top 500 by 24h volume (catches popular)
+ *   2. Top 500 by liquidity (catches well-funded crypto markets, often
+ *      thin volume because long-dated)
+ *   3. /markets?search=bitcoin     (direct crypto keyword targeting)
+ *   4. /markets?search=ethereum
+ *   5. /markets?search=crypto
+ *
+ * Any individual query failing degrades to "missing those results" — the
+ * rest still return. Cached 60 s so SUI cron + UI share one fan-out.
  */
+async function fetchOne(
+  url: string,
+  controller: AbortController,
+): Promise<Array<Record<string, unknown>>> {
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return [];
+    const raw = await res.json();
+    if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+    const dataArr = (raw as { data?: unknown }).data;
+    return Array.isArray(dataArr) ? (dataArr as Array<Record<string, unknown>>) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchBroadCryptoMarkets(opts: {
   limit?: number;
   bypassCache?: boolean;
@@ -244,43 +273,61 @@ export async function fetchBroadCryptoMarkets(opts: {
     return cache.markets;
   }
   const limit = Math.max(50, Math.min(500, opts.limit ?? 500));
-  const url = `${POLYMARKET_API}/markets?active=true&closed=false&limit=${limit}&order=volume24hr&ascending=false`;
+  const base = `${POLYMARKET_API}/markets?active=true&closed=false&limit=${limit}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  let raw: unknown = [];
+
+  const queries = [
+    `${base}&order=volume24hr&ascending=false`,
+    `${base}&order=liquidityNum&ascending=false`,
+    `${base}&order=startDate&ascending=false`,
+    // Keyword-targeted: gamma supports `search=` for substring slug/question
+    // search. These three terms together cover the vast majority of crypto
+    // market questions.
+    `${base.replace(`&limit=${limit}`, '&limit=200')}&search=bitcoin`,
+    `${base.replace(`&limit=${limit}`, '&limit=200')}&search=ethereum`,
+    `${base.replace(`&limit=${limit}`, '&limit=200')}&search=crypto`,
+  ];
+
+  let all: Array<Record<string, unknown>> = [];
   try {
-    const res = await fetch(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`gamma ${res.status}`);
-    raw = await res.json();
-  } catch (err) {
-    logger.warn('[BroadMarkets] fetch failed', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return cache?.markets ?? [];
+    const results = await Promise.allSettled(
+      queries.map(u => fetchOne(u, controller)),
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') all = all.concat(r.value);
+    }
   } finally {
     clearTimeout(timeout);
   }
-  const list: Array<Record<string, unknown>> = Array.isArray(raw)
-    ? (raw as Array<Record<string, unknown>>)
-    : Array.isArray((raw as { data?: unknown }).data)
-      ? ((raw as { data: Array<Record<string, unknown>> }).data)
-      : [];
+
+  if (all.length === 0) {
+    logger.warn('[BroadMarkets] all fan-out queries returned empty');
+    return cache?.markets ?? [];
+  }
+
+  // De-dup by id BEFORE the expensive parse step — a market that appears
+  // in 3 of the 6 queries shouldn't get parsed 3 times.
+  const seenIds = new Set<string>();
+  const uniqueRaw: Array<Record<string, unknown>> = [];
+  for (const m of all) {
+    const id = String(m.id || m.conditionId || m.slug || '');
+    if (!id || seenIds.has(id)) continue;
+    seenIds.add(id);
+    uniqueRaw.push(m);
+  }
 
   const parsed: BroadMarket[] = [];
-  for (const m of list) {
+  for (const m of uniqueRaw) {
     const bm = parseMarket(m);
     if (bm) parsed.push(bm);
   }
-  // De-dup by id (Polymarket sometimes returns the same market twice across
-  // pages when ordering changes mid-pull)
-  const dedup = new Map<string, BroadMarket>();
-  for (const bm of parsed) {
-    if (!dedup.has(bm.id)) dedup.set(bm.id, bm);
-  }
-  const markets = Array.from(dedup.values());
+
+  const markets = parsed;
   cache = { ts: Date.now(), markets };
-  logger.info('[BroadMarkets] fetched', {
-    total: list.length,
+  logger.info('[BroadMarkets] fetched (multi-query)', {
+    rawTotal: all.length,
+    uniqueAfterDedup: uniqueRaw.length,
     cryptoRelevant: markets.length,
     byHorizon: countBy(markets, m => m.horizon),
     byType: countBy(markets, m => m.marketType),

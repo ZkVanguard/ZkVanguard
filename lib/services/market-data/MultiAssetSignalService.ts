@@ -197,39 +197,56 @@ export class MultiAssetSignalService {
     const windowStart = Math.floor(nowEpoch / WINDOW_SECONDS) * WINDOW_SECONDS;
     const windowEnd = windowStart + lookaheadWindows * WINDOW_SECONDS;
 
-    // Gamma API supports active+order; we pull a large batch and filter
-    // client-side so new asset symbols can't be missed by a stale allow-list.
-    const url = `${POLYMARKET_API}/markets?active=true&closed=false&limit=500&order=volume24hr&ascending=false`;
+    // 5-min binaries are fresh / low-volume — they rarely appear in the
+    // top-500-by-24h-volume sort (which is dominated by political /
+    // sports markets). To find them, query gamma multiple ways and
+    // crypto-keyword-search for them directly. Same fan-out pattern as
+    // PolymarketBroadMarketsService.fetchBroadCryptoMarkets — keyword
+    // search reliably returns the active 5-min binaries.
+    const base = `${POLYMARKET_API}/markets?active=true&closed=false`;
+    const queries = [
+      `${base}&limit=500&order=volume24hr&ascending=false`,
+      `${base}&limit=500&order=startDate&ascending=false`,
+      `${base}&limit=300&search=updown`,
+      `${base}&limit=200&search=bitcoin`,
+      `${base}&limit=200&search=ethereum`,
+      `${base}&limit=200&search=solana`,
+    ];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8_000);
-    let raw: unknown = [];
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    let all: Array<Record<string, unknown>> = [];
     try {
-      const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) throw new Error(`gamma ${res.status}`);
-      raw = await res.json();
+      const results = await Promise.allSettled(
+        queries.map(async u => {
+          const res = await fetch(u, { signal: controller.signal });
+          if (!res.ok) return [];
+          const raw = await res.json();
+          if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+          const dataArr = (raw as { data?: unknown }).data;
+          return Array.isArray(dataArr) ? (dataArr as Array<Record<string, unknown>>) : [];
+        }),
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') all = all.concat(r.value);
+      }
     } catch (err) {
-      logger.warn('[MultiAssetSignal] discovery fetch failed', {
+      logger.warn('[MultiAssetSignal] discovery fan-out failed', {
         error: err instanceof Error ? err.message : String(err),
       });
-      return { assets: [], perAsset: {}, fetchedAt: Date.now() };
     } finally {
       clearTimeout(timeout);
     }
-    const markets: Array<Record<string, unknown>> = Array.isArray(raw)
-      ? (raw as Array<Record<string, unknown>>)
-      : Array.isArray((raw as { data?: unknown }).data)
-        ? ((raw as { data: Array<Record<string, unknown>> }).data)
-        : [];
 
     const perAsset: Record<string, { slug: string; volume24hr: number; liquidity: number; endDate?: string }> = {};
-    for (const m of markets) {
+    const seenSlugs = new Set<string>();
+    for (const m of all) {
       const slug = String(m.slug || '').toLowerCase();
+      if (!slug || seenSlugs.has(slug)) continue;
+      seenSlugs.add(slug);
       const match = FIVE_MIN_SLUG_RE.exec(slug);
       if (!match) continue;
       const asset = match[1].toUpperCase();
       const epoch = Number(match[2]);
-      // Only count windows in or near the current one — historical resolved
-      // markets are noise.
       if (epoch < windowStart - WINDOW_SECONDS || epoch > windowEnd) continue;
       if (m.closed || m.archived || m.resolved) continue;
       const vol = Number(m.volume24hr ?? m.volumeNum ?? m.volume ?? 0) || 0;
