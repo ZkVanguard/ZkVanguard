@@ -204,13 +204,16 @@ export class MultiAssetSignalService {
     // PolymarketBroadMarketsService.fetchBroadCryptoMarkets — keyword
     // search reliably returns the active 5-min binaries.
     const base = `${POLYMARKET_API}/markets?active=true&closed=false`;
+    // Polymarket gamma's filter params (search, tag_id, category) are
+    // silently IGNORED. Only sort + paginate work. Fan-out across
+    // multiple sort orders to maximize unique markets surfaced.
+    // PLUS direct slug probe for the tracked-asset list — that's the
+    // ONLY reliable way to find current 5-min binaries, which are
+    // fresh / low-volume and never appear in top-by-volume sorts.
     const queries = [
       `${base}&limit=500&order=volume24hr&ascending=false`,
       `${base}&limit=500&order=startDate&ascending=false`,
-      `${base}&limit=300&search=updown`,
-      `${base}&limit=200&search=bitcoin`,
-      `${base}&limit=200&search=ethereum`,
-      `${base}&limit=200&search=solana`,
+      `${base}&limit=500&order=endDate&ascending=true`,
     ];
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -261,6 +264,48 @@ export class MultiAssetSignalService {
         };
       }
     }
+
+    // Second pass: directly probe by-slug for each tracked asset's
+    // current + next 3 windows. Gamma's sort orders rarely surface
+    // 5-min binaries (low volume + just-listed), but a direct slug
+    // GET always works. This is the same per-asset slug-discovery
+    // approach `fetchLatest5MinMarket` uses for the per-signal
+    // endpoint — generalized here so discovery confirms tracked
+    // assets ARE listed even when sort orders miss them.
+    const probeTargets = getTrackedAssetList();
+    const probeOffsets = [0, WINDOW_SECONDS, WINDOW_SECONDS * 2, WINDOW_SECONDS * 3];
+    const probeRequests: Array<Promise<void>> = [];
+    for (const asset of probeTargets) {
+      if (perAsset[asset]) continue; // already found via sort-fanout
+      for (const off of probeOffsets) {
+        const slug = this.buildSlug(windowStart + off, asset);
+        probeRequests.push((async () => {
+          try {
+            const res = await fetch(`${POLYMARKET_API}/markets?slug=${slug}`, {
+              signal: controller.signal,
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+            const m = arr.find((x: Record<string, unknown>) => x && x.slug === slug);
+            if (!m || m.closed || m.archived || m.resolved) return;
+            const vol = Number(m.volume24hr ?? m.volumeNum ?? m.volume ?? 0) || 0;
+            const liq = Number(m.liquidityNum ?? m.liquidity ?? 0) || 0;
+            const prev = perAsset[asset];
+            if (!prev || vol > prev.volume24hr) {
+              perAsset[asset] = {
+                slug,
+                volume24hr: vol,
+                liquidity: liq,
+                endDate: (m.endDate as string) || (m.endDateIso as string) || undefined,
+              };
+            }
+          } catch { /* graceful */ }
+        })());
+      }
+    }
+    await Promise.allSettled(probeRequests);
+
     return {
       assets: Object.keys(perAsset).sort(),
       perAsset,

@@ -268,7 +268,14 @@ function riskGate(args: {
 
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
   const ranAt = new Date().toISOString();
-  void setCronState('cron:lastRun:polymarket-edge-trader', Date.now()).catch(() => {});
+  // AWAIT the heartbeat — fire-and-forget gets dropped by Vercel's
+  // serverless suspension after response (observed 2026-06-22: trader
+  // ran successfully via manual trigger, returned full payload, but
+  // health endpoint still showed 'traderCron: no entry yet' because
+  // the void setCronState write didn't complete before the lambda
+  // suspended). Awaiting adds ~50ms but guarantees the heartbeat
+  // lands.
+  await setCronState('cron:lastRun:polymarket-edge-trader', Date.now()).catch(() => {});
 
   const auth = await verifyCronRequest(request, 'PolymarketEdgeTrader');
   if (auth !== true) {

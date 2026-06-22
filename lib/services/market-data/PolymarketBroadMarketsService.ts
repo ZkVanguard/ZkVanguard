@@ -277,16 +277,22 @@ export async function fetchBroadCryptoMarkets(opts: {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
+  // Polymarket gamma's `?search=`, `?tag_id=`, `?category=` parameters
+  // are silently IGNORED (verified 2026-06-22: each returns the same
+  // default 10 markets regardless of value). Only sort + paginate
+  // params actually work. So fan-out is across sort orders:
+  //   1. by 24h volume (catches popular)
+  //   2. by liquidity (catches well-funded long-dated markets)
+  //   3. by startDate (catches new listings)
+  //   4. by endDate ascending (catches markets resolving soonest —
+  //      typically the 5-min / hourly binaries we care about most)
+  // This gets us ~4× the unique markets vs one query, still bounded
+  // by gamma's lack of real filter support.
   const queries = [
     `${base}&order=volume24hr&ascending=false`,
     `${base}&order=liquidityNum&ascending=false`,
     `${base}&order=startDate&ascending=false`,
-    // Keyword-targeted: gamma supports `search=` for substring slug/question
-    // search. These three terms together cover the vast majority of crypto
-    // market questions.
-    `${base.replace(`&limit=${limit}`, '&limit=200')}&search=bitcoin`,
-    `${base.replace(`&limit=${limit}`, '&limit=200')}&search=ethereum`,
-    `${base.replace(`&limit=${limit}`, '&limit=200')}&search=crypto`,
+    `${base}&order=endDate&ascending=true`,
   ];
 
   let all: Array<Record<string, unknown>> = [];
