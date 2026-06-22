@@ -24,7 +24,7 @@ export interface PredictionMarket {
   lastUpdate: number;
   confidence: number; // 0-100, based on volume and liquidity
   recommendation?: 'HEDGE' | 'MONITOR' | 'IGNORE';
-  source?: 'polymarket' | 'crypto-analysis' | 'delphi';
+  source?: 'polymarket' | 'crypto-analysis' | 'delphi' | 'manifold';
   aiSummary?: string; // AI-generated agent analysis summary
   agentAnalysis?: {
     riskAgent: string;

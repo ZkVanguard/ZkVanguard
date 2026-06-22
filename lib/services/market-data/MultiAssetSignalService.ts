@@ -70,20 +70,91 @@ const FIVE_MIN_SLUG_RE = /^([a-z0-9]{2,8})-updown-5m-(\d{10})$/;
 
 /**
  * The default asset list for the SUI pool's prediction-signal aggregator.
- * Overridable via `POLYMARKET_TRACKED_ASSETS` (comma-separated, e.g.
- * "BTC,ETH,SOL,XRP,DOGE"). Keep this in sync with the assets the cron
- * actually cares about — adding too many makes each sentiment aggregation
- * pay for fetches that won't change any allocation decision.
+ *
+ * Three modes:
+ *   - `POLYMARKET_TRACKED_ASSETS=auto` → fully dynamic, fetched from
+ *     Polymarket discovery each call (filtered by min-liquidity floor).
+ *   - `POLYMARKET_TRACKED_ASSETS=BTC,ETH,SOL,…` → explicit list.
+ *   - Unset → built-in 5-asset default.
+ *
+ * The auto mode is the creative unlock — quiet days on the hardcoded list
+ * stay quiet, but Polymarket usually has 5-min binaries for 10+ assets at
+ * any time and the discovery layer already finds them. Use the dynamic
+ * helper below to get the live universe.
  */
+const DEFAULT_TRACKED = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'] as const;
+
 export function getTrackedAssetList(): string[] {
   const raw = (process.env.POLYMARKET_TRACKED_ASSETS || '').trim();
-  if (raw) {
+  if (raw && raw.toLowerCase() !== 'auto') {
     return raw
       .split(',')
       .map(s => s.trim().toUpperCase())
       .filter(Boolean);
   }
-  return ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE'];
+  return [...DEFAULT_TRACKED];
+}
+
+const DYNAMIC_CACHE_TTL_MS = 5 * 60 * 1000;
+const DYNAMIC_MIN_LIQUIDITY_USD = Number(process.env.POLYMARKET_MIN_LIQUIDITY_USD || 1000);
+let dynamicCache: { ts: number; assets: string[] } | null = null;
+
+/**
+ * Returns the full dynamic asset universe — every 5-min binary Polymarket
+ * is currently running, filtered by a min-liquidity floor. Cached for 5
+ * min to keep fetch volume bounded.
+ *
+ * Falls back to the explicit/default tracked list on discovery failure so
+ * callers always get usable assets.
+ *
+ * Set `POLYMARKET_TRACKED_ASSETS=auto` to make `getTrackedAssetList`-aware
+ * callers consume the dynamic universe; otherwise call this directly.
+ */
+export async function getDynamicTrackedAssets(opts: {
+  forceRefresh?: boolean;
+  minLiquidityUsd?: number;
+} = {}): Promise<string[]> {
+  if (!opts.forceRefresh && dynamicCache && Date.now() - dynamicCache.ts < DYNAMIC_CACHE_TTL_MS) {
+    return dynamicCache.assets;
+  }
+  const minLiq = opts.minLiquidityUsd ?? DYNAMIC_MIN_LIQUIDITY_USD;
+  try {
+    const discovered = await MultiAssetSignalService.discoverAvailableAssets({ lookaheadWindows: 4 });
+    const liquid = Object.entries(discovered.perAsset)
+      .filter(([, info]) => info.liquidity >= minLiq)
+      .map(([asset]) => asset)
+      .sort();
+    // Union with the explicit/default list so a momentary discovery miss
+    // never empties the universe. Discovery often finds 10+; the explicit
+    // list is a safety net.
+    const explicit = getTrackedAssetList();
+    const union = Array.from(new Set([...liquid, ...explicit])).sort();
+    dynamicCache = { ts: Date.now(), assets: union };
+    logger.info('[MultiAssetSignal] dynamic universe refreshed', {
+      discovered: Object.keys(discovered.perAsset).length,
+      liquidPass: liquid.length,
+      finalUnion: union.length,
+      minLiquidityUsd: minLiq,
+      assets: union.join(','),
+    });
+    return union;
+  } catch (err) {
+    logger.warn('[MultiAssetSignal] dynamic discovery failed, falling back to static list', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return getTrackedAssetList();
+  }
+}
+
+/**
+ * Asset-list resolver that honours the AUTO mode env switch. Callers that
+ * want "do the right thing" should use this instead of `getTrackedAssetList`.
+ * Synchronous callers that can't await default back to the static list.
+ */
+export async function resolveTrackedAssets(): Promise<string[]> {
+  const raw = (process.env.POLYMARKET_TRACKED_ASSETS || '').trim().toLowerCase();
+  if (raw === 'auto') return getDynamicTrackedAssets();
+  return getTrackedAssetList();
 }
 
 export class MultiAssetSignalService {

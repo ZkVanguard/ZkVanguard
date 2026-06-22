@@ -23,6 +23,10 @@ import {
 } from '@/lib/services/market-data/opportunity-scoring';
 import type { FiveMinBTCSignal } from './Polymarket5MinService';
 import type { PredictionMarket } from './DelphiMarketService';
+import type { MultiAssetSignal } from './MultiAssetSignalService';
+import { MultiAssetSignalService } from './MultiAssetSignalService';
+import { ManifoldMarketService } from './ManifoldMarketService';
+import { SignalDriftFusion, type FusionUpgrade } from './SignalDriftFusion';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -504,23 +508,60 @@ export class PredictionAggregatorService {
       if (fresh) return cached;
     }
 
-    const [polymarketSignal, delphiPredictions, cryptoComData, fundingRates] = await Promise.all([
+    // Fetch per-asset 5-min binaries via MultiAssetSignalService (not just
+    // BTC) so the synthetic-STRONG fusion has cross-asset data to work
+    // with, plus Manifold for source diversity.
+    const upperAssets = assets.map(a => a.toUpperCase());
+    const [polymarketSignal, delphiPredictions, cryptoComData, fundingRates, multiAssetSignals, manifoldMarkets] = await Promise.all([
       this.fetchPolymarketSignal(),
       this.fetchDelphiPredictions(),
       this.fetchCryptoComData(),
       this.fetchBluefinFundingRates(assets),
+      MultiAssetSignalService.getLatestSignals(upperAssets).catch(() => ({} as Record<string, MultiAssetSignal | null>)),
+      ManifoldMarketService.getCryptoMarkets(upperAssets).catch(() => [] as PredictionMarket[]),
     ]);
+
+    // Run drift-fusion over the multi-asset signal map. Returns per-asset
+    // upgrade decisions: where alignment + drift + funding line up, the
+    // asset's WEAK/MODERATE signal is treated as STRONG.
+    const fusionResult = SignalDriftFusion.fuseAll(multiAssetSignals, fundingRates);
 
     const out: Record<string, AggregatedPrediction> = {};
 
-    for (const rawAsset of assets) {
-      const asset = rawAsset.toUpperCase();
+    for (const asset of upperAssets) {
       const sources: PredictionSource[] = [];
 
-      // 1) Polymarket 5-min only contributes to BTC
+      // 1a) Per-asset Polymarket 5-min binary (was BTC-only before — this
+      //     is the main signal-density unlock).
+      const assetSignal = multiAssetSignals[asset];
+      const upgrade: FusionUpgrade | undefined = fusionResult.upgrades[asset];
+      if (assetSignal) {
+        const effectiveConfidence = upgrade?.upgradedToStrong
+          ? upgrade.syntheticConfidence
+          : assetSignal.confidence;
+        sources.push({
+          name: upgrade?.upgradedToStrong
+            ? `Polymarket 5-Min ${asset} (synthetic STRONG)`
+            : `Polymarket 5-Min ${asset}`,
+          type: 'short_term',
+          direction: assetSignal.direction,
+          confidence: effectiveConfidence,
+          probability:
+            assetSignal.direction === 'UP'
+              ? assetSignal.upProbability
+              : assetSignal.downProbability,
+          weight: upgrade?.upgradedToStrong ? 0.35 : 0.25,
+          rawData: { ...assetSignal, fusionUpgrade: upgrade },
+          fetchedAt: assetSignal.fetchedAt,
+        });
+      }
+
+      // 1b) BTC-specific Polymarket5MinService signal (legacy ticker) —
+      //     only kept for BTC since RiskAgent/HedgingAgent already subscribe
+      //     to it. Lower weight since (1a) covers the same signal now.
       if (asset === 'BTC' && polymarketSignal) {
         sources.push({
-          name: 'Polymarket 5-Min BTC',
+          name: 'Polymarket 5-Min BTC (ticker)',
           type: 'short_term',
           direction: polymarketSignal.direction,
           confidence: polymarketSignal.confidence,
@@ -528,7 +569,7 @@ export class PredictionAggregatorService {
             polymarketSignal.direction === 'UP'
               ? polymarketSignal.upProbability
               : polymarketSignal.downProbability,
-          weight: 0.30,
+          weight: 0.10,
           rawData: polymarketSignal,
           fetchedAt: polymarketSignal.fetchedAt,
         });
@@ -548,6 +589,26 @@ export class PredictionAggregatorService {
           probability: pred.probability,
           weight:
             pred.impact === 'HIGH' ? 0.15 : pred.impact === 'MODERATE' ? 0.10 : 0.05,
+          rawData: pred,
+          fetchedAt: pred.lastUpdate,
+        });
+      }
+
+      // 2b) Manifold markets that tag this asset — different bettor base
+      //     than Polymarket, picks up markets the others miss. Weight kept
+      //     modest until we calibrate Manifold's signal accuracy.
+      const assetManifold = manifoldMarkets.filter((p) =>
+        (p.relatedAssets || []).map((a) => a.toUpperCase()).includes(asset),
+      );
+      for (const pred of assetManifold.slice(0, 3)) {
+        const isPositive = pred.probability > 50;
+        sources.push({
+          name: `Manifold: ${pred.question.substring(0, 40)}...`,
+          type: 'medium_term',
+          direction: isPositive ? 'UP' : pred.probability < 45 ? 'DOWN' : 'NEUTRAL',
+          confidence: pred.confidence,
+          probability: pred.probability,
+          weight: pred.impact === 'HIGH' ? 0.10 : pred.impact === 'MODERATE' ? 0.07 : 0.04,
           rawData: pred,
           fetchedAt: pred.lastUpdate,
         });
@@ -605,6 +666,30 @@ export class PredictionAggregatorService {
       if (fundingRate === undefined) {
         const funding = this.approximateFundingRateSentiment(sources);
         if (funding) sources.push(funding);
+      }
+
+      // 6) Cross-asset alignment as its own source. When 3+ assets agree on
+      //    direction with ≥67% dominance, that's directional information
+      //    independent of any single asset's signal — and the strongest
+      //    way to surface signal on quiet days when individual markets
+      //    are all flat-ish.
+      const alignment = fusionResult.alignment;
+      if (
+        alignment.totalAssets >= 3
+        && alignment.dominancePct >= 67
+        && alignment.dominantDirection !== 'NEUTRAL'
+        && alignment.dominantDirection === assetSignal?.direction
+      ) {
+        sources.push({
+          name: `Cross-asset alignment (${alignment.upCount}UP/${alignment.downCount}DOWN/${alignment.neutralCount}~)`,
+          type: 'sentiment',
+          direction: alignment.dominantDirection,
+          confidence: Math.min(90, 40 + (alignment.dominancePct - 67) * 1.5 + alignment.meanConfidence * 0.3),
+          probability: 50 + (alignment.dominancePct - 50) * (alignment.dominantDirection === 'UP' ? 1 : -1) * 0.5,
+          weight: 0.15,
+          rawData: alignment,
+          fetchedAt: Date.now(),
+        });
       }
 
       // Normalize weights within this asset's bucket
