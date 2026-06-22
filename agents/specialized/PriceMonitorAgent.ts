@@ -142,6 +142,70 @@ export class PriceMonitorAgent {
   }
 
   /**
+   * One-shot monitoring tick for serverless callers.
+   *
+   * The setInterval-driven monitoringLoop dies the moment the Lambda
+   * suspends, so the autonomous LeadAgent cycle (every 30min) calls
+   * this directly to get the same work done without a persistent loop.
+   * Returns a structured summary instead of relying on event emission.
+   */
+  async tick(): Promise<{
+    pricesFetched: number;
+    alertsChecked: number;
+    alertsTriggered: number;
+    fiveMinProcessed: boolean;
+    symbols: string[];
+  }> {
+    // Ensure we have a fresh 5-min signal cache even when start() never ran
+    // (serverless: PriceMonitorAgent.start() launches the long-running loop
+    // that subscribes to the ticker; if the loop never started or already
+    // suspended, the cached signal is stale).
+    if (!this.cachedFiveMinSignal) {
+      try {
+        const { Polymarket5MinService } = await import('../../lib/services/market-data/Polymarket5MinService');
+        this.cachedFiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
+      } catch { /* best-effort */ }
+    }
+
+    const prices = await this.fetchAllPrices();
+
+    let alertsChecked = 0;
+    let alertsTriggered = 0;
+    for (const alert of this.alerts.values()) {
+      if (!alert.active) continue;
+      const priceData = prices.get(alert.symbol);
+      if (!priceData) continue;
+      alertsChecked++;
+      if (this.checkAlertCondition(alert, priceData)) {
+        alertsTriggered++;
+        await this.handleAlertTriggered(alert, priceData);
+      }
+    }
+
+    let fiveMinProcessed = false;
+    const fiveMinSignal = this.cachedFiveMinSignal;
+    if (fiveMinSignal && fiveMinSignal.signalStrength === 'STRONG') {
+      const btcPrice = prices.get('BTC') || null;
+      await this.handleFiveMinSignal(fiveMinSignal, btcPrice);
+      fiveMinProcessed = true;
+    }
+
+    this.emit({
+      type: 'price_update',
+      prices: Object.fromEntries(prices),
+      timestamp: Date.now(),
+    });
+
+    return {
+      pricesFetched: prices.size,
+      alertsChecked,
+      alertsTriggered,
+      fiveMinProcessed,
+      symbols: Array.from(prices.keys()),
+    };
+  }
+
+  /**
    * Main monitoring loop - runs every polling interval
    */
   private async monitoringLoop(): Promise<void> {
@@ -310,13 +374,21 @@ export class PriceMonitorAgent {
 
       const data = await response.json();
       
-      // Crypto.com API response format
-      if (data.result?.data) {
-        const ticker = data.result.data;
+      // Crypto.com /v2/public/get-ticker now returns result.data as an
+      // ARRAY (the underlying endpoint is get-tickers in disguise).
+      // Tolerate both shapes — older single-object form and the current
+      // array form — so we don't silently fall back to 0 prices.
+      const ticker = Array.isArray(data.result?.data)
+        ? data.result.data[0]
+        : data.result?.data;
+      if (ticker) {
+        // `c` on v2 is daily-change-PERCENT-as-decimal (e.g. 0.0049 = 0.49%).
+        // Convert to percent for downstream change24h consumers.
+        const changePctRaw = parseFloat(ticker.c || '0');
         return {
           symbol,
           price: parseFloat(ticker.a || ticker.k) || 0,
-          change24h: parseFloat(ticker.c || '0') || 0,
+          change24h: Number.isFinite(changePctRaw) ? changePctRaw * 100 : 0,
           volume24h: parseFloat(ticker.v || '0') || 0,
           timestamp: Date.now(),
           source: 'crypto.com',

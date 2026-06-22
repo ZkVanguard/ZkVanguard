@@ -835,6 +835,13 @@ export class AgentOrchestrator {
     settlementsProcessed?: number;
     zkProofs?: number;
     leadSummary?: string;
+    priceMonitor?: {
+      pricesFetched: number;
+      alertsChecked: number;
+      alertsTriggered: number;
+      fiveMinProcessed: boolean;
+      symbols: string[];
+    } | null;
     error?: string;
   }> {
     const startTime = Date.now();
@@ -867,19 +874,21 @@ export class AgentOrchestrator {
 
       const report = await this.leadAgent.executeStrategyFromIntent(intent);
 
-      // Best-effort PriceMonitorAgent tick alongside the lead cycle.
-      // Standalone agent (not in the LeadAgent chain) — its monitoringLoop
-      // can't survive serverless suspend, so we trigger one fetch+process
-      // cycle directly. Currently no public one-shot API on it; we just
-      // surface its current alert count so the cycle output reflects
-      // whatever it's holding from prior runs.
-      let priceMonitorAlerts = 0;
+      // PriceMonitorAgent tick alongside the lead cycle. Standalone agent
+      // (not in the LeadAgent chain) — its monitoringLoop can't survive
+      // serverless suspend, so we drive one fetch+process cycle directly
+      // via the new tick() one-shot. Best-effort: failures don't bubble.
+      let priceMonitorTick: Awaited<ReturnType<PriceMonitorAgent['tick']>> | null = null;
       try {
         if (this.priceMonitorAgent) {
-          priceMonitorAlerts = this.priceMonitorAgent.getAlerts().length;
+          priceMonitorTick = await this.priceMonitorAgent.tick();
+          logger.info('[Orchestrator] PriceMonitorAgent tick complete', priceMonitorTick);
         }
-      } catch { /* best-effort */ }
-      void priceMonitorAlerts;
+      } catch (pmErr) {
+        logger.warn('[Orchestrator] PriceMonitorAgent tick failed', {
+          error: pmErr instanceof Error ? pmErr.message : String(pmErr),
+        });
+      }
 
       const riskData = (report.riskAnalysis ?? null) as null | { totalRisk?: number; riskLevel?: string };
       const hedgeData = (report.hedgingStrategy ?? null) as null | { needsRebalance?: boolean; positions?: unknown[]; recommendations?: unknown[] };
@@ -903,6 +912,7 @@ export class AgentOrchestrator {
         settlementsProcessed: settlementData?.settled,
         zkProofs: report.zkProofs.length,
         leadSummary: summary,
+        priceMonitor: priceMonitorTick,
       };
     } catch (err) {
       logger.error('[AgentOrchestrator] runAutonomousCycle failed', { error: err });
