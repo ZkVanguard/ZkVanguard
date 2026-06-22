@@ -133,31 +133,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
       canTrade = true;
     }
 
-    // Refresh the shared `bluefin:nav-last-good` cache so the NAV path,
-    // pool API, dashboard, and every other safeBluefinSnapshot consumer
-    // gets a max-5-min staleness instead of waiting for the 30-min
-    // sui-community-pool cron. Only write when we got a CLEAN read —
-    // both probes succeeded AND at least one is non-empty (or both
-    // empty in agreement with no on-chain exposure expected).
+    // Refresh the shared cache via the centralized helper, which also
+    // maintains the `bluefin:consecutiveEmptyReads` counter that pages
+    // Discord at 3+ consecutive empty reads (≈15 min) — distinguishes
+    // venue blips from real outages.
     if (freeCollateralUsdc !== null && positionsCount !== null) {
-      const venueLooksEmpty = freeCollateralUsdc === 0 && positionsCount === 0;
-      if (!venueLooksEmpty) {
-        let lockedMargin = 0;
-        let upnl = 0;
-        for (const p of positions) {
-          const pp = p as unknown as Record<string, unknown>;
-          lockedMargin += Number(pp.margin ?? 0) || 0;
-          upnl += Number(pp.unrealizedPnl ?? 0) || 0;
-        }
-        await setCronState('bluefin:nav-last-good', {
-          value: freeCollateralUsdc + lockedMargin + upnl,
+      try {
+        const { refreshBluefinCache } = await import('@/lib/services/sui/bluefin-read-safe');
+        await refreshBluefinCache({
           free: freeCollateralUsdc,
-          lockedMargin,
-          upnl,
-          positions: positionsCount,
-          ts: Date.now(),
-        }).catch(() => { /* best-effort */ });
-      }
+          positions: positions as unknown as Array<Record<string, unknown>>,
+          source: 'bluefin-health',
+        });
+      } catch { /* best-effort */ }
     }
   } catch (probeErr) {
     apiError = errMsg(probeErr);

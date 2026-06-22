@@ -71,6 +71,68 @@ async function readCache(): Promise<{ cached: CachedSnapshot | null; ageMs: numb
   return { cached, ageMs };
 }
 
+/**
+ * Refresh the shared `bluefin:nav-last-good` cache from a successful
+ * BlueFin read. Any cron that touches getBalance + getPositions and
+ * gets clean values should call this — keeps the cache hot across
+ * every cron cadence so the NAV path / health endpoint / dashboard
+ * always see fresh data, regardless of which cron last fired.
+ *
+ * No-op when the read looks empty (free=0 AND no positions) so a
+ * venue blip can't poison the cache with zeros.
+ *
+ * Also maintains a `bluefin:consecutiveEmptyReads` counter for
+ * persistence-based empty detection: each clean (non-empty) read
+ * resets it; each empty read increments it. Discord alerts at the
+ * 3rd consecutive empty so 1-tick venue blips don't page anyone but
+ * sustained outages do.
+ */
+export async function refreshBluefinCache(args: {
+  free: number;
+  positions: Array<Record<string, unknown>>;
+  source?: string;          // which cron called us, for logging
+}): Promise<void> {
+  const { free, positions, source = 'unknown' } = args;
+  const venueLooksEmpty = free === 0 && positions.length === 0;
+
+  if (venueLooksEmpty) {
+    // Increment persistent empty-read counter. Alert on the 3rd one
+    // (≈ 15 min of consecutive empties at 5-min cron cadence).
+    const prev = await getCronStateOr<number>('bluefin:consecutiveEmptyReads', 0);
+    const next = prev + 1;
+    await setCronState('bluefin:consecutiveEmptyReads', next).catch(() => {});
+    if (next === 3) {
+      const { notifyDiscord } = await import('@/lib/utils/discord-notify');
+      await notifyDiscord(
+        `BlueFin /account returning EMPTY for ${next}+ consecutive cron reads (~15 min). ` +
+        `Could be venue API glitch OR real position close. NAV is currently served from ` +
+        `last-good cache. Investigate via BlueFin web UI.`,
+        'WARN',
+        { source, consecutiveEmpty: next },
+      ).catch(() => {});
+    }
+    return; // don't poison cache with zeros
+  }
+
+  // Clean (non-empty) read — reset the empty counter and refresh cache.
+  await setCronState('bluefin:consecutiveEmptyReads', 0).catch(() => {});
+
+  let lockedMargin = 0;
+  let upnl = 0;
+  for (const p of positions) {
+    lockedMargin += Number(p.margin ?? p.initialMargin ?? 0) || 0;
+    upnl += Number(p.unrealizedPnl ?? 0) || 0;
+  }
+  await setCronState('bluefin:nav-last-good', {
+    value: free + lockedMargin + upnl,
+    free,
+    lockedMargin,
+    upnl,
+    positions: positions.length,
+    ts: Date.now(),
+  }).catch(() => { /* best-effort */ });
+}
+
 function snapshotFromCache(c: CachedSnapshot, ageMs: number, warning: string): BluefinSnapshot {
   return {
     free: c.free,

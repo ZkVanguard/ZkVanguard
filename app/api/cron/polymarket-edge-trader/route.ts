@@ -318,6 +318,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const bf = BluefinService.getInstance();
     await bf.initialize(adminKey, network);
 
+    // ── 0) Refresh shared BlueFin cache for downstream NAV / health
+    //    consumers. This cron runs every 5 min and already needs both
+    //    getBalance and getPositions — using them to keep the
+    //    `bluefin:nav-last-good` cache hot gives the pool a SECOND
+    //    5-min cache writer alongside bluefin-health, so a single-cron
+    //    failure can't stale the cache.
+    try {
+      const [bal, pos] = await Promise.all([
+        bf.getBalance().catch(() => 0),
+        bf.getPositions().catch(() => [] as BluefinPosition[]),
+      ]);
+      const { refreshBluefinCache } = await import('@/lib/services/sui/bluefin-read-safe');
+      await refreshBluefinCache({
+        free: Number(bal) || 0,
+        positions: pos as unknown as Array<Record<string, unknown>>,
+        source: 'polymarket-edge-trader',
+      });
+    } catch { /* best-effort; trader loop continues below */ }
+
     // ── 1) If a trade is active ─────────────────────────────────────────
     if (active) {
       const positions = await bf.getPositions().catch(() => [] as BluefinPosition[]);

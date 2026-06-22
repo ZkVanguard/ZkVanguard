@@ -107,10 +107,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
 
   try {
     const bf = BluefinService.getInstance();
-    const [dbHedges, positions] = await Promise.all([
+    const [dbHedges, positions, balance] = await Promise.all([
       getActiveHedges(undefined, 'sui'),
       bf.getPositions(),
+      bf.getBalance().catch(() => 0),  // best-effort for cache write
     ]);
+
+    // Refresh shared `bluefin:nav-last-good` cache whenever we have a
+    // clean read here. Reconciler runs every 15 min, so combined with
+    // bluefin-health (5 min) the NAV cache cadence becomes 5-15 min
+    // from multiple redundant sources — if either cron's BlueFin call
+    // succeeds, downstream consumers stay fresh.
+    try {
+      const { refreshBluefinCache } = await import('@/lib/services/sui/bluefin-read-safe');
+      await refreshBluefinCache({
+        free: balance,
+        positions: positions as unknown as Array<Record<string, unknown>>,
+        source: 'bluefin-db-reconcile',
+      });
+    } catch { /* best-effort */ }
 
     // Safety bail: BlueFin's /positions endpoint occasionally returns []
     // during transient venue issues (observed during the 2026-05-30 closeHedge
