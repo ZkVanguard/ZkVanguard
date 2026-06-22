@@ -2600,6 +2600,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           ...(enhancedContext.predictionSignals && { predictionSignals: enhancedContext.predictionSignals }),
           ...(enhancedContext.riskAlerts?.length && { riskAlerts: enhancedContext.riskAlerts }),
           ...(enhancedContext.correlationInsight && { correlationInsight: enhancedContext.correlationInsight }),
+          // Persist the recommendations list so /api/debug/sui-pool-status
+          // can surface tilt explanations like "Synthetic STRONG UP on BTC"
+          // and "Drift-fusion alignment UP 100% across 4 assets" — without
+          // this, the audit trail loses the *why* behind each allocation.
+          ...(enhancedContext.recommendations?.length && { recommendations: enhancedContext.recommendations }),
         },
       });
     } catch (txErr) {

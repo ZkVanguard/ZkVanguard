@@ -52,12 +52,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
        WHERE type = 'AI_DECISION' AND details->>'chain' = 'sui'
        ORDER BY created_at DESC LIMIT 3`
     ) as Array<{ created_at: Date; details: Record<string, unknown> }>;
-    result.lastAIDecisions = lastDecisions.map(d => ({
-      timestamp: d.created_at,
-      allocations: (d.details as any)?.allocations,
-      confidence: (d.details as any)?.confidence,
-      shouldRebalance: (d.details as any)?.shouldRebalance,
-    }));
+    result.lastAIDecisions = lastDecisions.map(d => {
+      const det = d.details as Record<string, unknown>;
+      return {
+        timestamp: d.created_at,
+        allocations: det?.allocations,
+        confidence: det?.confidence,
+        action: det?.action,
+        marketSentiment: det?.marketSentiment,
+        urgency: det?.urgency,
+        recommendations: det?.recommendations,
+        riskAlerts: det?.riskAlerts,
+        // Truncate reasoning to keep payload bounded
+        reasoning: typeof det?.reasoning === 'string' ? (det.reasoning as string).slice(0, 500) : undefined,
+      };
+    });
   } catch (err) {
     result.lastAIDecisions = { error: err instanceof Error ? err.message : String(err) };
   }

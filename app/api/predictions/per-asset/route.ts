@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { PredictionAggregatorService } from '@/lib/services/market-data/PredictionAggregatorService';
 import { getDynamicTrackedAssets, getTrackedAssetList } from '@/lib/services/market-data/MultiAssetSignalService';
-import { SignalDriftFusion } from '@/lib/services/market-data/SignalDriftFusion';
+import { SignalDriftFusion, type FusionUpgrade } from '@/lib/services/market-data/SignalDriftFusion';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,24 +49,61 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     durationMs: Date.now() - start,
     assets,
     predictions: Object.fromEntries(
-      Object.entries(predictions).map(([asset, p]) => [asset, {
-        direction: p.direction,
-        recommendation: p.recommendation,
-        confidence: Math.round(p.confidence),
-        consensus: Math.round(p.consensus),
-        probability: Math.round(p.probability * 10) / 10,
-        sourceCount: p.sources.length,
-        sources: p.sources.map(s => ({
-          name: s.name,
-          direction: s.direction,
-          confidence: Math.round(s.confidence),
-          weight: Math.round(s.weight * 1000) / 10,            // %
-        })),
-        syntheticStrong: p.sources.some(s => s.name.includes('synthetic STRONG')),
-        hasManifold: p.sources.some(s => s.name.startsWith('Manifold:')),
-        hasAlignment: p.sources.some(s => s.name.startsWith('Cross-asset alignment')),
-        reasoning: p.reasoning,
-      }]),
+      Object.entries(predictions).map(([asset, p]) => {
+        // Recover the fusion upgrade from the source bag — surfaces drift
+        // detail so callers can see WHY synthetic STRONG isn't firing
+        // (e.g., drift FLAT vs alignment FAIL vs funding CONFLICT).
+        let upgrade: FusionUpgrade | undefined;
+        for (const s of p.sources) {
+          const raw = s.rawData as { fusionUpgrade?: FusionUpgrade } | undefined;
+          if (raw?.fusionUpgrade) { upgrade = raw.fusionUpgrade; break; }
+        }
+        return [asset, {
+          direction: p.direction,
+          recommendation: p.recommendation,
+          confidence: Math.round(p.confidence),
+          consensus: Math.round(p.consensus),
+          probability: Math.round(p.probability * 10) / 10,
+          sourceCount: p.sources.length,
+          sources: p.sources.map(s => ({
+            name: s.name,
+            direction: s.direction,
+            confidence: Math.round(s.confidence),
+            weight: Math.round(s.weight * 1000) / 10,            // %
+          })),
+          syntheticStrong: p.sources.some(s => s.name.includes('synthetic STRONG')),
+          hasManifold: p.sources.some(s => s.name.startsWith('Manifold:')),
+          hasAlignment: p.sources.some(s => s.name.startsWith('Cross-asset alignment')),
+          reasoning: p.reasoning,
+          // Diagnostic — exposes why upgrade fired (or didn't):
+          fusion: upgrade ? {
+            upgradedToStrong: upgrade.upgradedToStrong,
+            syntheticConfidence: Math.round(upgrade.syntheticConfidence),
+            reasons: upgrade.reasons,
+            fundingAlign: upgrade.fundingAlign,
+            probDrift: upgrade.drift && {
+              direction: upgrade.drift.driftDirection,
+              consistency: Math.round(upgrade.drift.directionConsistency * 100),
+              netDelta: Math.round(upgrade.drift.netDelta * 10) / 10,
+              samples: upgrade.drift.samples,
+            },
+            priceDrift: upgrade.priceDrift && {
+              direction: upgrade.priceDrift.driftDirection,
+              consistency: Math.round(upgrade.priceDrift.directionConsistency * 100),
+              netDelta: Math.round(upgrade.priceDrift.netDelta * 100) / 100,
+              samples: upgrade.priceDrift.samples,
+            },
+            alignment: upgrade.alignment && {
+              dominantDirection: upgrade.alignment.dominantDirection,
+              dominancePct: Math.round(upgrade.alignment.dominancePct),
+              up: upgrade.alignment.upCount,
+              down: upgrade.alignment.downCount,
+              neutral: upgrade.alignment.neutralCount,
+              directionalVoters: upgrade.alignment.directionalVoters,
+            },
+          } : null,
+        }];
+      }),
     ),
     driftHistory: driftSnapshot,
   });
