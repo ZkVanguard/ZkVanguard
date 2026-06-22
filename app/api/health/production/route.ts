@@ -240,7 +240,11 @@ export async function GET(req: NextRequest) {
   const db = await checkDb();
   const navFreshness = await checkNavFreshness();
   const suiPoolCron = await checkCronAge('cron:lastRun:sui-community-pool', 45, 90);
-  const traderCron = await checkCronAge('polymarket-edge:daily', 60, 1440);
+  // FIX 2026-06-22: was reading 'polymarket-edge:daily' (a stats key only
+  // written on actual trade execution), so cron 'no entry yet' even though
+  // the trader was firing every 5 min. Use the real heartbeat key the
+  // trader route writes at the top of every invocation.
+  const traderCron = await checkCronAge('cron:lastRun:polymarket-edge-trader', 15, 30);
   const hedgeReconcileCron = await checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240);
   const bluefinHealthCron = await checkCronAge('bluefin-health:consecutiveDegraded', 15, 30);
   const bluefinDbReconcileCron = await checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60);
