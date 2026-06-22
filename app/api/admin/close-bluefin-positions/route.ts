@@ -31,10 +31,19 @@ async function handle(req: NextRequest, dryRun: boolean) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Optional ?symbol=SUI-PERP filter — close one specific position
+  // instead of flattening everything. Case-insensitive match against
+  // the venue's symbol field. When unset, all positions get closed
+  // (legacy behavior preserved).
+  const symbolFilter = (new URL(req.url).searchParams.get('symbol') || '').trim().toUpperCase();
+
   try {
     const bf = BluefinService.getInstance();
     const beforeFree = await bf.getBalance();
-    const positions = await bf.getPositions();
+    const allPositions = await bf.getPositions();
+    const positions = symbolFilter
+      ? allPositions.filter(p => String((p as unknown as Record<string, unknown>).symbol || '').toUpperCase() === symbolFilter)
+      : allPositions;
 
     if (positions.length === 0) {
       return NextResponse.json({
@@ -44,8 +53,11 @@ async function handle(req: NextRequest, dryRun: boolean) {
         afterFree: beforeFree,
         closed: 0,
         results: [],
-        message: 'No open positions',
+        message: symbolFilter
+          ? `No open positions matching symbol=${symbolFilter} (total open: ${allPositions.length})`
+          : 'No open positions',
         durationMs: Date.now() - startTime,
+        symbolFilter: symbolFilter || undefined,
       });
     }
 
