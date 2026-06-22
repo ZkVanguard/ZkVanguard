@@ -37,9 +37,13 @@ async function testB() {
 
   // Hand-craft a 4-asset world with weak-UP signals drifting upward.
   // Each asset starts at 50.5 and drifts to 52.5 over 5 samples.
+  // Use distinct fetchedAt per sample — recordSample dedups by ts so two
+  // samples with the same Date.now() millisecond would collapse to one.
   const assets = ['BTC', 'ETH', 'SOL', 'XRP'];
   const drifts = [50.5, 51.0, 51.5, 52.0, 52.5];
-  for (const prob of drifts) {
+  const baseTs = Date.now() - 60_000;
+  for (let i = 0; i < drifts.length; i++) {
+    const prob = drifts[i];
     for (const a of assets) {
       // @ts-ignore — minimal synthetic signal
       SignalDriftFusion.recordSample(a, {
@@ -48,7 +52,7 @@ async function testB() {
         currentPrice: 0, priceToBeat: 0, volume: 100, liquidity: 1000,
         confidence: 45, signalStrength: 'WEAK', recommendation: 'WAIT',
         timeRemainingSeconds: 200, windowEndTime: Date.now() + 200_000,
-        fetchedAt: Date.now(), question: '', sourceUrl: '',
+        fetchedAt: baseTs + i * 10_000, question: '', sourceUrl: '',
       });
     }
   }

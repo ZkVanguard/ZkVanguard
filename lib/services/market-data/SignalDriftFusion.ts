@@ -87,18 +87,27 @@ export class SignalDriftFusion {
   /**
    * Record a fresh signal sample for an asset. Called by the aggregator
    * each time it fetches per-asset signals so the drift window stays warm.
+   *
+   * **Dedup by fetchedAt:** MultiAssetSignalService caches per-asset
+   * signals for 15s, and the aggregator caches its output for 20s, so
+   * back-to-back API calls would otherwise record IDENTICAL samples that
+   * pollute the history with zero-delta entries and force drift to FLAT.
+   * We only push when the underlying market data is genuinely new
+   * (fetchedAt strictly greater than the last recorded sample's ts).
    */
   static recordSample(asset: string, signal: MultiAssetSignal): void {
     const key = asset.toUpperCase();
     const arr = this.history.get(key) ?? [];
+    const ts = signal.fetchedAt || Date.now();
+    const last = arr[arr.length - 1];
+    if (last && ts <= last.ts) return;             // skip duplicate / older sample
     // Direction-aware probability: UP-leaning markets are tracked by their
     // upProbability; DOWN-leaning by 100 - upProbability. This lets a
     // 48 → 50 → 52 trajectory read as a smooth UP drift even though the
     // direction flipped at 50.
-    const upProb = signal.upProbability;
     arr.push({
-      ts: signal.fetchedAt || Date.now(),
-      probability: upProb,
+      ts,
+      probability: signal.upProbability,
       direction: signal.direction,
       confidence: signal.confidence,
     });

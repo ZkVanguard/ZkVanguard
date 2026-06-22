@@ -181,6 +181,16 @@ export class MultiAssetSignalService {
         try {
           const signal = await this.fetchLatest5MinMarket(key);
           this.signalCache.set(key, { signal, ts: Date.now() });
+          // Feed the drift-fusion window at the source: this fires only
+          // on actual fetches (cache misses), so drift samples accrue at
+          // the underlying 15s cadence — not at the outer aggregator's
+          // 20s cache rate, which would frequently skip fuseAll entirely.
+          if (signal) {
+            try {
+              const { SignalDriftFusion } = await import('./SignalDriftFusion');
+              SignalDriftFusion.recordSample(key, signal);
+            } catch { /* graceful — drift fusion is optional */ }
+          }
           return [key, signal] as const;
         } catch (err) {
           logger.debug(`[MultiAssetSignal] ${key} signal fetch failed (graceful)`, {
