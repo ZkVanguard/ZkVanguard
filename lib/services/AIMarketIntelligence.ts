@@ -22,6 +22,9 @@ import { cache } from '../utils/cache';
 import { Polymarket5MinService, type FiveMinBTCSignal, type FiveMinSignalHistory } from './market-data/Polymarket5MinService';
 import { DelphiMarketService, type PredictionMarket } from './market-data/DelphiMarketService';
 import { MultiAssetSignalService, type MultiAssetSignal } from './market-data/MultiAssetSignalService';
+import { ManifoldMarketService } from './market-data/ManifoldMarketService';
+import { PredictionAggregatorService, type AggregatedPrediction } from './market-data/PredictionAggregatorService';
+import type { FusionUpgrade, AlignmentSnapshot } from './market-data/SignalDriftFusion';
 
 // ============================================================================
 // Enhanced Types for AI Agents
@@ -174,6 +177,28 @@ export interface AIMarketContext {
     }>;
   };
   
+  /**
+   * Fused per-asset predictions from the creative-signal stack:
+   * per-asset 5-min binaries + Manifold sources + drift fusion +
+   * cross-asset alignment. Available for the assets the caller passed
+   * in. Each entry includes the synthetic-STRONG upgrade decision under
+   * `fusionUpgrade` so SuiPoolAgent can tilt allocations accordingly.
+   *
+   * This is the same per-asset aggregation the autonomous trader uses;
+   * surfacing it here lets the SUI pool's allocation logic share the
+   * same alpha.
+   */
+  fusedPredictions: {
+    perAsset: Record<string, AggregatedPrediction>;
+    upgrades: Record<string, FusionUpgrade>;
+    alignment: AlignmentSnapshot;
+    /** Assets currently in synthetic-STRONG state, with direction. */
+    syntheticStrong: Array<{ asset: string; direction: 'UP' | 'DOWN'; confidence: number; reasons: string[] }>;
+  };
+
+  /** Manifold prediction markets surfaced alongside Polymarket/Delphi. */
+  manifoldMarkets: PredictionMarket[];
+
   /** Overall market sentiment */
   marketSentiment: {
     score: number; // -100 (extreme fear) to +100 (extreme greed)
@@ -281,12 +306,25 @@ export class AIMarketIntelligence {
 
     const { fetchBroadCryptoMarkets, summarize: summarizeBroad } = await import('./market-data/PolymarketBroadMarketsService');
 
+    // Per-asset fusion targets for the SUI pool: BTC + ETH cover the
+    // tradeable assets, plus any extra requested in `assets`. We feed
+    // ALL of `multiAssetTargets` for the cross-asset alignment calc but
+    // only request fused predictions for the assets the SUI pool can
+    // act on (avoids paying for per-asset Crypto.com ticker fetches on
+    // assets the pool can't allocate to).
+    const fusionTargets = Array.from(new Set([
+      'BTC', 'ETH',
+      ...assets.map(a => a.toUpperCase()).filter(a => ['BTC', 'ETH'].includes(a)),
+    ]));
+
     const [
       fiveMinSignal,
       predictions,
       priceData,
       multiAssetAgg,
       broadAll,
+      manifoldMarkets,
+      fusedPerAsset,
     ] = await Promise.all([
       Polymarket5MinService.getLatest5MinSignal().catch((err) => { logger.warn('[AIMarketIntelligence] 5min signal fetch failed', { error: err }); return null; }),
       DelphiMarketService.getRelevantMarkets(assets).catch((err) => { logger.warn('[AIMarketIntelligence] Predictions fetch failed', { error: err }); return []; }),
@@ -299,7 +337,46 @@ export class AIMarketIntelligence {
         logger.warn('[AIMarketIntelligence] Broad markets fetch failed', { error: err });
         return [] as Awaited<ReturnType<typeof fetchBroadCryptoMarkets>>;
       }),
+      ManifoldMarketService.getCryptoMarkets(multiAssetTargets).catch((err) => {
+        logger.warn('[AIMarketIntelligence] Manifold fetch failed', { error: err });
+        return [] as PredictionMarket[];
+      }),
+      PredictionAggregatorService.getPerAssetPredictions(fusionTargets).catch((err) => {
+        logger.warn('[AIMarketIntelligence] Fused per-asset predictions failed', { error: err });
+        return {} as Record<string, AggregatedPrediction>;
+      }),
     ]);
+
+    // Extract the drift-fusion upgrade decisions + cross-asset alignment
+    // from the fused per-asset predictions. The aggregator side stored
+    // them on the source.rawData.fusionUpgrade — recover them so the
+    // pool can surface synthetic-STRONG to the allocation tilts.
+    const upgrades: Record<string, FusionUpgrade> = {};
+    let alignment: AlignmentSnapshot = {
+      upCount: 0, downCount: 0, neutralCount: 0, totalAssets: 0,
+      dominantDirection: 'NEUTRAL', dominancePct: 0, meanConfidence: 0,
+    };
+    for (const [asset, pred] of Object.entries(fusedPerAsset)) {
+      for (const src of pred.sources) {
+        const raw = src.rawData as { fusionUpgrade?: FusionUpgrade } | undefined;
+        if (raw?.fusionUpgrade) {
+          upgrades[asset] = raw.fusionUpgrade;
+          if (raw.fusionUpgrade.alignment) alignment = raw.fusionUpgrade.alignment;
+        }
+      }
+    }
+    const syntheticStrong = Object.entries(upgrades)
+      .filter(([, u]) => u.upgradedToStrong)
+      .map(([asset, u]) => {
+        const pred = fusedPerAsset[asset];
+        const direction: 'UP' | 'DOWN' = pred?.direction === 'DOWN' ? 'DOWN' : 'UP';
+        return {
+          asset,
+          direction,
+          confidence: u.syntheticConfidence,
+          reasons: u.reasons,
+        };
+      });
 
     // Fold the top broad markets (by 24h volume) into `predictions` so the
     // existing SuiPoolAgent loop at agents/specialized/SuiPoolAgent.ts:402
@@ -326,7 +403,12 @@ export class AIMarketIntelligence {
         recommendation: 'MONITOR' as const,
         source: 'polymarket' as const,
       }));
-    const mergedPredictions = [...predictions, ...broadAsPredictions];
+    // Fold Manifold markets in too — same `PredictionMarket` shape, just
+    // a different prediction-market source. SuiPoolAgent's existing
+    // per-prediction loop reads `relatedAssets` to route signals to
+    // allocation tilts, so Manifold markets contribute the same way
+    // Delphi/Polymarket-broad do.
+    const mergedPredictions = [...predictions, ...broadAsPredictions, ...manifoldMarkets];
 
     const signalHistory = Polymarket5MinService.getSignalHistory();
 
@@ -370,6 +452,13 @@ export class AIMarketIntelligence {
             sourceUrl: b.sourceUrl,
           })),
       },
+      fusedPredictions: {
+        perAsset: fusedPerAsset,
+        upgrades,
+        alignment,
+        syntheticStrong,
+      },
+      manifoldMarkets,
       marketSentiment: this.calculateSentiment(fiveMinSignal, signalHistory, mergedPredictions, priceData),
       summary: this.generateSummary(fiveMinSignal, signalHistory, mergedPredictions),
     };

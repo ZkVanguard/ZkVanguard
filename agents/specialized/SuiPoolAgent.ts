@@ -488,7 +488,41 @@ export class SuiPoolAgent extends BaseAgent {
         );
       }
     }
-    
+
+    // 3d. Synthetic-STRONG tilts from drift-fusion (the creative-signal stack).
+    // When SignalDriftFusion upgrades an asset to synthetic STRONG, that's a
+    // higher-conviction signal than the per-tick MODERATE classification —
+    // tilt the allocation more aggressively. ±5% per upgraded asset.
+    // Funding-confirmed upgrades get +2% extra. SUI mirrors BTC's tilt since
+    // it has no Polymarket binary of its own.
+    if (context.fusedPredictions?.syntheticStrong?.length) {
+      for (const up of context.fusedPredictions.syntheticStrong) {
+        const target = up.asset as PoolAsset;
+        if (!['BTC', 'ETH'].includes(target)) continue;
+        const fundingConfirmed = up.reasons.some(r => r.startsWith('funding ') && r.includes('confirms'));
+        const tilt = fundingConfirmed ? 7 : 5;
+        if (up.direction === 'UP') {
+          adjustedAllocations[target] = Math.min(50, (adjustedAllocations[target] || 25) + tilt);
+          // Defensive complement: shave SUI to fund the tilt
+          adjustedAllocations['SUI'] = Math.max(10, (adjustedAllocations['SUI'] || 25) - Math.round(tilt / 2));
+        } else {
+          adjustedAllocations[target] = Math.max(8, (adjustedAllocations[target] || 25) - tilt);
+          // Risk-off: bias toward SUI (lower-beta on the pool's directional book)
+          adjustedAllocations['SUI'] = Math.min(50, (adjustedAllocations['SUI'] || 25) + Math.round(tilt / 2));
+        }
+        recommendations.push(
+          `Synthetic STRONG ${up.direction} on ${up.asset} (conf=${up.confidence.toFixed(0)}, ${up.reasons.length} confirms) → ${up.direction === 'UP' ? '+' : '-'}${tilt}% ${target}`,
+        );
+      }
+      // Cross-asset alignment as its own context line for the LLM prompt
+      const align = context.fusedPredictions.alignment;
+      if (align.totalAssets >= 3 && align.dominancePct >= 67) {
+        recommendations.push(
+          `Drift-fusion alignment: ${align.dominantDirection} ${align.dominancePct.toFixed(0)}% across ${align.totalAssets} assets (avgConf=${align.meanConfidence.toFixed(0)})`,
+        );
+      }
+    }
+
     // 4. Calculate overall sentiment from marketSentiment.score (-100 to +100)
     // Also factor in prediction signal consensus
     let marketSentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
