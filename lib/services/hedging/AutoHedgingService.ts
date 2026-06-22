@@ -391,20 +391,19 @@ class AutoHedgingService {
         if (!currentPrice) continue;
 
         const entryPrice = Number(hedge.entry_price) || 0;
-        const notionalValue = Number(hedge.notional_value);
-        const leverage = Number(hedge.leverage) || 1;
+        const size = Number(hedge.size) || 0;
 
-        // Calculate PnL (guard against division by zero)
-        if (entryPrice === 0) continue;
+        // Calculate PnL (guard against division by zero / missing data)
+        if (entryPrice === 0 || size === 0) continue;
 
-        let pnlMultiplier: number;
-        if (hedge.side === 'SHORT') {
-          pnlMultiplier = (entryPrice - currentPrice) / entryPrice;
-        } else {
-          pnlMultiplier = (currentPrice - entryPrice) / entryPrice;
-        }
-
-        const unrealizedPnL = notionalValue * pnlMultiplier * leverage;
+        // PnL formula: size × (entry − mark) × sideSign.
+        // Leverage affects MARGIN requirement, NOT PnL — the asset quantity
+        // already fully encodes directional exposure. Multiplying by leverage
+        // here (as we used to) inflated PnL by 3× for our 3× hedges and
+        // drove the long-standing DB-vs-venue drift (DB \$6.33 vs venue \$2.95
+        // on ETH SHORT, observed 2026-06-22).
+        const sign = hedge.side === 'SHORT' ? 1 : -1;
+        const unrealizedPnL = size * (entryPrice - currentPrice) * sign;
 
         // Guard against non-finite values (Infinity, NaN)
         if (!isFinite(unrealizedPnL)) continue;

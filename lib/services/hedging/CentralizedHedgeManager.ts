@@ -843,15 +843,17 @@ export class CentralizedHedgeManager {
         }
       }
 
-      let pnlMultiplier: number;
-      if (hedge.side === 'SHORT') {
-        pnlMultiplier = (entryPrice - snapshotPrice.price) / entryPrice;
-      } else {
-        pnlMultiplier = (snapshotPrice.price - entryPrice) / entryPrice;
-      }
-
-      const unrealizedPnL = notionalValue * pnlMultiplier * leverage;
+      // PnL formula: size × (entry − mark) × sideSign.
+      // Leverage affects MARGIN requirement, NOT PnL — the asset quantity
+      // already fully encodes directional exposure. Multiplying by leverage
+      // inflates PnL by 3× for our 3× hedges (the long-standing
+      // DB \$6.33 vs venue \$2.95 ETH-SHORT drift, observed 2026-06-22).
+      const size = Number(hedge.size) || 0;
+      if (size === 0) continue;
+      const sign = hedge.side === 'SHORT' ? 1 : -1;
+      const unrealizedPnL = size * (entryPrice - snapshotPrice.price) * sign;
       if (!isFinite(unrealizedPnL)) continue;
+      void notionalValue; void leverage;  // legacy locals; intentionally unused now
 
       updates.push({ id: hedge.id, pnl: unrealizedPnL, price: snapshotPrice.price });
     }
