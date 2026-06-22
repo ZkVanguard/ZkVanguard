@@ -165,14 +165,36 @@ export class SignalDriftFusion {
     }
     if (returns.length === 0) return null;
 
+    // Noise floor: ignore deltas below 1 bp (0.01%). At 30s sampling BTC
+    // moves ~0.0015% per tick on average — anything below 1bp is almost
+    // certainly stale ticker / floating-point jitter, not real movement.
     let pos = 0, neg = 0;
-    const NOISE_THRESHOLD = 0.0005;            // 5 bps per sample
+    const NOISE_THRESHOLD = 0.0001;            // 1 bp per sample
     for (const r of returns) {
       if (r > NOISE_THRESHOLD) pos++;
       else if (r < -NOISE_THRESHOLD) neg++;
     }
+    const nonZero = pos + neg;
+    // Need at least 2 non-zero deltas before claiming a trend — one data
+    // point isn't direction. Otherwise FLAT.
+    if (nonZero < 2) {
+      return {
+        asset: key,
+        samples: samples.length,
+        directionConsistency: 0,
+        netDelta: samples[0].price > 0
+          ? ((samples[samples.length - 1].price - samples[0].price) / samples[0].price) * 100
+          : 0,
+        recentSlope: returns.reduce((s, r) => s + r, 0) / returns.length * 100,
+        driftDirection: 'FLAT',
+      };
+    }
     const dominant = pos > neg ? pos : neg;
-    const directionConsistency = dominant / returns.length;
+    // Consistency over NON-ZERO deltas only. Including zero-classified
+    // deltas in the denominator would dilute a genuine trend (e.g., 1 UP
+    // + 4 zero deltas would read as 20% consistency even though all the
+    // signal is UP).
+    const directionConsistency = dominant / nonZero;
     const driftDirection: DriftDirection =
       directionConsistency < DRIFT_CONSISTENT_THRESHOLD ? 'FLAT'
       : pos >= neg ? 'UP' : 'DOWN';
@@ -208,16 +230,19 @@ export class SignalDriftFusion {
     }
     if (deltas.length === 0) return null;
 
-    let pos = 0, neg = 0, zero = 0;
+    let pos = 0, neg = 0;
     for (const d of deltas) {
       if (d > 0.2) pos++;
       else if (d < -0.2) neg++;
-      else zero++;
     }
+    const nonZero = pos + neg;
+    // Same "non-zero divisor" pattern as computePriceDrift — including
+    // zero-classified deltas in the denominator dilutes a real trend.
     const dominant = pos > neg ? pos : neg;
-    const directionConsistency = dominant / deltas.length;
+    const directionConsistency = nonZero > 0 ? dominant / nonZero : 0;
     const driftDirection: DriftDirection =
-      directionConsistency < DRIFT_CONSISTENT_THRESHOLD ? 'FLAT'
+      nonZero < 2 ? 'FLAT'
+      : directionConsistency < DRIFT_CONSISTENT_THRESHOLD ? 'FLAT'
       : pos >= neg ? 'UP' : 'DOWN';
 
     const netDelta = samples[samples.length - 1].probability - samples[0].probability;
