@@ -2675,6 +2675,51 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       });
     }
 
+    // LeadAgent autonomous cycle — invokes Risk → Hedging consensus →
+    // Hedging → Settlement → Reporting in sequence so the 7-agent
+    // architecture actually fires every 30min instead of being dormant
+    // until someone hits an API endpoint. Result persisted to
+    // `lead-cycle:last-decision` for surfacing via the latest endpoint
+    // + UI. Try/catch'd so a specialist failure can never break the
+    // SUI cron.
+    try {
+      const { getAgentOrchestrator } = await import('@/lib/services/agent-orchestrator');
+      const orchestrator = getAgentOrchestrator();
+      const cycle = await orchestrator.runAutonomousCycle({
+        chain: 'sui',
+        portfolioId: -2,
+      });
+      const { setCronState } = await import('@/lib/db/cron-state');
+      await Promise.all([
+        setCronState('cron:lastRun:lead-cycle', Date.now()).catch(() => {}),
+        setCronState('lead-cycle:last-decision', { ts: Date.now(), ...cycle }).catch(() => {}),
+      ]);
+      logger.info('[SUI Cron] LeadAgent autonomous cycle complete', {
+        success: cycle.success,
+        riskScore: cycle.riskScore,
+        hedgeRecs: cycle.hedgeRecommendations,
+        durationMs: cycle.durationMs,
+      });
+      // Discord ping on actionable findings: high risk OR rebalance needed.
+      if (cycle.success && (cycle.needsRebalance || (cycle.riskScore ?? 0) > 70)) {
+        try {
+          const { notifyDiscord } = await import('@/lib/utils/discord-notify');
+          await notifyDiscord(
+            `🤖 LeadAgent cycle: risk=${cycle.riskScore ?? '?'}/${cycle.riskLevel ?? '?'}, ` +
+            `hedge-recs=${cycle.hedgeRecommendations ?? 0}, ` +
+            `rebalance=${cycle.needsRebalance ? 'YES' : 'no'}. ` +
+            (cycle.leadSummary ?? '').slice(0, 200),
+            cycle.needsRebalance ? 'WARN' : 'INFO',
+            { cycle },
+          ).catch(() => {});
+        } catch { /* best-effort */ }
+      }
+    } catch (cycleErr) {
+      logger.warn('[SUI Cron] LeadAgent cycle failed (non-fatal)', {
+        error: cycleErr instanceof Error ? cycleErr.message : String(cycleErr),
+      });
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
