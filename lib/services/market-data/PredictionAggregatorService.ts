@@ -538,13 +538,25 @@ export class PredictionAggregatorService {
     // Fetch per-asset 5-min binaries via MultiAssetSignalService (not just
     // BTC) so the synthetic-STRONG fusion has cross-asset data to work
     // with, plus Manifold for source diversity.
+    //
+    // Alignment universe vs return universe:
+    //   - We compute cross-asset ALIGNMENT over the full tracked universe
+    //     (BTC, ETH, SOL, XRP, DOGE by default) — even when the caller only
+    //     wants per-asset predictions for BTC + ETH. Otherwise a SUI-pool-
+    //     style 2-asset call would only have 2 alignment voters and fail
+    //     the ≥3 minimum gate, killing synthetic STRONG even on perfectly
+    //     clear 5/5 universe agreement.
+    //   - We still only RETURN per-asset predictions for the requested
+    //     assets — alignment is a side-input, not output.
     const upperAssets = assets.map(a => a.toUpperCase());
+    const { getTrackedAssetList } = await import('./MultiAssetSignalService');
+    const alignmentUniverse = Array.from(new Set([...getTrackedAssetList(), ...upperAssets]));
     const [polymarketSignal, delphiPredictions, cryptoComData, fundingRates, multiAssetSignals, manifoldMarkets] = await Promise.all([
       this.fetchPolymarketSignal(),
       this.fetchDelphiPredictions(),
       this.fetchCryptoComData(upperAssets),
       this.fetchBluefinFundingRates(assets),
-      MultiAssetSignalService.getLatestSignals(upperAssets).catch(() => ({} as Record<string, MultiAssetSignal | null>)),
+      MultiAssetSignalService.getLatestSignals(alignmentUniverse).catch(() => ({} as Record<string, MultiAssetSignal | null>)),
       ManifoldMarketService.getCryptoMarkets(upperAssets).catch(() => [] as PredictionMarket[]),
     ]);
 
