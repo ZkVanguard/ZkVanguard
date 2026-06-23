@@ -392,12 +392,19 @@ export class PredictionAggregatorService {
         const asset = rawAsset.toUpperCase();
         const t = tickerMap[`${asset}_USDT`];
         if (!t) continue;
-        const price = parseFloat(t.a || '0');
+        // Use bid+ask MID for drift tracking. `t.a` (ask) alone goes stale
+        // between updates on quiet pairs — multiple consecutive fetches
+        // return the identical ask even when bid moved, producing
+        // zero-delta drift samples. Midpoint averages both sides so any
+        // real book movement registers.
+        const ask = parseFloat(t.a || '0');
+        const bid = parseFloat(t.b || '0');
+        const price = (ask > 0 && bid > 0) ? (ask + bid) / 2 : (ask || bid);
         if (!Number.isFinite(price) || price <= 0) continue;
         perAsset[asset] = {
           price,
           change24h: parseFloat(t.c || '0') * 100,
-          volume: parseFloat(t.v || '0') * price,
+          volume: parseFloat(t.v || '0') * (ask || price),
         };
       }
 

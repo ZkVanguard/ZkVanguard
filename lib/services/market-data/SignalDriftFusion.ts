@@ -379,9 +379,22 @@ export class SignalDriftFusion {
       reasons.push(`funding conflicts (would be ${fundingRate > 0 ? 'DOWN' : 'UP'}-bias)`);
     }
 
+    // Overwhelming alignment escape hatch: when ≥5 assets all point the
+    // same way with ≥85% directional-voter dominance, that IS the signal —
+    // requiring drift to also fire would strand a perfectly clear
+    // multi-asset consensus. Keeps the funding-conflict veto active so
+    // a contrarian funding regime still blocks upgrades.
+    const overwhelmingAlignment =
+      alignment.dominantDirection === predDir
+      && alignment.directionalVoters >= 5
+      && alignment.dominancePct >= 85;
+    if (overwhelmingAlignment) {
+      reasons.push(`overwhelming alignment (${alignment.directionalVoters} voters, ${alignment.dominancePct.toFixed(0)}%)`);
+    }
+
     const upgradeable =
       currentSignal.signalStrength !== 'STRONG'
-      && driftMatches
+      && (driftMatches || overwhelmingAlignment)
       && alignmentMatches
       && fundingAlign !== 'CONFLICTS';
 
