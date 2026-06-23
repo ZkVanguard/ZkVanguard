@@ -69,6 +69,14 @@ export interface FusionUpgrade {
   originalStrength: 'STRONG' | 'MODERATE' | 'WEAK';
   upgradedToStrong: boolean;
   syntheticConfidence: number;            // final confidence after fusion
+  /**
+   * Direction the upgrade was evaluated against — sourced from the raw
+   * MultiAssetSignal (always UP or DOWN), NOT the aggregated prediction
+   * direction (which can collapse to NEUTRAL when other sources balance).
+   * SUI pool tilts read this so a NEUTRAL aggregate doesn't lose the
+   * directional signal that triggered the upgrade.
+   */
+  predictedDirection: 'UP' | 'DOWN';
   reasons: string[];
   drift: AssetDrift | null;               // probability drift (Polymarket moves)
   priceDrift: AssetDrift | null;          // spot-price momentum drift
@@ -441,6 +449,7 @@ export class SignalDriftFusion {
       originalStrength: currentSignal.signalStrength,
       upgradedToStrong: upgradeable,
       syntheticConfidence: Math.min(100, syntheticConfidence),
+      predictedDirection: predDir,
       reasons,
       drift,
       priceDrift,

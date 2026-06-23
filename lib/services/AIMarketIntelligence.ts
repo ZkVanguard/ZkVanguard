@@ -368,16 +368,15 @@ export class AIMarketIntelligence {
     }
     const syntheticStrong = Object.entries(upgrades)
       .filter(([, u]) => u.upgradedToStrong)
-      .map(([asset, u]) => {
-        const pred = fusedPerAsset[asset];
-        const direction: 'UP' | 'DOWN' = pred?.direction === 'DOWN' ? 'DOWN' : 'UP';
-        return {
-          asset,
-          direction,
-          confidence: u.syntheticConfidence,
-          reasons: u.reasons,
-        };
-      });
+      .map(([asset, u]) => ({
+        asset,
+        // Use the raw upgrade direction (always UP/DOWN from MultiAssetSignal),
+        // not the aggregated prediction direction (which can collapse to
+        // NEUTRAL when other sources balance and would default tilts UP).
+        direction: u.predictedDirection,
+        confidence: u.syntheticConfidence,
+        reasons: u.reasons,
+      }));
 
     // Fold the top broad markets (by 24h volume) into `predictions` so the
     // existing SuiPoolAgent loop at agents/specialized/SuiPoolAgent.ts:402
