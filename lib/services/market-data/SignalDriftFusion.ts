@@ -343,24 +343,28 @@ export class SignalDriftFusion {
 
     // Probability-drift check (Polymarket binary moves)
     const probDriftMatches = drift && drift.driftDirection !== 'FLAT' && drift.driftDirection === predDir;
+    const probDriftConflicts = drift && drift.driftDirection !== 'FLAT' && drift.driftDirection !== predDir;
     if (drift && probDriftMatches) {
       reasons.push(
         `prob-drift ${drift.driftDirection} consistency=${(drift.directionConsistency * 100).toFixed(0)}% over ${drift.samples} samples`,
       );
     }
+    if (drift && probDriftConflicts) {
+      reasons.push(`prob-drift ${drift.driftDirection} CONFLICTS with prediction ${predDir}`);
+    }
 
     // Price-drift check (spot-momentum — fires when Polymarket is flat but
     // the underlying spot is still moving directionally).
     const priceDriftMatches = priceDrift && priceDrift.driftDirection !== 'FLAT' && priceDrift.driftDirection === predDir;
+    const priceDriftConflicts = priceDrift && priceDrift.driftDirection !== 'FLAT' && priceDrift.driftDirection !== predDir;
     if (priceDrift && priceDriftMatches) {
       reasons.push(
         `price-drift ${priceDrift.driftDirection} ${priceDrift.netDelta >= 0 ? '+' : ''}${priceDrift.netDelta.toFixed(2)}% over ${priceDrift.samples} samples`,
       );
     }
-
-    // Drift requirement = EITHER source matches direction. Quiet days where
-    // Polymarket is silent but spot is moving still let alignment work.
-    const driftMatches = Boolean(probDriftMatches) || Boolean(priceDriftMatches);
+    if (priceDrift && priceDriftConflicts) {
+      reasons.push(`price-drift ${priceDrift.driftDirection} CONFLICTS with prediction ${predDir}`);
+    }
 
     // Alignment check
     const alignmentMatches =
@@ -369,7 +373,7 @@ export class SignalDriftFusion {
       && alignment.dominantDirection === predDir;
     if (alignmentMatches) {
       reasons.push(
-        `${alignment.dominantDirection} alignment ${alignment.dominancePct.toFixed(0)}% across ${alignment.totalAssets} assets`,
+        `${alignment.dominantDirection} alignment ${alignment.dominancePct.toFixed(0)}% across ${alignment.directionalVoters} directional voters`,
       );
     }
 
@@ -379,11 +383,29 @@ export class SignalDriftFusion {
       reasons.push(`funding conflicts (would be ${fundingRate > 0 ? 'DOWN' : 'UP'}-bias)`);
     }
 
-    // Overwhelming alignment escape hatch: when ≥5 assets all point the
-    // same way with ≥85% directional-voter dominance, that IS the signal —
-    // requiring drift to also fire would strand a perfectly clear
-    // multi-asset consensus. Keeps the funding-conflict veto active so
-    // a contrarian funding regime still blocks upgrades.
+    // ===== New unified upgrade gate =====
+    //
+    // Alignment is the PRIMARY driver. Drift is a SAFETY check (it can
+    // VETO an upgrade if it's actively conflicting, but it's not REQUIRED
+    // to fire). This matches the production observation that:
+    //   * Markets often show 4-5 assets in clear consensus while binary
+    //     probabilities are stuck at default 50/50 (no drift accruable)
+    //   * Demanding drift in that state strands perfectly clear signals
+    //   * But if drift is ACTIVELY moving AGAINST the alignment direction,
+    //     that's real disagreement → safer to wait
+    //
+    // Required:
+    //   * Alignment matches predicted direction with ≥3 directional voters
+    //     and ≥67% dominance.
+    //   * Funding doesn't actively conflict.
+    //   * Drift doesn't actively conflict (FLAT counts as "no opinion,"
+    //     which is fine).
+    //
+    // Optional boosts:
+    //   * Drift confirms → confidence +5 per channel
+    //   * Funding confirms → confidence +5
+    //   * Overwhelming alignment (≥5 voters at ≥85%) → confidence +5
+    const driftBlocking = Boolean(probDriftConflicts) || Boolean(priceDriftConflicts);
     const overwhelmingAlignment =
       alignment.dominantDirection === predDir
       && alignment.directionalVoters >= 5
@@ -394,13 +416,12 @@ export class SignalDriftFusion {
 
     const upgradeable =
       currentSignal.signalStrength !== 'STRONG'
-      && (driftMatches || overwhelmingAlignment)
       && alignmentMatches
-      && fundingAlign !== 'CONFLICTS';
+      && fundingAlign !== 'CONFLICTS'
+      && !driftBlocking;
 
     // Confidence floor + bonuses. Each independent confirmation adds a
-    // small boost — both drift sources agreeing is meaningfully stronger
-    // than just one.
+    // small boost — multiple agreeing channels = compounding conviction.
     let syntheticConfidence = upgradeable
       ? Math.max(
           SYNTHETIC_CONFIDENCE_FLOOR,
@@ -409,8 +430,10 @@ export class SignalDriftFusion {
         )
       : currentSignal.confidence;
     if (upgradeable) {
-      if (probDriftMatches && priceDriftMatches) syntheticConfidence += 8;
+      if (probDriftMatches) syntheticConfidence += 5;
+      if (priceDriftMatches) syntheticConfidence += 5;
       if (fundingAlign === 'CONFIRMS') syntheticConfidence += 5;
+      if (overwhelmingAlignment) syntheticConfidence += 5;
     }
 
     return {

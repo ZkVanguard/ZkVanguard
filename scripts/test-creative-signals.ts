@@ -154,6 +154,58 @@ async function testB() {
   const btc2 = r2.upgrades['BTC'];
   if (btc2?.upgradedToStrong) fail(`BTC should NOT upgrade on split alignment, but did`);
   else ok(`negative test: no upgrade when alignment is split`);
+
+  // NEW B3: alignment-only upgrade (drift FLAT, alignment strong).
+  // This is the "quiet binaries but clear consensus" case — alignment
+  // alone should be enough now.
+  SignalDriftFusion.__resetForTests();
+  const alignOnlySignals: Record<string, any> = {};
+  for (const a of ['BTC', 'ETH', 'SOL', 'XRP']) {
+    alignOnlySignals[a] = {
+      asset: a, marketId: 'x', slug: 'x', windowLabel: 'x',
+      direction: 'UP', probability: 50.5, upProbability: 50.5, downProbability: 49.5,
+      currentPrice: 0, priceToBeat: 0, volume: 100, liquidity: 1000,
+      confidence: 50, signalStrength: 'WEAK', recommendation: 'WAIT',
+      timeRemainingSeconds: 200, windowEndTime: Date.now() + 200_000,
+      fetchedAt: Date.now(), question: '', sourceUrl: '',
+    };
+  }
+  const r3 = SignalDriftFusion.fuseAll(alignOnlySignals, {});
+  const btc3 = r3.upgrades['BTC'];
+  if (!btc3?.upgradedToStrong) {
+    fail(`BTC should upgrade on alignment alone (4-UP/0-DOWN/0-NEUTRAL), reasons=${btc3?.reasons.join('|')}`);
+  } else {
+    ok(`alignment-only upgrade fires (conf=${btc3.syntheticConfidence}, reasons=${btc3.reasons.length})`);
+  }
+
+  // NEW B4: drift-conflict veto. Alignment says UP but spot price is
+  // moving DOWN — should BLOCK upgrade (real disagreement).
+  SignalDriftFusion.__resetForTests();
+  const baseTs4 = Date.now() - 60_000;
+  // BTC price drifts DOWN
+  const btcDownPrices = [65000, 64900, 64800, 64700, 64600];
+  for (let i = 0; i < btcDownPrices.length; i++) {
+    SignalDriftFusion.recordPriceTick('BTC', btcDownPrices[i], baseTs4 + i * 10_000);
+  }
+  // But Polymarket alignment says all UP
+  const conflictSignals: Record<string, any> = {};
+  for (const a of ['BTC', 'ETH', 'SOL', 'XRP']) {
+    conflictSignals[a] = {
+      asset: a, marketId: 'x', slug: 'x', windowLabel: 'x',
+      direction: 'UP', probability: 51, upProbability: 51, downProbability: 49,
+      currentPrice: 0, priceToBeat: 0, volume: 100, liquidity: 1000,
+      confidence: 50, signalStrength: 'WEAK', recommendation: 'WAIT',
+      timeRemainingSeconds: 200, windowEndTime: Date.now() + 200_000,
+      fetchedAt: Date.now(), question: '', sourceUrl: '',
+    };
+  }
+  const r4 = SignalDriftFusion.fuseAll(conflictSignals, {});
+  const btc4 = r4.upgrades['BTC'];
+  if (btc4?.upgradedToStrong) {
+    fail(`BTC should NOT upgrade when price-drift conflicts with alignment, did fire`);
+  } else {
+    ok(`drift-conflict veto fires (alignment says UP, price says DOWN, no upgrade)`);
+  }
 }
 
 async function testC() {
