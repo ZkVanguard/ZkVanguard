@@ -1,14 +1,17 @@
 /**
  * Hedge ↔ prediction-signal alignment check.
  *
- * Read-only. Compares:
+ * Read-only. Compares each active hedge's side against the per-asset fused
+ * prediction signal for THAT asset (not BTC). Inputs:
  *   - Live SUI on-chain hedge positions (pool.hedge_state.active_hedges)
  *   - DB hedge rows (chain='sui', status='active')
- *   - Polymarket 5-min current signal direction
- *   - PredictionAggregator best-asset recommendation
+ *   - PredictionAggregator.getPerAssetPredictions for each asset with an
+ *     active hedge, plus BTC for overall market context
  *
- * Reports per-hedge: is the open SHORT/LONG consistent with the
- * recommendation that opened it (and with the current signal)?
+ * Previously this used only the Polymarket 5-min BTC binary and judged
+ * every hedge against the BTC signal — which mis-flagged ETH/SUI hedges
+ * any time their asset's signal disagreed with BTC. The per-asset signal
+ * is the right universe for an ETH SHORT or SUI LONG.
  *
  * Run: bun run scripts/check-hedge-signal-alignment.ts
  */
@@ -123,34 +126,50 @@ async function main() {
     } finally { await pg.end().catch(() => {}); }
   }
 
-  // ── 3. Polymarket 5-min signal (public API) ──────────────────
-  log('\n── 3. POLYMARKET 5-MIN BTC SIGNAL ──');
-  let signal: { direction: Direction; probability: number; confidence: number; recommendation?: string } | null = null;
+  // ── 3. Per-asset prediction signals (fused) ──────────────────
+  // Previously this read only the Polymarket 5-min BTC binary and judged
+  // every hedge (ETH SHORT, SUI LONG, etc.) against the BTC signal — which
+  // produced false misalignment reports the moment an ETH hedge disagreed
+  // with the BTC signal. Now we ask PredictionAggregator for the per-asset
+  // fused signal (Polymarket 5-min + Delphi + Crypto.com 24h + funding +
+  // Manifold) for each active hedge's asset, plus BTC as overall context.
+  log('\n── 3. PER-ASSET PREDICTION SIGNALS ──');
+  const hedgeAssets = new Set<string>();
+  for (const h of activeHedgesOnChain) {
+    if (onChainCollatUsd(h.fields) < 1) continue;
+    const a = ['BTC','ETH','SUI','CRO'][Number(h.fields?.pair_index)];
+    if (a) hedgeAssets.add(a.toUpperCase());
+  }
+  for (const h of dbHedges) {
+    if (Number(h.notional_value) < 1) continue;
+    if (h.asset) hedgeAssets.add(String(h.asset).toUpperCase());
+  }
+  // Always include BTC as overall-market context, even when no BTC hedges.
+  hedgeAssets.add('BTC');
+
+  const perAsset: Record<string, { direction: Direction; confidence: number; consensus: number; recommendation: string } | null> = {};
   try {
-    const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
-    const sig = await (Polymarket5MinService as any).getLatest5MinSignal();
-    if (sig) {
-      signal = { direction: sig.direction as Direction, probability: sig.probability, confidence: sig.confidence, recommendation: sig.recommendation };
-      log(`  Direction: ${color(signal.direction, signal.direction === 'UP' ? 'g' : signal.direction === 'DOWN' ? 'r' : 'dim')}  prob=${signal.probability}%  conf=${signal.confidence}%  rec=${signal.recommendation || '-'}`);
-    } else {
-      log(color('  ⚠ no signal available', 'y'));
+    const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
+    const preds = await (PredictionAggregatorService as any).getPerAssetPredictions(Array.from(hedgeAssets));
+    for (const a of hedgeAssets) {
+      const p = preds[a];
+      perAsset[a] = p
+        ? { direction: p.direction as Direction, confidence: p.confidence, consensus: p.consensus, recommendation: p.recommendation }
+        : null;
+      const d = perAsset[a];
+      if (d) {
+        log(`  ${a.padEnd(4)} ${color(d.direction, d.direction === 'UP' ? 'g' : d.direction === 'DOWN' ? 'r' : 'dim')}  conf=${d.confidence.toFixed(0)}%  consensus=${d.consensus.toFixed(0)}%  rec=${d.recommendation}`);
+      } else {
+        log(color(`  ${a.padEnd(4)} ⚠ no signal available`, 'y'));
+      }
     }
   } catch (e) {
-    log(color(`  ✗ Polymarket fetch failed: ${e instanceof Error ? e.message : String(e)}`, 'r'));
+    log(color(`  ✗ Prediction fetch failed: ${e instanceof Error ? e.message : String(e)}`, 'r'));
   }
 
   // ── 4. ALIGNMENT VERDICT ────────────────────────────────────
-  log('\n── 4. ALIGNMENT VERDICT ──');
-  if (!signal) {
-    log(color('  Cannot judge alignment without a current signal.', 'y'));
-  } else {
-    const expSide = expectedSide(signal.direction);
-    if (!expSide) {
-      log(color(`  Signal is NEUTRAL — neither LONG nor SHORT explicitly favoured.`, 'dim'));
-    } else {
-      log(`  Current signal favours ${color(expSide, expSide === 'LONG' ? 'g' : 'r')} (signal=${signal.direction}).`);
-    }
-
+  log('\n── 4. ALIGNMENT VERDICT (per-asset) ──');
+  {
     // Operational $0.01 rebalance hedges (per SuiHedgeReconciler doc) carry
     // collateral well below $1 and aren't directional bets — exclude them.
     const OPERATIONAL_COLLAT_THRESHOLD_USD = 1;
@@ -164,7 +183,7 @@ async function main() {
       })),
       ...dbHedges
         .filter(h => Number(h.notional_value) >= OPERATIONAL_COLLAT_THRESHOLD_USD)
-        .map(h => ({ src: 'db', asset: h.asset, side: h.side as Side })),
+        .map(h => ({ src: 'db', asset: String(h.asset).toUpperCase(), side: h.side as Side })),
     ];
 
     if (allActive.length === 0) {
@@ -177,19 +196,29 @@ async function main() {
       } else {
         log(color(`  ⚠ No NAV snapshot in DB — cannot evaluate the $${floor} auto-hedge floor (on-chain balance alone undercounts NAV).`, 'y'));
       }
-    } else if (expSide) {
-      let aligned = 0, misaligned = 0;
+    } else {
+      let aligned = 0, misaligned = 0, neutral = 0, missing = 0;
       for (const h of allActive) {
+        const sig = perAsset[h.asset];
+        if (!sig) {
+          missing++;
+          log(`    ${color('? unknown', 'y')}    ${h.src.padEnd(8)} ${h.asset.padEnd(4)} ${h.side}  (no signal for ${h.asset})`);
+          continue;
+        }
+        const expSide = expectedSide(sig.direction);
+        if (!expSide) {
+          neutral++;
+          log(`    ${color('~ neutral', 'dim')}   ${h.src.padEnd(8)} ${h.asset.padEnd(4)} ${h.side}  (${h.asset} signal NEUTRAL — neither confirmed nor contradicted)`);
+          continue;
+        }
         const ok = h.side === expSide;
-        log(`    ${ok ? color('✓ aligned', 'g') : color('✗ MISALIGNED', 'r')}  ${h.src.padEnd(8)} ${h.asset.padEnd(4)} is ${h.side} (signal wants ${expSide})`);
         if (ok) aligned++; else misaligned++;
+        log(`    ${ok ? color('✓ aligned', 'g') : color('✗ MISALIGNED', 'r')}  ${h.src.padEnd(8)} ${h.asset.padEnd(4)} is ${h.side} (${h.asset} signal wants ${expSide} — ${sig.direction} conf=${sig.confidence.toFixed(0)}%)`);
       }
       log('');
-      log(`  Total: ${color(String(aligned), 'g')} aligned, ${color(String(misaligned), misaligned ? 'r' : 'dim')} misaligned, ${allActive.length} active.`);
-      if (misaligned === 0) log(color('  ✓ All open hedges are consistent with the current prediction signal.', 'g'));
-      else log(color('  ✗ At least one hedge contradicts the current signal — manual review recommended.', 'r'));
-    } else {
-      log(`  ${color('Signal is NEUTRAL', 'dim')} — open hedges (${allActive.length}) are neither contradicted nor confirmed.`);
+      log(`  Total: ${color(String(aligned), 'g')} aligned, ${color(String(misaligned), misaligned ? 'r' : 'dim')} misaligned, ${neutral} neutral, ${missing} no-signal, ${allActive.length} active.`);
+      if (misaligned === 0) log(color('  ✓ No hedge contradicts its asset-specific prediction signal.', 'g'));
+      else log(color('  ✗ At least one hedge contradicts its asset-specific signal — manual review recommended.', 'r'));
     }
   }
 
