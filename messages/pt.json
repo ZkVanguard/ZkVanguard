@@ -1,437 +1,437 @@
-﻿{
-    "nav":  {
-                "home":  "Início",
-                "dashboard":  "Painel",
-                "agents":  "Agentes",
-                "simulator":  "Simulador",
-                "docs":  "Documentação"
-            },
-    "hero":  {
-                 "eyebrow":  "SUI Mainnet",
-                 "quantumProof":  "Resistência Quântica",
-                 "headline1":  "Seu portfólio.",
-                 "headline2":  "Protegido.",
-                 "subtitle":  "Agentes de IA gerenciam riscos. Provas de conhecimento zero protegem a privacidade.",
-                 "ctaDashboard":  "Acessar painel",
-                 "ctaLearnMore":  "Saiba mais",
-                 "ctaArrow":  "→"
-             },
-    "features":  {
-                     "title":  "Proteção avançada",
-                     "subtitle":  "Segurança de nível empresarial com inteligência autônoma",
-                     "zkProofs":  {
-                                      "title":  "Provas ZK-STARK",
-                                      "description":  "Segurança pós-quântica com provas transparentes, sem configuração de confiança"
-                                  },
-                     "aiAgents":  {
-                                      "title":  "Agentes de IA",
-                                      "description":  "Gerenciamento de risco autônomo 24/7 com gatilhos de hedge inteligentes"
-                                  },
-                     "liveAnalytics":  {
-                                           "title":  "Análise ao vivo",
-                                           "description":  "Rastreamento de portfólio em tempo real com pontuação de risco preditiva"
-                                       },
-                     "quantumProof":  {
-                                          "title":  "Segurança quântica",
-                                          "description":  "Pronto para criptografia pós-quântica com curvas BLS12-381"
-                                      }
-                 },
-    "stats":  {
-                  "aiAgents":  "Agentes de IA",
-                  "gasSavings":  "Economia de Gás",
-                  "zkProofs":  "Provas ZK",
-                  "responseTime":  "Tempo de Resposta",
-                  "batchingNote":  "Agentes de trading IA na SUI Mainnet",
-                  "chainsSupported":  "Blockchains Suportadas"
-              },
-    "cta":  {
-                "title":  "Pronto para proteger seus ativos?",
-                "subtitle":  "Junte-se a milhares de investidores usando gerenciamento de risco baseado em IA com privacidade ZK-STARK.",
-                "button":  "Abrir painel",
-                "learnMore":  "Saiba mais sobre segurança"
-            },
-    "footer":  {
-                   "product":  "PRODUTO",
-                   "platform":  "PLATAFORMA",
-                   "resources":  "RECURSOS",
-                   "legal":  "LEGAL",
-                   "dashboard":  "Painel",
-                   "agents":  "Agentes",
-                   "simulator":  "Simulador",
-                   "documentation":  "Documentação",
-                   "zkVerification":  "Verificação ZK",
-                   "authenticity":  "Autenticidade",
-                   "whitepaper":  "Whitepaper",
-                   "api":  "API",
-                   "contact":  "Contato",
-                   "community":  "Comunidade",
-                   "github":  "GitHub",
-                   "twitter":  "Twitter",
-                   "privacy":  "Política de privacidade",
-                   "terms":  "Termos de serviço",
-                   "rights":  "Todos os direitos reservados.",
-                   "testnet":  "SUI Mainnet",
-                   "stage":  "Mainnet ao Vivo",
-                   "builtWith":  "Desenvolvido com ZK-STARK"
-               },
-    "connect":  {
-                    "button":  "Conectar wallet",
-                    "disconnect":  "Desconectar",
-                    "connecting":  "Conectando...",
-                    "wrongNetwork":  "Rede incorreta",
-                    "switchNetwork":  "Mudar para {network}"
-                },
-    "dashboard":  {
-                      "title":  "Painel de riscos",
-                      "overview":  "Visão geral",
-                      "positions":  "Posições",
-                      "analytics":  "Análises",
-                      "settings":  "Configurações",
-                      "totalValue":  "Valor total do portfólio",
-                      "riskScore":  "Pontuação de risco",
-                      "activePositions":  "Posições ativas",
-                      "monthlyReturn":  "Retorno mensal"
-                  },
-    "agents":  {
-                   "title":  "Rede de agentes de IA",
-                   "subtitle":  "Gestão de portfólio autônoma 24/7 com consenso multiagente",
-                   "active":  "Ativo",
-                   "idle":  "Inativo",
-                   "monitoring":  "Monitorando",
-                   "leadAgent":  "Agente líder de risco",
-                   "marketAgent":  "Agente de inteligência de mercado",
-                   "complianceAgent":  "Agente de conformidade",
-                   "executionAgent":  "Agente de execução"
-               },
-    "common":  {
-                   "loading":  "Carregando...",
-                   "error":  "Erro",
-                   "success":  "Sucesso",
-                   "confirm":  "Confirmar",
-                   "cancel":  "Cancelar",
-                   "save":  "Salvar",
-                   "close":  "Fechar",
-                   "back":  "Voltar",
-                   "next":  "Próximo",
-                   "language":  "Idioma"
-               },
-    "howItWorks":  {
-                       "title":  "Como Funciona",
-                       "subtitle":  "Comece em três passos simples",
-                       "step1":  {
-                                     "title":  "Conectar",
-                                     "description":  "Vincule sua carteira e defina preferências",
-                                     "detail":  "Integração com carteira Web3"
-                                 },
-                       "step2":  {
-                                     "title":  "Monitorar",
-                                     "description":  "Agentes de IA analisam o risco do portfólio 24/7",
-                                     "detail":  "Análise de risco em tempo real"
-                                 },
-                       "step3":  {
-                                     "title":  "Executar",
-                                     "description":  "Auto-hedge e liquidação de transações",
-                                     "detail":  "Proteção automatizada"
-                                 }
-                   },
-    "whitepaper":  {
-                       "version":  "Versão 1.0",
-                       "date":  "Janeiro 2026",
-                       "title":  "Whitepaper ZkVanguard",
-                       "subtitle":  "Gestão preditiva de riscos impulsionada por IA com privacidade Zero-Knowledge para ativos digitais institucionais",
-                       "readButton":  "Ler o whitepaper",
-                       "toc":  "Índice",
-                       "sections":  {
-                                        "abstract":  "Resumo",
-                                        "introduction":  "Introdução e oportunidade de mercado",
-                                        "problem":  "O problema: Gestão reativa de riscos",
-                                        "solution":  "Nossa solução: Inteligência preditiva",
-                                        "architecture":  "Arquitetura técnica",
-                                        "agents":  "Sistema multi-agente de IA",
-                                        "zkp":  "Camada de privacidade Zero-Knowledge",
-                                        "gasless":  "Protocolo de transação sem gás (x402)",
-                                        "predictions":  "Integração de mercados preditivos",
-                                        "multichain":  "Estratégia multi-chain",
-                                        "security":  "Análise de segurança",
-                                        "tokenomics":  "Tokenomics e economia",
-                                        "roadmap":  "Roadmap",
-                                        "conclusion":  "Conclusão",
-                                        "references":  "Referências"
-                                    },
-                       "abstract":  {
-                                        "highlight":  "ZkVanguard introduz uma mudança de paradigma na gestão de riscos de ativos digitais institucionais, combinando agentes de IA autônomos com inteligência de mercados preditivos colaborativos e criptografia zero-knowledge pós-quântica. Diferentemente dos sistemas reativos tradicionais que respondem após quedas de mercado, a arquitetura preditiva do ZkVanguard antecipa eventos de volatilidade com 3-7 dias de antecedência.",
-                                        "p1":  "A plataforma orquestra seis agentes de IA especializados—Lead, Risco, Hedge, Liquidação, Relatórios e Monitor de Preços—que analisam autonomamente os portfólios, consomem dados de mercados preditivos em tempo real da Delphi/Polymarket, geram estratégias de hedge matematicamente ótimas e executam transações sem gás na blockchain Cronos.",
-                                        "p2":  "Com US$ 16 trilhões em ativos do mundo real tokenizados (RWA) projetados até 2030 e capital institucional atualmente à margem devido à infraestrutura de risco inadequada, o ZkVanguard aborda uma lacuna crítica de mercado. Nosso protocolo x402 sem gás elimina as taxas de transação (97,4% de cobertura de gás)."
-                                    },
-                       "introduction":  {
-                                            "opportunity":  "A oportunidade de US$ 16 trilhões",
-                                            "opportunityText":  "De acordo com o relatório 2024 do Boston Consulting Group, o mercado de ativos do mundo real tokenizados deve atingir US$ 16 trilhões até 2030.",
-                                            "barrier1Title":  "Gestão reativa de riscos:",
-                                            "barrier1":  "As ferramentas existentes só respondem após quedas de mercado, resultando em drawdowns de 15-30% antes da ativação da proteção",
-                                            "barrier2Title":  "Vulnerabilidades de privacidade:",
-                                            "barrier2":  "A transparência da blockchain pública expõe estratégias de trading institucionais",
-                                            "barrier3Title":  "Custos de transação proibitivos:",
-                                            "barrier3":  "Taxas de gás de US$ 5-50 por transação criam ineficiência operacional de 60-80%",
-                                            "timing":  "Timing do mercado",
-                                            "timingText":  "A convergência de diversos desenvolvimentos tecnológicos e regulatórios cria uma janela ótima de entrada no mercado:",
-                                            "timing1Title":  "Maturação dos mercados preditivos:",
-                                            "timing1":  "Polymarket e plataformas similares demonstraram mais de 85% de precisão em eventos importantes",
-                                            "timing2Title":  "Avanço tecnológico ZK:",
-                                            "timing2":  "Provas ZK-STARK agora alcançam desempenho prático (geração de 2-5 segundos) com garantias de segurança pós-quântica",
-                                            "timing3Title":  "Adoção institucional de cripto:",
-                                            "timing3":  "BlackRock, Fidelity e principais bancos lançaram produtos de ativos digitais",
-                                            "timing4Title":  "Clareza regulatória:",
-                                            "timing4":  "MiCA na Europa e diretrizes em evolução da SEC fornecem estruturas de conformidade mais claras"
-                                        },
-                       "problem":  {
-                                       "paradigm":  "O paradigma reativo",
-                                       "paradigmText":  "A gestão tradicional de riscos de criptomoedas opera em um paradigma fundamentalmente falho: reação em vez de previsão.",
-                                       "costTitle":  "O custo da reação",
-                                       "costText":  "A análise dos principais eventos de mercado de 2020-2025 revela o verdadeiro custo da gestão reativa de riscos:",
-                                       "tableEvent":  "Evento",
-                                       "tableDrop":  "Queda total",
-                                       "tableLoss":  "Perda antes do hedge",
-                                       "tablePredictable":  "Previsível?",
-                                       "privacy":  "Exposição à Privacidade",
-                                       "privacyText":  "A transparência das blockchains públicas cria vantagens competitivas significativas para os traders institucionais:",
-                                       "frontRunning":  "Fronteiragem:",
-                                       "frontRunningText":  "Os bots MEV extraem mais de $500M anualmente ao detectar e front-runar grandes ordens",
-                                       "strategyLeakage":  "Divulgação de Estratégia:",
-                                       "strategyLeakageText":  "Concorrentes podemreverse-engineer estratégias de negociação a partir da atividade na cadeia de blocos.",
-                                       "regulatoryRisk":  "Risco Regulatório:",
-                                       "regulatoryRiskText":  "A exposição do portfólio público pode violar requisitos de confidencialidade",
-                                       "marketImpact":  "Impacto no Mercado:",
-                                       "marketImpactText":  "Grandes posições visíveis atraem operações predatórias"
-                                   },
-                       "conclusion":  {
-                                          "title":  "Conclusão",
-                                          "text":  "ZkVanguard representa uma mudança de paradigma fundamental na gestão de riscos de ativos digitais institucionais. Combinando inteligência de IA preditiva com privacidade criptográfica pós-quântica e execução sem gás, abordamos as três barreiras críticas que impedem a adoção institucional."
-                                      },
-                       "solution":  {
-                                        "title":  "Nossa Solução: Inteligência Preditiva",
-                                        "paradigm":  "O Paradigma Preditivo",
-                                        "paradigmText":  "A ZkVanguard apresenta uma abordagem fundamentalmente diferente: gerenciamento de riscos preditivo alimentado por inteligência coletiva. Em vez de reagirmos a colapsos, antecipamos-os:",
-                                        "coreStack":  "Pilha de Inovação Coreana",
-                                        "multiAgent":  "Sistema Multimídia de Inteligência Artificial",
-                                        "multiAgentDesc":  "Seis agentes especializados coordenam autonomamente para analisar, recomendar, executar e relatar sobre estratégias de proteção de portfólio.",
-                                        "prediction":  "Inteligência de Previsão",
-                                        "predictionDesc":  "Integração em tempo real com os mercados de previsão do Delphi/Polymarket para previsões colaborativas com acurácia superior a 78%.",
-                                        "zkStark":  "Privacidade ZK-STARK",
-                                        "zkStarkDesc":  "Provas de conhecimento de zero-conhecimento pós-quânticas aceleradas pelo CUDA (segurança de 512 bits, integridade de 180 bits) protegem todos os dados do portfólio e das operações de trading da exposição pública.",
-                                        "gasless":  "Execução Gas-Free",
-                                        "gaslessDesc":  "O protocolo x402 oferece 97,4% de cobertura gas, reduzindo os custos das transações de $15-50 para efetivamente $0,00.",
-                                        "uxFlow":  "Fluxo de Experiência do Usuário",
-                                        "ux1":  "Conecte seu Portfólio (5 seg): Conecte sua carteira ou posições de RA—o AI descobre automaticamente todos os ativos",
-                                        "ux2":  "Análise de Risco por Inteligência Artificial (10 seg): Agente de Risco calcula o VaR, a razão Sharpe e verifica os mercados de previsão",
-                                        "ux3":  "Revisão da Predição (10 seg): O usuário vê \"🔮 Alerta Delphi: 73% de probabilidade de disparo de volatilidade do BTC\"",
-                                        "ux4":  "Decisão do Usuário (5 sec): Aprovar hedge, adicionar à lista de observação ou descartar",
-                                        "ux5":  "Execução Automática (instantânea): O Agente de Hedge abre posição nos perpetuos do Moonlander",
-                                        "ux6":  "Liquidificação Sem Custos (instantânea): o x402 processa a transação com taxas de $0,00",
-                                        "ux7":  "Verificação ZK (2-5 seg): Prova preservadora de privacidade publicada na cadeia de blocos"
-                                    },
-                       "architecture":  {
-                                            "title":  "Arquitetura Técnica",
-                                            "overview":  "Visão Sistemática",
-                                            "overviewText":  "A ZkVanguard emprega uma arquitetura camada-a-camada projetada para segurança, escalabilidade e operação autônoma:",
-                                            "techStack":  "Pilha Tecnológica",
-                                            "tableLayer":  "Camada",
-                                            "tableTechnology":  "Tecnologia",
-                                            "tablePurpose":  "Propósito",
-                                            "contracts":  "Deplyoed Smart Contracts",
-                                            "contractsText":  "Todos os contratos inteligentes são implantados na Cronos Testnet (ID da Cadeia: 338) e verificados:"
-                                        },
-                       "agents":  {
-                                      "title":  "Sistema Multimídia de Inteligência Artificial",
-                                      "intro":  "ZkVanguard implementa seis agentes de IA especializados que operam de forma autônoma, mantendo o controle humano no loop para decisões críticas:",
-                                      "lead":  "Agente Líder - Orquestrador de Estratégia",
-                                      "risk":  "Agente de Risco - Monitoramento em Tempo Real",
-                                      "hedging":  "Agente de Hedge - Execução Preditiva",
-                                      "settlement":  "Agente de Liquidação - Transações Sem Gás",
-                                      "reporting":  "Agente de Relatório - ZK-Versificado Conformidade",
-                                      "priceMonitor":  "Agente de Monitoramento de Preços - Vigilância Autônoma"
-                                  },
-                       "zkp":  {
-                                   "title":  "Camada de Privacidade Zero-Conhecimento",
-                                   "protocol":  "Protocolo ZK-STARK",
-                                   "protocolText":  "ZkVanguard implementa um sistema de prova baseado em ZK-STARK (Zero-Knowledge Scalável e Transparência Argumento de Conhecimento) acelerado por CUDA, com base no protocolo FRI (Protocolo Interativo de Verificação Rápida de Reed-Solomon):",
-                                   "security":  "Parâmetros de Segurança e Demonstração de Integridade",
-                                   "verification":  "Verificação Matemática Formal",
-                                   "verificationTitle":  "Todos os 6 Teoremas Criptográficos Provarizados",
-                                   "verificationText":  "Nossa implementação foi verificada formalmente contra as definições acadêmicas em Ben-Sasson et al. Isso não é apenas teste — é uma prova matemática.",
-                                   "hedgeArch":  "Arquitetura de Garantia de Cofrança Preservadora da Privacidade",
-                                   "hedgeArchText":  "Ao executar hedge em blockchains públicas, o ZkVanguard protege a privacidade do usuário através de:"
-                               },
-                       "gasless":  {
-                                       "title":  "Protocolo de Transação Sem Gás (x402)",
-                                       "overview":  "Visão Geral do Protocolo",
-                                       "overviewText":  "O protocolo x402 elimina as taxas de gás para os usuários finais ao aproveitar a autorização EIP-3009 e transações patrocinadas pelo protocolo:",
-                                       "implementation":  "Implementação Técnica",
-                                       "flowDiagram":  "Diagrama de Fluxo"
-                                   },
-                       "predictions":  {
-                                           "title":  "Integração de Mercado de Previsão",
-                                           "sources":  "Origens de Dados",
-                                           "sourcesText":  "ZkVanguard integra-se com principais mercados de previsão para fornecer previsões baseadas na participação da comunidade:",
-                                           "hedgeRatio":  "Cálculo da Razão de Hedge",
-                                           "hedgeRatioText":  "O Agente de Cofranqueamento usa probabilidades de previsão para ajustar dinamicamente as proporções de cofranqueamento:",
-                                           "scenarios":  "Exemplos de Predições Exemplificativas",
-                                           "tableQuestion":  "Pergunta de Mercado",
-                                           "tableProbability":  "Probabilidade",
-                                           "tableImpact":  "Impacto",
-                                           "tableAction":  "Ação de Inteligência Artificial"
-                                       },
-                       "multichain":  {
-                                          "title":  "Estratégia Multicadeira",
-                                          "networks":  "Redes Suportadas",
-                                          "tableChain":  "Cadeia",
-                                          "tableType":  "Tipo",
-                                          "tableStatus":  "Status",
-                                          "tableFeatures":  "Funcionalidades",
-                                          "roadmap":  "Roadmap de Expansão"
-                                      },
-                       "security":  {
-                                        "title":  "Análise de Segurança",
-                                        "contracts":  "Segurança de Contratos Inteligentes",
-                                        "cryptographic":  "Segurança Criptográfica",
-                                        "operational":  "Segurança Operacional"
-                                    },
-                       "tokenomics":  {
-                                          "title":  "Tokênomia \u0026 Economia",
-                                          "revenue":  "Fluxos de Receita",
-                                          "projections":  "Projeções de 5 Anos",
-                                          "tableMetric":  "Métrica"
-                                      },
-                       "roadmap":  {
-                                       "title":  "Roadmap",
-                                       "q1_2026":  "Q1 2026 - Lançamento Beta ✅",
-                                       "q1_2026_desc":  "5 agentes de IA, privacidade ZK-STARK, x402 sem gás, deploy na rede de teste Cronos",
-                                       "q2_2026":  "Q2 de 2026 - Integração SUI",
-                                       "q2_2026_desc":  "Expansão multicadeira, depuração da mainnet SUI, portfólio cruzado de cadeias",
-                                       "q3_2026":  "Terceiro trimestre de 2026 - Ethereum L2s",
-                                       "q3_2026_desc":  "Integração do Hedera, do Optimism, do Base, painel multichave unificado",
-                                       "q4_2026":  "4º quadrimestre de 2026 - Derivativos Avançados",
-                                       "q4_2026_desc":  "Integração completa do Moonlander, estratégias de opções, hedge avançado",
-                                       "2027_2030":  "2027-2030 - Escala Global",
-                                       "2027_2030_desc":  "TVL superior a $100 bi, mais de 10.000 instituições, plataforma pronta para IPO"
-                                   },
-                       "references":  {
-                                          "title":  "Referências"
-                                      },
-                       "footerCta":  {
-                                         "title":  "Pronto para Experienciar o Gerenciamento de Riscos Preditivo?",
-                                         "subtitle":  "Junte-se aos negociadores institucionais que já protegem seus portfólios com inteligência preditiva baseada em IA.",
-                                         "launchApp":  "Lançar Aplicativo",
-                                         "viewDocs":  "Visualizar Documentação"
-                                     }
-                   },
-    "zkProof":  {
-                    "title":  "Gerador de Prova ZK",
-                    "subtitle":  "Gere e verifique provas de conhecimento zero para privacidade de portfólio",
-                    "selectScenario":  "Selecionar cenário",
-                    "generateProof":  "Gerar prova",
-                    "verifyProof":  "Verificar prova",
-                    "proofGenerated":  "Prova gerada",
-                    "proofVerified":  "Prova verificada",
-                    "proofFailed":  "Verificação falhou",
-                    "showSecrets":  "Mostrar segredos",
-                    "hideSecrets":  "Ocultar segredos",
-                    "scenarios":  {
-                                      "portfolioRisk":  "Avaliação de Risco do Portfólio",
-                                      "portfolioRiskDesc":  "Prove que o risco do portfólio está abaixo do limite sem revelar posições",
-                                      "settlementBatch":  "Validação de Lote de Liquidação",
-                                      "settlementBatchDesc":  "Prove que o lote de liquidação é válido sem revelar detalhes das transações",
-                                      "compliance":  "Conformidade Regulatória",
-                                      "complianceDesc":  "Prove conformidade com regulamentos sem expor dados sensíveis"
-                                  }
-                },
-    "zkAuthenticity":  {
-                           "title":  "Verificação de Autenticidade ZK-STARK",
-                           "subtitle":  "Verifique a autenticidade de nossa implementação de prova de conhecimento zero",
-                           "systemStatus":  "Status do Sistema",
-                           "operational":  "Operacional",
-                           "verifyProof":  "Verificar uma prova",
-                           "pasteProof":  "Cole seu JSON de prova aqui",
-                           "implementation":  "Detalhes da Implementação",
-                           "cryptoParams":  "Parâmetros Criptográficos",
-                           "sourceCode":  "Código Fonte"
-                       },
-    "zkVerification":  {
-                           "title":  "Prova Matemática ZK-STARK",
-                           "subtitle":  "Verificação formal de que ZkVanguard implementa um verdadeiro ZK-STARK conforme especificações acadêmicas de Ben-Sasson et al.",
-                           "auditorSummary":  "Resumo Rápido para Auditores",
-                           "implementation":  "Implementação",
-                           "securityLevel":  "Nível de Segurança",
-                           "academicFoundation":  "Fundamento Acadêmico"
-                       },
-    "marketOpportunity":  {
-                              "title":  "Oportunidade de Mercado Massiva",
-                              "subtitle":  "Posicionado na interseção da tokenização RWA e DeFi impulsionado por IA",
-                              "rwaMarketSize":  "Tamanho do Mercado RWA",
-                              "rwaDescription":  "Projetado até 2030 (BCG)",
-                              "growthRate":  "Taxa de Crescimento",
-                              "growthDescription":  "Expansão do mercado 2024-2030",
-                              "targetMarket":  "Mercado-Alvo",
-                              "targetDescription":  "Ativos DeFi institucionais",
-                              "potentialUsers":  "Usuários Potenciais",
-                              "usersDescription":  "Traders institucionais",
-                              "competitiveEdge":  "Nosso Diferencial Competitivo",
-                              "traditionalTools":  "Ferramentas de Risco Tradicionais",
-                              "noAiAutomation":  "Sem automação de IA",
-                              "defiProtocols":  "Protocolos DeFi",
-                              "limitedRwa":  "Suporte RWA limitado",
-                              "centralizedServices":  "Serviços Centralizados",
-                              "custodialRisk":  "Risco custodial",
-                              "whyWins":  "Por que ZkVanguard Vence",
-                              "aiPowered":  "Automação com IA",
-                              "aiDescription":  "5 agentes especializados operando 24/7",
-                              "zkVerificationFeature":  "Verificação ZK-STARK",
-                              "zkDescription":  "Privacidade + auditabilidade garantidas",
-                              "nonCustodial":  "Não-Custodial",
-                              "nonCustodialDescription":  "Suas chaves, suas criptomoedas",
-                              "gasOptimization":  "Otimização de Gás",
-                              "gasDescription":  "Transações patrocinadas na SUI Mainnet"
-                          },
-    "liveMetrics":  {
-                        "title":  "Métricas da Plataforma em Tempo Real",
-                        "subtitle":  "Dados de desempenho ao vivo da SUI Mainnet",
-                        "tvl":  "Valor Total Bloqueado",
-                        "transactions":  "Transações",
-                        "gasSavings":  "Economia de Gás",
-                        "aiAgentsOnline":  "Agentes IA Online"
-                    },
-    "roadmap":  {
-                    "title":  "Roadmap do Produto",
-                    "subtitle":  "Nosso caminho para revolucionar a gestão de risco RWA institucional",
-                    "q1Title":  "Q1 2026: Fundação",
-                    "q1Description":  "Infraestrutura principal construída — contratos SUI, 5 agentes IA, pipeline ZK",
-                    "q2Title":  "Q2 2026: Lançamento Mainnet",
-                    "q2Description":  "CommunityPool e 5 agentes de trading IA ao vivo na SUI Mainnet",
-                    "q3Title":  "Q3 2026: Crescimento",
-                    "q3Description":  "Lançamento em produção com parcerias institucionais",
-                    "q4Title":  "Q4 2026: Escalabilidade",
-                    "q4Description":  "$500M+ TVL em múltiplas chains",
-                    "inProgress":  "Em Andamento",
-                    "upcoming":  "Em Breve",
-                    "planned":  "Planejado",
-                    "completed":  "Concluído",
-                    "live":  "Ao Vivo"
-                },
-    "cookies":  {
-                    "title":  "Preferências de Cookies",
-                    "description":  "Usamos cookies para melhorar sua experiência e analisar o uso da plataforma. O endereço da sua carteira é dado público de blockchain—não coletamos informações pessoais.",
-                    "privacyPolicy":  "Política de Privacidade",
-                    "customize":  "Personalizar",
-                    "necessaryOnly":  "Apenas Necessários",
-                    "acceptAll":  "Aceitar Todos",
-                    "settings":  "Configurações de Cookies",
-                    "necessary":  "Necessários",
-                    "alwaysOn":  "Sempre Ativo",
-                    "necessaryDescription":  "Necessários para conexão de carteira e funcionalidade básica",
-                    "analytics":  "Analytics",
-                    "analyticsDescription":  "Dados de uso anônimos para melhorias de desempenho",
-                    "preferences":  "Preferências",
-                    "preferencesDescription":  "Lembrar suas configurações e preferências",
-                    "rejectOptional":  "Rejeitar Opcionais",
-                    "savePreferences":  "Salvar Preferências"
-                }
+{
+  "nav": {
+    "home": "Início",
+    "dashboard": "Painel",
+    "agents": "Agentes",
+    "simulator": "Simulador",
+    "docs": "Documentação"
+  },
+  "hero": {
+    "eyebrow": "SUI Mainnet",
+    "quantumProof": "Resistência Quântica",
+    "headline1": "Seu portfólio.",
+    "headline2": "Protegido.",
+    "subtitle": "Agentes de IA gerenciam riscos. Provas de conhecimento zero protegem a privacidade.",
+    "ctaDashboard": "Acessar painel",
+    "ctaLearnMore": "Saiba mais",
+    "ctaArrow": "→"
+  },
+  "features": {
+    "title": "Proteção avançada",
+    "subtitle": "Segurança de nível empresarial com inteligência autônoma",
+    "zkProofs": {
+      "title": "Provas ZK-STARK",
+      "description": "Segurança pós-quântica com provas transparentes, sem configuração de confiança"
+    },
+    "aiAgents": {
+      "title": "Agentes de IA",
+      "description": "Gerenciamento de risco autônomo 24/7 com gatilhos de hedge inteligentes"
+    },
+    "liveAnalytics": {
+      "title": "Análise ao vivo",
+      "description": "Rastreamento de portfólio em tempo real com pontuação de risco preditiva"
+    },
+    "quantumProof": {
+      "title": "Segurança quântica",
+      "description": "Pronto para criptografia pós-quântica com curvas BLS12-381"
+    }
+  },
+  "stats": {
+    "aiAgents": "Agentes de IA",
+    "gasSavings": "Economia de Gás",
+    "zkProofs": "Provas ZK",
+    "responseTime": "Tempo de Resposta",
+    "batchingNote": "Agentes de trading IA na SUI Mainnet",
+    "chainsSupported": "Blockchains Suportadas"
+  },
+  "cta": {
+    "title": "Pronto para proteger seus ativos?",
+    "subtitle": "Junte-se a milhares de investidores usando gerenciamento de risco baseado em IA com privacidade ZK-STARK.",
+    "button": "Abrir painel",
+    "learnMore": "Saiba mais sobre segurança"
+  },
+  "footer": {
+    "product": "PRODUTO",
+    "platform": "PLATAFORMA",
+    "resources": "RECURSOS",
+    "legal": "LEGAL",
+    "dashboard": "Painel",
+    "agents": "Agentes",
+    "simulator": "Simulador",
+    "documentation": "Documentação",
+    "zkVerification": "Verificação ZK",
+    "authenticity": "Autenticidade",
+    "whitepaper": "Whitepaper",
+    "api": "API",
+    "contact": "Contato",
+    "community": "Comunidade",
+    "github": "GitHub",
+    "twitter": "Twitter",
+    "privacy": "Política de privacidade",
+    "terms": "Termos de serviço",
+    "rights": "Todos os direitos reservados.",
+    "testnet": "SUI Mainnet",
+    "stage": "Mainnet ao Vivo",
+    "builtWith": "Desenvolvido com ZK-STARK"
+  },
+  "connect": {
+    "button": "Conectar wallet",
+    "disconnect": "Desconectar",
+    "connecting": "Conectando...",
+    "wrongNetwork": "Rede incorreta",
+    "switchNetwork": "Mudar para {network}"
+  },
+  "dashboard": {
+    "title": "Painel de riscos",
+    "overview": "Visão geral",
+    "positions": "Posições",
+    "analytics": "Análises",
+    "settings": "Configurações",
+    "totalValue": "Valor total do portfólio",
+    "riskScore": "Pontuação de risco",
+    "activePositions": "Posições ativas",
+    "monthlyReturn": "Retorno mensal"
+  },
+  "agents": {
+    "title": "Rede de agentes de IA",
+    "subtitle": "Gestão de portfólio autônoma 24/7 com consenso multiagente",
+    "active": "Ativo",
+    "idle": "Inativo",
+    "monitoring": "Monitorando",
+    "leadAgent": "Agente líder de risco",
+    "marketAgent": "Agente de inteligência de mercado",
+    "complianceAgent": "Agente de conformidade",
+    "executionAgent": "Agente de execução"
+  },
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "close": "Fechar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "language": "Idioma"
+  },
+  "howItWorks": {
+    "title": "Como Funciona",
+    "subtitle": "Comece em três passos simples",
+    "step1": {
+      "title": "Conectar",
+      "description": "Vincule sua carteira e defina preferências",
+      "detail": "Integração com carteira Web3"
+    },
+    "step2": {
+      "title": "Monitorar",
+      "description": "Agentes de IA analisam o risco do portfólio 24/7",
+      "detail": "Análise de risco em tempo real"
+    },
+    "step3": {
+      "title": "Executar",
+      "description": "Auto-hedge e liquidação de transações",
+      "detail": "Proteção automatizada"
+    }
+  },
+  "whitepaper": {
+    "version": "Versão 1.0",
+    "date": "Janeiro 2026",
+    "title": "Whitepaper ZkVanguard",
+    "subtitle": "Um cofre cripto gerido por IA que aproveita o alpha do Polymarket — verificado por ZK, autônomo, ao vivo na Sui mainnet",
+    "readButton": "Ler o whitepaper",
+    "toc": "Índice",
+    "sections": {
+      "abstract": "Resumo",
+      "introduction": "Introdução e oportunidade de mercado",
+      "problem": "O problema: Gestão reativa de riscos",
+      "solution": "Nossa solução: Inteligência preditiva",
+      "architecture": "Arquitetura técnica",
+      "agents": "Sistema multi-agente de IA",
+      "zkp": "Camada de privacidade Zero-Knowledge",
+      "gasless": "Protocolo de transação sem gás (x402)",
+      "predictions": "Integração de mercados preditivos",
+      "multichain": "Estratégia multi-chain",
+      "security": "Análise de segurança",
+      "tokenomics": "Tokenomics e economia",
+      "roadmap": "Roadmap",
+      "conclusion": "Conclusão",
+      "references": "Referências"
+    },
+    "abstract": {
+      "highlight": "ZkVanguard introduz uma mudança de paradigma na gestão de riscos de ativos digitais institucionais, combinando agentes de IA autônomos com inteligência de mercados preditivos colaborativos e criptografia zero-knowledge pós-quântica. Diferentemente dos sistemas reativos tradicionais que respondem após quedas de mercado, a arquitetura preditiva do ZkVanguard antecipa eventos de volatilidade com 3-7 dias de antecedência.",
+      "p1": "A plataforma orquestra seis agentes de IA especializados—Lead, Risco, Hedge, Liquidação, Relatórios e Monitor de Preços—que analisam autonomamente os portfólios, consomem dados de mercados preditivos em tempo real da Delphi/Polymarket, geram estratégias de hedge matematicamente ótimas e executam transações sem gás na blockchain Cronos.",
+      "p2": "Apenas o Polymarket já processa mais de 20 bilhões de dólares em volume por mês, e o setor de mercados de previsão cresceu para 63,5 bilhões em 2025. O sinal é real, mas aproveitá-lo de forma consistente exigiu bots personalizados, gestão sofisticada de risco e atenção constante. O ZkVanguard reduz todo esse fluxo a um único depósito de USDC com um clique, com duas camadas de receita já ativas: taxas de protocolo on-chain em cada depósito no cofre (50 pb anuais de gestão + 10% de desempenho, encaminhadas para uma FeeManagerCap controlada por MSafe multisig) e assinaturas em níveis para acessar recursos premium (hedges privados, criador de portfólios privados e gestor RWA para carteiras individuais)."
+    },
+    "introduction": {
+      "opportunity": "A oportunidade de US$ 16 trilhões",
+      "opportunityText": "De acordo com o relatório 2024 do Boston Consulting Group, o mercado de ativos do mundo real tokenizados deve atingir US$ 16 trilhões até 2030.",
+      "barrier1Title": "Gestão reativa de riscos:",
+      "barrier1": "As ferramentas existentes só respondem após quedas de mercado, resultando em drawdowns de 15-30% antes da ativação da proteção",
+      "barrier2Title": "Vulnerabilidades de privacidade:",
+      "barrier2": "A transparência da blockchain pública expõe estratégias de trading institucionais",
+      "barrier3Title": "Custos de transação proibitivos:",
+      "barrier3": "Taxas de gás de US$ 5-50 por transação criam ineficiência operacional de 60-80%",
+      "timing": "Timing do mercado",
+      "timingText": "A convergência de diversos desenvolvimentos tecnológicos e regulatórios cria uma janela ótima de entrada no mercado:",
+      "timing1Title": "Maturação dos mercados preditivos:",
+      "timing1": "Polymarket e plataformas similares demonstraram mais de 85% de precisão em eventos importantes",
+      "timing2Title": "Avanço tecnológico ZK:",
+      "timing2": "Provas ZK-STARK agora alcançam desempenho prático (geração de 2-5 segundos) com garantias de segurança pós-quântica",
+      "timing3Title": "Adoção institucional de cripto:",
+      "timing3": "BlackRock, Fidelity e principais bancos lançaram produtos de ativos digitais",
+      "timing4Title": "Clareza regulatória:",
+      "timing4": "MiCA na Europa e diretrizes em evolução da SEC fornecem estruturas de conformidade mais claras"
+    },
+    "problem": {
+      "paradigm": "O paradigma reativo",
+      "paradigmText": "A gestão tradicional de riscos de criptomoedas opera em um paradigma fundamentalmente falho: reação em vez de previsão.",
+      "costTitle": "O custo da reação",
+      "costText": "A análise dos principais eventos de mercado de 2020-2025 revela o verdadeiro custo da gestão reativa de riscos:",
+      "tableEvent": "Evento",
+      "tableDrop": "Queda total",
+      "tableLoss": "Perda antes do hedge",
+      "tablePredictable": "Previsível?",
+      "privacy": "Exposição à Privacidade",
+      "privacyText": "A transparência das blockchains públicas cria vantagens competitivas significativas para os traders institucionais:",
+      "frontRunning": "Fronteiragem:",
+      "frontRunningText": "Os bots MEV extraem mais de $500M anualmente ao detectar e front-runar grandes ordens",
+      "strategyLeakage": "Divulgação de Estratégia:",
+      "strategyLeakageText": "Concorrentes podemreverse-engineer estratégias de negociação a partir da atividade na cadeia de blocos.",
+      "regulatoryRisk": "Risco Regulatório:",
+      "regulatoryRiskText": "A exposição do portfólio público pode violar requisitos de confidencialidade",
+      "marketImpact": "Impacto no Mercado:",
+      "marketImpactText": "Grandes posições visíveis atraem operações predatórias"
+    },
+    "conclusion": {
+      "title": "Conclusão",
+      "text": "ZkVanguard representa uma mudança de paradigma fundamental na gestão de riscos de ativos digitais institucionais. Combinando inteligência de IA preditiva com privacidade criptográfica pós-quântica e execução sem gás, abordamos as três barreiras críticas que impedem a adoção institucional."
+    },
+    "solution": {
+      "title": "Nossa Solução: Inteligência Preditiva",
+      "paradigm": "O Paradigma Preditivo",
+      "paradigmText": "A ZkVanguard apresenta uma abordagem fundamentalmente diferente: gerenciamento de riscos preditivo alimentado por inteligência coletiva. Em vez de reagirmos a colapsos, antecipamos-os:",
+      "coreStack": "Pilha de Inovação Coreana",
+      "multiAgent": "Sistema Multimídia de Inteligência Artificial",
+      "multiAgentDesc": "Seis agentes especializados coordenam autonomamente para analisar, recomendar, executar e relatar sobre estratégias de proteção de portfólio.",
+      "prediction": "Inteligência de Previsão",
+      "predictionDesc": "Integração em tempo real com os mercados de previsão do Delphi/Polymarket para previsões colaborativas com acurácia superior a 78%.",
+      "zkStark": "Privacidade ZK-STARK",
+      "zkStarkDesc": "Provas de conhecimento de zero-conhecimento pós-quânticas aceleradas pelo CUDA (segurança de 512 bits, integridade de 180 bits) protegem todos os dados do portfólio e das operações de trading da exposição pública.",
+      "gasless": "Execução Gas-Free",
+      "gaslessDesc": "O protocolo x402 oferece 97,4% de cobertura gas, reduzindo os custos das transações de $15-50 para efetivamente $0,00.",
+      "uxFlow": "Fluxo de Experiência do Usuário",
+      "ux1": "Conecte sua carteira (5 seg): Conecte sua carteira — a IA detecta automaticamente seu saldo USDC e começa a alocar",
+      "ux2": "Análise de Risco por Inteligência Artificial (10 seg): Agente de Risco calcula o VaR, a razão Sharpe e verifica os mercados de previsão",
+      "ux3": "Revisão da Predição (10 seg): O usuário vê \"🔮 Alerta Delphi: 73% de probabilidade de disparo de volatilidade do BTC\"",
+      "ux4": "Decisão do Usuário (5 sec): Aprovar hedge, adicionar à lista de observação ou descartar",
+      "ux5": "Execução Automática (instantânea): O Agente de Hedge abre posição nos perpetuos do Moonlander",
+      "ux6": "Liquidificação Sem Custos (instantânea): o x402 processa a transação com taxas de $0,00",
+      "ux7": "Verificação ZK (2-5 seg): Prova preservadora de privacidade publicada na cadeia de blocos"
+    },
+    "architecture": {
+      "title": "Arquitetura Técnica",
+      "overview": "Visão Sistemática",
+      "overviewText": "A ZkVanguard emprega uma arquitetura camada-a-camada projetada para segurança, escalabilidade e operação autônoma:",
+      "techStack": "Pilha Tecnológica",
+      "tableLayer": "Camada",
+      "tableTechnology": "Tecnologia",
+      "tablePurpose": "Propósito",
+      "contracts": "Deplyoed Smart Contracts",
+      "contractsText": "Todos os contratos inteligentes são implantados na Cronos Testnet (ID da Cadeia: 338) e verificados:"
+    },
+    "agents": {
+      "title": "Sistema Multimídia de Inteligência Artificial",
+      "intro": "ZkVanguard implementa seis agentes de IA especializados que operam de forma autônoma, mantendo o controle humano no loop para decisões críticas:",
+      "lead": "Agente Líder - Orquestrador de Estratégia",
+      "risk": "Agente de Risco - Monitoramento em Tempo Real",
+      "hedging": "Agente de Hedge - Execução Preditiva",
+      "settlement": "Agente de Liquidação - Transações Sem Gás",
+      "reporting": "Agente de Relatório - ZK-Versificado Conformidade",
+      "priceMonitor": "Agente de Monitoramento de Preços - Vigilância Autônoma"
+    },
+    "zkp": {
+      "title": "Camada de Privacidade Zero-Conhecimento",
+      "protocol": "Protocolo ZK-STARK",
+      "protocolText": "ZkVanguard implementa um sistema de prova baseado em ZK-STARK (Zero-Knowledge Scalável e Transparência Argumento de Conhecimento) acelerado por CUDA, com base no protocolo FRI (Protocolo Interativo de Verificação Rápida de Reed-Solomon):",
+      "security": "Parâmetros de Segurança e Demonstração de Integridade",
+      "verification": "Verificação Matemática Formal",
+      "verificationTitle": "Todos os 6 Teoremas Criptográficos Provarizados",
+      "verificationText": "Nossa implementação foi verificada formalmente contra as definições acadêmicas em Ben-Sasson et al. Isso não é apenas teste — é uma prova matemática.",
+      "hedgeArch": "Arquitetura de Garantia de Cofrança Preservadora da Privacidade",
+      "hedgeArchText": "Ao executar hedge em blockchains públicas, o ZkVanguard protege a privacidade do usuário através de:"
+    },
+    "gasless": {
+      "title": "Protocolo de Transação Sem Gás (x402)",
+      "overview": "Visão Geral do Protocolo",
+      "overviewText": "O protocolo x402 elimina as taxas de gás para os usuários finais ao aproveitar a autorização EIP-3009 e transações patrocinadas pelo protocolo:",
+      "implementation": "Implementação Técnica",
+      "flowDiagram": "Diagrama de Fluxo"
+    },
+    "predictions": {
+      "title": "Integração de Mercado de Previsão",
+      "sources": "Origens de Dados",
+      "sourcesText": "ZkVanguard integra-se com principais mercados de previsão para fornecer previsões baseadas na participação da comunidade:",
+      "hedgeRatio": "Cálculo da Razão de Hedge",
+      "hedgeRatioText": "O Agente de Cofranqueamento usa probabilidades de previsão para ajustar dinamicamente as proporções de cofranqueamento:",
+      "scenarios": "Exemplos de Predições Exemplificativas",
+      "tableQuestion": "Pergunta de Mercado",
+      "tableProbability": "Probabilidade",
+      "tableImpact": "Impacto",
+      "tableAction": "Ação de Inteligência Artificial"
+    },
+    "multichain": {
+      "title": "Estratégia Multicadeira",
+      "networks": "Redes Suportadas",
+      "tableChain": "Cadeia",
+      "tableType": "Tipo",
+      "tableStatus": "Status",
+      "tableFeatures": "Funcionalidades",
+      "roadmap": "Roadmap de Expansão"
+    },
+    "security": {
+      "title": "Análise de Segurança",
+      "contracts": "Segurança de Contratos Inteligentes",
+      "cryptographic": "Segurança Criptográfica",
+      "operational": "Segurança Operacional"
+    },
+    "tokenomics": {
+      "title": "Tokênomia & Economia",
+      "revenue": "Fluxos de Receita",
+      "projections": "Projeções de 5 Anos",
+      "tableMetric": "Métrica"
+    },
+    "roadmap": {
+      "title": "Roadmap",
+      "q1_2026": "Q1 2026 - Lançamento Beta ✅",
+      "q1_2026_desc": "5 agentes de IA, privacidade ZK-STARK, x402 sem gás, deploy na rede de teste Cronos",
+      "q2_2026": "Q2 de 2026 - Integração SUI",
+      "q2_2026_desc": "Expansão multicadeira, depuração da mainnet SUI, portfólio cruzado de cadeias",
+      "q3_2026": "Terceiro trimestre de 2026 - Ethereum L2s",
+      "q3_2026_desc": "Integração do Hedera, do Optimism, do Base, painel multichave unificado",
+      "q4_2026": "4º quadrimestre de 2026 - Derivativos Avançados",
+      "q4_2026_desc": "Integração completa do Moonlander, estratégias de opções, hedge avançado",
+      "2027_2030": "2027-2030 - Escala Global",
+      "2027_2030_desc": "TVL superior a $100 bi, mais de 10.000 instituições, plataforma pronta para IPO"
+    },
+    "references": {
+      "title": "Referências"
+    },
+    "footerCta": {
+      "title": "Pronto para Experienciar o Gerenciamento de Riscos Preditivo?",
+      "subtitle": "Junte-se aos negociadores institucionais que já protegem seus portfólios com inteligência preditiva baseada em IA.",
+      "launchApp": "Lançar Aplicativo",
+      "viewDocs": "Visualizar Documentação"
+    }
+  },
+  "zkProof": {
+    "title": "Gerador de Prova ZK",
+    "subtitle": "Gere e verifique provas de conhecimento zero para privacidade de portfólio",
+    "selectScenario": "Selecionar cenário",
+    "generateProof": "Gerar prova",
+    "verifyProof": "Verificar prova",
+    "proofGenerated": "Prova gerada",
+    "proofVerified": "Prova verificada",
+    "proofFailed": "Verificação falhou",
+    "showSecrets": "Mostrar segredos",
+    "hideSecrets": "Ocultar segredos",
+    "scenarios": {
+      "portfolioRisk": "Avaliação de Risco do Portfólio",
+      "portfolioRiskDesc": "Prove que o risco do portfólio está abaixo do limite sem revelar posições",
+      "settlementBatch": "Validação de Lote de Liquidação",
+      "settlementBatchDesc": "Prove que o lote de liquidação é válido sem revelar detalhes das transações",
+      "compliance": "Conformidade Regulatória",
+      "complianceDesc": "Prove conformidade com regulamentos sem expor dados sensíveis"
+    }
+  },
+  "zkAuthenticity": {
+    "title": "Verificação de Autenticidade ZK-STARK",
+    "subtitle": "Verifique a autenticidade de nossa implementação de prova de conhecimento zero",
+    "systemStatus": "Status do Sistema",
+    "operational": "Operacional",
+    "verifyProof": "Verificar uma prova",
+    "pasteProof": "Cole seu JSON de prova aqui",
+    "implementation": "Detalhes da Implementação",
+    "cryptoParams": "Parâmetros Criptográficos",
+    "sourceCode": "Código Fonte"
+  },
+  "zkVerification": {
+    "title": "Prova Matemática ZK-STARK",
+    "subtitle": "Verificação formal de que ZkVanguard implementa um verdadeiro ZK-STARK conforme especificações acadêmicas de Ben-Sasson et al.",
+    "auditorSummary": "Resumo Rápido para Auditores",
+    "implementation": "Implementação",
+    "securityLevel": "Nível de Segurança",
+    "academicFoundation": "Fundamento Acadêmico"
+  },
+  "marketOpportunity": {
+    "title": "Oportunidade de Mercado Massiva",
+    "subtitle": "Alpha do Polymarket + agentes de IA + cripto para consumidor — tudo acontecendo ao mesmo tempo",
+    "rwaMarketSize": "Volume do Polymarket",
+    "rwaDescription": "Ritmo mensal (TRM Labs, 2026)",
+    "growthRate": "Taxa de Crescimento",
+    "growthDescription": "Expansão do mercado 2024-2030",
+    "targetMarket": "Mercado-Alvo",
+    "targetDescription": "Retail cripto-nativo · usuários DeFi · titulares de carteiras individuais",
+    "potentialUsers": "Usuários Potenciais",
+    "usersDescription": "Apostadores do Polymarket, entusiastas de agentes de IA, usuários de cofres DeFi, titulares de carteiras tokenizadas",
+    "competitiveEdge": "Nosso Diferencial Competitivo",
+    "traditionalTools": "Ferramentas de Risco Tradicionais",
+    "noAiAutomation": "Sem automação de IA",
+    "defiProtocols": "Protocolos DeFi",
+    "limitedRwa": "Sem sinais de mercados de previsão",
+    "centralizedServices": "Serviços Centralizados",
+    "custodialRisk": "Risco custodial",
+    "whyWins": "Por que ZkVanguard Vence",
+    "aiPowered": "Automação com IA",
+    "aiDescription": "5 agentes especializados operando 24/7",
+    "zkVerificationFeature": "Verificação ZK-STARK",
+    "zkDescription": "Privacidade + auditabilidade garantidas",
+    "nonCustodial": "Não-Custodial",
+    "nonCustodialDescription": "Suas chaves, suas criptomoedas",
+    "gasOptimization": "Otimização de Gás",
+    "gasDescription": "Transações patrocinadas na SUI Mainnet"
+  },
+  "liveMetrics": {
+    "title": "Métricas da Plataforma em Tempo Real",
+    "subtitle": "Dados de desempenho ao vivo da SUI Mainnet",
+    "tvl": "Valor Total Bloqueado",
+    "transactions": "Transações",
+    "gasSavings": "Economia de Gás",
+    "aiAgentsOnline": "Agentes IA Online"
+  },
+  "roadmap": {
+    "title": "Roadmap do Produto",
+    "subtitle": "Nosso caminho para tornar o alpha dos mercados de previsão acessível a todos",
+    "q1Title": "Q1 2026: Fundação",
+    "q1Description": "Infraestrutura principal construída — contratos SUI, 5 agentes IA, pipeline ZK",
+    "q2Title": "Q2 2026: Lançamento Mainnet",
+    "q2Description": "CommunityPool e 5 agentes de trading IA ao vivo na SUI Mainnet",
+    "q3Title": "Q3 2026: Crescimento",
+    "q3Description": "Lançamento em produção com parcerias institucionais",
+    "q4Title": "Q4 2026: Escalabilidade",
+    "q4Description": "$500M+ TVL em múltiplas chains",
+    "inProgress": "Em Andamento",
+    "upcoming": "Em Breve",
+    "planned": "Planejado",
+    "completed": "Concluído",
+    "live": "Ao Vivo"
+  },
+  "cookies": {
+    "title": "Preferências de Cookies",
+    "description": "Usamos cookies para melhorar sua experiência e analisar o uso da plataforma. O endereço da sua carteira é dado público de blockchain—não coletamos informações pessoais.",
+    "privacyPolicy": "Política de Privacidade",
+    "customize": "Personalizar",
+    "necessaryOnly": "Apenas Necessários",
+    "acceptAll": "Aceitar Todos",
+    "settings": "Configurações de Cookies",
+    "necessary": "Necessários",
+    "alwaysOn": "Sempre Ativo",
+    "necessaryDescription": "Necessários para conexão de carteira e funcionalidade básica",
+    "analytics": "Analytics",
+    "analyticsDescription": "Dados de uso anônimos para melhorias de desempenho",
+    "preferences": "Preferências",
+    "preferencesDescription": "Lembrar suas configurações e preferências",
+    "rejectOptional": "Rejeitar Opcionais",
+    "savePreferences": "Salvar Preferências"
+  }
 }

@@ -1074,7 +1074,7 @@ export class ReportingAgent extends BaseAgent {
         .map(a => `${a.asset} (${a.contribution.toFixed(1)}% risk, ${a.allocation.toFixed(1)}% allocation, ${(a.volatility * 100).toFixed(0)}% vol)`)
         .join(', ');
 
-      const systemPrompt = `You are a DeFi portfolio strategist specializing in institutional RWA management. Provide actionable, data-driven recommendations.`;
+      const systemPrompt = `You are a DeFi portfolio strategist for an AI-managed prediction-market alpha vault on Sui mainnet. Provide actionable, data-driven recommendations grounded in the current per-asset signal state and live positions.`;
 
       const aiPrompt = `Analyze this portfolio and provide 3 prioritized recommendations:
 

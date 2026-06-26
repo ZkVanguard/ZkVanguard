@@ -23,6 +23,25 @@ Polymarket prints **\$20B+ a month** in alpha-bearing signal. Riding it consiste
 
 The vault has been running unattended on Sui mainnet since June 2026, with TVL deliberately capped at \$10K by contract (strict NAV-oracle mode `ON`) until external audit completes.
 
+## Products
+
+The Vault is the lead product. The same ZK + agent rails power three additional products that share the codebase:
+
+| Product | What it does | Status |
+|---|---|---|
+| 🔓 **The Vault** | USDC vault, AI-allocates BTC / ETH / SUI / CRO from prediction-market signals, auto-hedged on BlueFin perps | Live on Sui mainnet |
+| 🔒 **Private Hedges** | Confidential perp positions for funds and whales — stealth addresses + commitment hashes; asset, side, size, and PnL stay off-chain | Live primitive |
+| 🔒 **Private Portfolio Creator** | Wizard-style custom portfolios via [`zk_proxy_vault`](./contracts/sui/sources/zk_proxy_vault.move) (727 LOC); time-locked withdrawals, ZK ownership proofs | Live primitive |
+| 🏢 **RWA Manager** | Per-user tokenized-asset portfolios via [`rwa_manager.move`](./contracts/sui/sources/rwa_manager.move) (586 LOC); AI-agent rebalancing, ed25519 prover attestation, 50 bps protocol fee | Live primitive |
+
+## Revenue model
+
+| Layer | Detail |
+|---|---|
+| **Protocol fees** (live today) | 50 bps annual management + 10% performance on every USDC vault deposit. Per-trade fees on the autonomous BlueFin perp trader unlock post-audit. All fees route to `FeeManagerCap` on a MSafe multisig — on-chain, public, auditable. |
+| **Tiered subscriptions** (premium feature access) | Free trial · Retail (\$99/mo) · Pro (\$499/mo) · Institutional (\$2,499/mo) · Enterprise (custom) — bundle private-hedge access, RWA-portfolio creation, dedicated SLAs, and white-label deployment |
+| **Token-integrated value capture** | Designed for Month 9-12 TGE post-audit: percentage of on-chain fees route to staking rewards / buyback-burn (Pendle / GMX precedent). No public sale planned. |
+
 ## How it works
 
 ```mermaid

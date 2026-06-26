@@ -1,16 +1,19 @@
 {
   "name": "zkvanguard",
   "version": "0.1.0",
-  "description": "Verifiable Multi-Agent AI Swarm for Institutional RWA Risk Orchestration with Zero-Knowledge Proofs on Cronos zkEVM",
+  "description": "AI-managed crypto vault platform on Sui mainnet — Polymarket-alpha vault (lead product), private hedges, private portfolio creator, and RWA manager for individual tokenized portfolios. Seven autonomous AI agents, prediction-market signals fused per asset, ZK-attested decisions, BlueFin perp execution. Protocol fees + tiered subscription revenue.",
   "author": "ZkVanguard Team",
   "license": "Apache-2.0",
   "keywords": [
-    "cronos",
+    "sui",
     "ai-agents",
-    "rwa",
+    "prediction-markets",
+    "polymarket",
     "defi",
+    "vault",
+    "rwa",
     "zk-proofs",
-    "x402",
+    "bluefin",
     "web3"
   ],
   "repository": {
