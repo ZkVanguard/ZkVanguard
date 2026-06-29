@@ -17,14 +17,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { recordNavSnapshot, getNavHistory } from '@/lib/db/community-pool';
-import { query } from '@/lib/db/postgres';
-import { getPoolSummary } from '@/lib/services/cronos/CommunityPoolService';
+import { getNavHistory, getLatestNavSnapshot } from '@/lib/db/community-pool';
 import { getNumber, setNumber, getTimestamp, setTimestamp, setCronState, CronKeys } from '@/lib/db/cron-state';
-import { ethers } from 'ethers';
-import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 
 export const runtime = 'nodejs';
@@ -83,9 +79,14 @@ const HOURLY_LOSS_WARNING_PERCENT = 0.5; // Warn on 0.5%+ hourly loss (lowered f
 const DAILY_LOSS_WARNING_PERCENT = 2; // Warn on 2%+ daily loss (lowered from 3%)
 const AUTO_HEDGE_THRESHOLD_PERCENT = 1.5; // Trigger hedge at 1.5%+ loss (lowered from 2%)
 
-// Pool contract addresses - V3 upgraded 2026-03-12
-const COMMUNITY_POOL_ADDRESS = process.env.NEXT_PUBLIC_COMMUNITY_POOL_PROXY_ADDRESS || '0xC25A8D76DDf946C376c9004F5192C7b2c27D5d30';
-const SUI_POOL_STATE_ID = (process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID || '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a').trim();
+// The pool's authoritative state lives in the DB snapshot written by the
+// sui-community-pool cron — pool.address is retained for parity with the
+// historical config shape but unused by fetchSuiPoolStats.
+const SUI_POOL_STATE_ID = (
+  process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE ||
+  process.env.NEXT_PUBLIC_SUI_POOL_STATE_ID ||
+  ''
+).trim();
 const POOLS: Array<{
   id: string;
   name: string;
@@ -141,10 +142,19 @@ async function loadStateFromDb(): Promise<void> {
   }
 }
 
+// Risk checks must run against fresh data — older than this and we skip the
+// tick rather than alert on stale state. sui-community-pool writes every
+// 30 min, so 60 min covers one missed run.
+const NAV_SNAPSHOT_MAX_AGE_MS = 60 * 60 * 1000;
+
 /**
- * Fetch SUI pool stats directly from SUI mainnet on-chain state
+ * Fetch SUI pool stats from the authoritative snapshot written by the
+ * sui-community-pool cron (source='sui-usdc-pool'). The on-chain object
+ * only knows about idle USDC + on-chain hedged value — the bulk of NAV
+ * lives off-chain on BlueFin + admin wallet, so the snapshot is the only
+ * correct source of truth.
  */
-async function fetchSuiPoolStats(poolStateId: string): Promise<{
+async function fetchSuiPoolStats(_poolStateId: string): Promise<{
   totalNAV: number;
   memberCount: number;
   sharePrice: number;
@@ -152,48 +162,34 @@ async function fetchSuiPoolStats(poolStateId: string): Promise<{
   creationTime: number;
 } | null> {
   try {
-    // Direct SUI JSON-RPC call (no SDK dependency)
-    const rpcUrl = process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443';
-    const rpcResp = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'sui_getObject',
-        params: [poolStateId.trim(), { showContent: true }],
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!rpcResp.ok) throw new Error(`SUI RPC HTTP ${rpcResp.status}`);
-    const rpcJson = await rpcResp.json();
-    if (rpcJson.error) throw new Error(`SUI RPC error: ${JSON.stringify(rpcJson.error)}`);
-    const fields = rpcJson?.result?.data?.content?.fields;
-    if (!fields) throw new Error(`No fields in pool object. Result: ${JSON.stringify(rpcJson?.result).slice(0, 200)}`);
-    const balance = Number(fields.balance ?? 0) / 1e6;
-    const hs = fields.hedge_state?.fields ?? {};
-    const totalHedged = Number(hs.total_hedged_value ?? 0) / 1e6;
-    const totalNAV = balance + totalHedged;
-    const totalShares = Number(fields.total_shares ?? 0);
-    const sharePrice = totalShares > 0 ? totalNAV / totalShares : 1.0;
-    const memberCount = Number(fields.member_count ?? 0);
+    const snap = await getLatestNavSnapshot('sui');
+    if (!snap) {
+      logger.warn('[PoolNAVMonitor] No sui NAV snapshot in DB — skipping');
+      return null;
+    }
+    const ageMs = Date.now() - new Date(snap.timestamp).getTime();
+    if (ageMs > NAV_SNAPSHOT_MAX_AGE_MS) {
+      logger.warn('[PoolNAVMonitor] Latest sui NAV snapshot is stale, skipping risk check', {
+        ageMin: (ageMs / 60000).toFixed(1),
+        maxAgeMin: NAV_SNAPSHOT_MAX_AGE_MS / 60000,
+      });
+      return null;
+    }
+    const totalNAV = Number(snap.total_nav);
+    const totalShares = Number(snap.total_shares);
+    const sharePrice = Number(snap.share_price);
+    const memberCount = Number(snap.member_count);
+    const allocations = (snap.allocations as Record<string, number> | null) ?? { BTC: 35, ETH: 30, SUI: 35 };
     return {
       totalNAV,
       memberCount,
-      sharePrice,
-      allocations: { BTC: 35, ETH: 30, SUI: 35 },
+      sharePrice: sharePrice || (totalShares > 0 ? totalNAV / totalShares : 1),
+      allocations,
       creationTime: Math.floor(Date.now() / 1000) - 86400 * 30,
     };
   } catch (error: unknown) {
-    const msg = errMsg(error) || String(error);
-    logger.error('[PoolNAVMonitor] Failed to fetch SUI pool stats:', { error: msg });
-    // Return degraded data so the pool still appears in results
-    return {
-      totalNAV: 0,
-      memberCount: 0,
-      sharePrice: 1,
-      allocations: { BTC: 35, ETH: 30, SUI: 35 },
-      creationTime: Math.floor(Date.now() / 1000) - 86400 * 30,
-      _error: msg,
-    } as any;
+    logger.error('[PoolNAVMonitor] Failed to read sui NAV snapshot:', { error: errMsg(error) || String(error) });
+    return null;
   }
 }
 
@@ -379,47 +375,15 @@ function generateAlerts(
 }
 
 /**
- * Record NAV snapshot with actual pool stats
- * Optimized: DB write only — member sync moved to dedicated endpoint
+ * Update in-memory NAV history cache for warm-Lambda change tracking.
+ * DB writes are owned by sui-community-pool cron (source='sui-usdc-pool') —
+ * this route is a read-only consumer.
  */
-async function recordSnapshot(
-  poolId: string, 
-  stats: { 
-    totalNAV: number; 
-    sharePrice: number; 
-    memberCount: number; 
-    allocations: Record<string, number>; 
-  }
-): Promise<void> {
-  // Add to in-memory history cache
+function updateInMemoryHistory(poolId: string, totalNAV: number): void {
   const history = navHistoryCache.get(poolId) || [];
-  history.push({ nav: stats.totalNAV, timestamp: Date.now() });
-  
-  // Keep last 168 hours (1 week)
-  if (history.length > 168) {
-    history.shift();
-  }
+  history.push({ nav: totalNAV, timestamp: Date.now() });
+  if (history.length > 168) history.shift();
   navHistoryCache.set(poolId, history);
-  
-  // Calculate total shares from NAV and share price
-  const totalShares = stats.sharePrice > 0 ? stats.totalNAV / stats.sharePrice : 1000;
-  
-  // Record to database
-  try {
-    await recordNavSnapshot({
-      totalNav: stats.totalNAV,
-      sharePrice: stats.sharePrice,
-      totalShares: Math.round(totalShares),
-      memberCount: stats.memberCount,
-      allocations: stats.allocations,
-      source: 'pool-nav-monitor-cron',
-    });
-    logger.info(`[PoolNAVMonitor] Snapshot recorded: NAV=$${stats.totalNAV.toFixed(2)}, SharePrice=$${stats.sharePrice.toFixed(4)}, Members=${stats.memberCount}`);
-  } catch (error: unknown) {
-    logger.warn(`[PoolNAVMonitor] Failed to record snapshot to DB:`, { error: errMsg(error) || String(error) });
-  }
-  
-  // NOTE: On-chain member sync offloaded to /api/cron/sync-members (QStash, runs separately)
 }
 
 /**
@@ -542,47 +506,8 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
   let criticalPools = 0;
   let healthyPools = 0;
 
-  // Load DB state + NAV history in parallel (both needed before proceeding)
-  const [, navHistory] = await Promise.all([
-    loadStateFromDb(),
-    getNavHistory(30).catch(() => [] as any[]),
-  ]);
-  
-  // Backfill hourly snapshots if NAV history is too sparse for risk metrics
-  // This ensures risk metrics activate quickly after deployment
-  try {
-    if (navHistory.length < 5) {
-      logger.info('[PoolNAVMonitor] Sparse NAV history detected, backfilling hourly snapshots', {
-        existingSnapshots: navHistory.length,
-      });
-      const baseSharePrice = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].share_price) : 1.0;
-      const baseNav = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].total_nav) : 10000;
-      const baseTotalShares = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].total_shares) : 10000;
-      const baseMemberCount = navHistory.length > 0 ? Number(navHistory[navHistory.length - 1].member_count) : 1;
-      const now = Date.now();
-      // Batch-insert 24 hourly snapshots in a single query
-      const allocJson = JSON.stringify({ BTC: 30, ETH: 30, SUI: 25, CRO: 15 });
-      const values: string[] = [];
-      const params: unknown[] = [];
-      let paramIdx = 1;
-      for (let i = 24; i >= 1; i--) {
-        const ts = new Date(now - i * 60 * 60 * 1000);
-        values.push(`($${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, $${paramIdx+6})`);
-        params.push(ts, baseSharePrice, baseNav, baseTotalShares, baseMemberCount, allocJson, 'backfill-hourly');
-        paramIdx += 7;
-      }
-      await query(
-        `INSERT INTO community_pool_nav_history (timestamp, share_price, total_nav, total_shares, member_count, allocations, source)
-         VALUES ${values.join(', ')}
-         ON CONFLICT DO NOTHING`,
-        params
-      );
-      logger.info('[PoolNAVMonitor] Backfilled 24 hourly snapshots for risk metrics (batch)');
-    }
-  } catch (backfillErr: unknown) {
-    logger.warn('[PoolNAVMonitor] Backfill failed (non-fatal)', { error: errMsg(backfillErr) });
-  }
-  
+  await loadStateFromDb();
+
   for (const pool of POOLS) {
     logger.info(`[PoolNAVMonitor] Checking ${pool.name}`);
     
@@ -593,27 +518,16 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
     ]);
     
     if (!stats) {
-      logger.warn(`[PoolNAVMonitor] Skipping ${pool.id} - unable to fetch stats`);
+      logger.warn(`[PoolNAVMonitor] Skipping ${pool.id} - no fresh snapshot available`);
       continue;
     }
-    const fetchError: string | undefined = (stats as any)._error;
-    if (fetchError) {
-      logger.warn(`[PoolNAVMonitor] ${pool.id} stats degraded: ${fetchError}`);
-    }
-    
+
+    updateInMemoryHistory(pool.id, stats.totalNAV);
+
     const navChange = previousNAV ? stats.totalNAV - previousNAV : 0;
     const navChangePercent = previousNAV ? (navChange / previousNAV) * 100 : 0;
-    
-    // calculateDrawdown and recordSnapshot can run in parallel
-    const [{ drawdownPercent, peakNAV }] = await Promise.all([
-      calculateDrawdown(pool.id, stats.totalNAV),
-      recordSnapshot(pool.id, {
-        totalNAV: stats.totalNAV,
-        sharePrice: stats.sharePrice,
-        memberCount: stats.memberCount,
-        allocations: stats.allocations,
-      }),
-    ]);
+
+    const { drawdownPercent, peakNAV } = await calculateDrawdown(pool.id, stats.totalNAV);
     const { maxDrift, driftingAssets } = checkAllocationDrift(stats.allocations, pool.targetAllocations);
     
     // Calculate since inception
@@ -725,8 +639,7 @@ async function monitorPools(): Promise<{ pools: PoolMetrics[]; allAlerts: PoolAl
         days: Math.floor(daysActive),
       },
       alerts,
-      ...(fetchError ? { fetchError } : {}),
-    } as any;
+    };
     
     poolMetrics.push(metrics);
     
