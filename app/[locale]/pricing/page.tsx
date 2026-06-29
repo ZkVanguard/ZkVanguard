@@ -19,7 +19,7 @@ export default async function PricingPage() {
             ZkVanguard
           </Link>
           <div className="flex items-center gap-6">
-            <Link href="/api-docs" className="text-[14px] text-[#86868b] hover:text-[#1d1d1f]">
+            <Link href="/developers" className="text-[14px] text-[#86868b] hover:text-[#1d1d1f]">
               API
             </Link>
             <Link href="/dashboard" className="text-[14px] text-[#86868b] hover:text-[#1d1d1f]">
@@ -187,7 +187,7 @@ export default async function PricingPage() {
               programmatically, attest decisions). Institutional: 10K req/min and
               custody-attestation request flow. Enterprise: white-label the entire
               autonomous risk engine. See{' '}
-              <Link href="/api-docs" className="text-[#4ca3ff] underline">/api-docs</Link>{' '}
+              <Link href="/developers" className="text-[#4ca3ff] underline">/developers</Link>{' '}
               for the full surface.
             </Faq>
 

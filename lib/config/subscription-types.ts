@@ -132,7 +132,7 @@ export interface PricingDisplayData {
   annualSavings: string;
   features: string[];
   limits: {
-    agents: string; // "3 AI agents", "All 5 AI agents"
+    agents: string; // "3 AI agents", "All 7 AI agents"
     zkProofs: string; // "10/month", "Unlimited"
     hedging: string; // "Basic", "Advanced"
     support: string; // "Community", "Email", "Dedicated"

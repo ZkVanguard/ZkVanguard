@@ -236,7 +236,7 @@ export default function CustodyProofsPage() {
               <p className="text-[12px] text-amber-700 mt-2">
                 Once deployed, this page will list active attestations for your wallet. The full API
                 surface ({' '}
-                <a href="/api-docs" className="underline">/api-docs</a>
+                <a href="/developers" className="underline">/developers</a>
                 {' '}) is already live for off-chain verification + message building.
               </p>
             </div>
@@ -267,7 +267,7 @@ export default function CustodyProofsPage() {
               {data.attestations.length} attestation{data.attestations.length === 1 ? '' : 's'}
             </h2>
             <a
-              href="/api-docs"
+              href="/developers"
               className="text-[12px] text-[#4ca3ff] hover:underline inline-flex items-center gap-1"
             >
               <Eye className="w-3 h-3" /> API reference

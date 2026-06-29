@@ -110,7 +110,7 @@ function OverviewSection() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4">
           <h4 className="text-lg font-semibold text-[#34C759] mb-2">🤖 Agent Orchestration</h4>
-          <p className="text-[#424245] text-sm">All 5 agents operational with multi-agent consensus voting and multi-chain awareness.</p>
+          <p className="text-[#424245] text-sm">All 7 agents operational with multi-agent consensus voting and multi-chain awareness.</p>
         </div>
         <div className="bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4">
           <h4 className="text-lg font-semibold text-[#34C759] mb-2">📊 Live Portfolio Data</h4>

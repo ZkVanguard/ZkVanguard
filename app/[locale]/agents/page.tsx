@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Brain, TrendingUp, Shield, Zap, FileText, MessageSquare, Activity, ChevronRight, CheckCircle, ArrowRight } from 'lucide-react';
+import { Brain, TrendingUp, Shield, Zap, FileText, MessageSquare, Activity, ChevronRight, CheckCircle, ArrowRight, Eye, Layers } from 'lucide-react';
 
 export default function AgentsPage() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>('lead');
@@ -25,7 +25,7 @@ export default function AgentsPage() {
       implementation: 'agents/core/LeadAgent.ts',
       extends: 'BaseAgent',
       messageTypes: ['strategy-input', 'agent-result', 'task-result', 'status-update'],
-      currentStatus: 'Fully operational - orchestrates all 5 agents with complete end-to-end workflow validated'
+      currentStatus: 'Fully operational - orchestrates all 7 agents with complete end-to-end workflow validated'
     },
     {
       id: 'risk',
@@ -114,6 +114,50 @@ export default function AgentsPage() {
       api: 'POST /api/agents/reporting/generate',
       apiStatus: 'Fully operational - comprehensive analytics',
       currentStatus: 'Validated in complete-system-test.ts: Full portfolio report with positions, P&L, and metrics'
+    },
+    {
+      id: 'priceMonitor',
+      name: 'Price Monitor Agent',
+      icon: Eye,
+      color: '#5856D6',
+      role: 'Threshold Watcher',
+      status: 'active',
+      description: 'Subscribes to the proactive 5-min Polymarket signal ticker, watches price thresholds, and broadcasts alerts to other agents.',
+      capabilities: [
+        'Real-time threshold monitoring across BTC/ETH/SUI/CRO',
+        'Subscribes to Polymarket5MinService event stream',
+        'Triggers other agents on signal-flip events',
+        'CentralizedHedgeManager integration',
+        'Per-asset alert routing',
+        'No-poll architecture (event-driven)'
+      ],
+      implementation: 'agents/specialized/PriceMonitorAgent.ts',
+      extends: 'BaseAgent',
+      api: 'GET /api/predictions/per-asset',
+      apiStatus: 'Fully operational - 10s proactive ticker',
+      currentStatus: 'Live on every dashboard request; consumes the Polymarket 5-min binary signal stream'
+    },
+    {
+      id: 'suiPool',
+      name: 'SUI Pool Agent',
+      icon: Layers,
+      color: '#4DA2FF',
+      role: 'On-chain Pool Manager',
+      status: 'active',
+      description: 'Drives the SUI USDC community pool: 4-asset allocation, rebalance via BlueFin aggregator, hedge sizing, SafeExecutionGuard enforcement.',
+      capabilities: [
+        '4-asset allocation (BTC/ETH/SUI/CRO)',
+        'Rebalance via BlueFin Aggregator (7k pools)',
+        'Hedge sizing aware of swappable vs hedged assets',
+        'Integrates SafeExecutionGuard position limits',
+        'Reads on-chain pool state every 30 min',
+        'AI-confidence-gated rebalance (only fires at ≥65%)'
+      ],
+      implementation: 'agents/specialized/SuiPoolAgent.ts',
+      extends: 'BaseAgent',
+      api: 'GET /api/sui/community-pool',
+      apiStatus: 'Fully operational - live on SUI mainnet',
+      currentStatus: 'Running every 30 min via sui-community-pool cron; manages the live $57 NAV pool'
     }
   ];
 
@@ -146,11 +190,11 @@ export default function AgentsPage() {
             <div className="flex-1 min-w-0">
               <h3 className="text-[15px] sm:text-[17px] font-semibold text-[#1d1d1f] mb-1">Production Status: 10/10 Tests Passing</h3>
               <p className="text-[13px] sm:text-[14px] text-[#86868b] mb-3 leading-relaxed">
-                All 5 agents fully operational with real integrations. System validated with live CoinGecko prices, 
+                All 7 agents fully operational with real integrations. System validated with live CoinGecko prices, 
                 ZK-STARK proofs, and x402 gasless settlements.
               </p>
               <div className="flex flex-wrap gap-2 sm:gap-3">
-                {['5 Agents Operational', 'CoinGecko Integration', 'ZK Proofs Validated', 'x402 Gasless'].map((item, i) => (
+                {['7 Agents Operational', 'CoinGecko Integration', 'ZK Proofs Validated', 'x402 Gasless'].map((item, i) => (
                   <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#34C759]/10 text-[#34C759] rounded-full text-[11px] sm:text-[12px] font-medium">
                     <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     {item}
