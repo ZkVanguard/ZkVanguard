@@ -161,7 +161,7 @@
     "abstract": {
       "highlight": "ZkVanguard는 자율 AI 에이전트와 크라우드소싱 예측 시장 인텔리전스, 포스트 양자 영지식 암호학을 결합하여 기관 디지털 자산 리스크 관리의 패러다임 전환을 도입합니다. 시장 폭락 후 대응하는 전통적인 반응적 시스템과 달리, ZkVanguard의 예측 아키텍처는 3-7일 전에 변동성 이벤트를 예측하여 선제적 포트폴리오 보호를 가능하게 합니다.",
       "p1": "플랫폼은 6개의 전문 AI 에이전트(리드, 리스크, 헤징, 결제, 리포팅, 가격 모니터)를 조율하여 자율적으로 포트폴리오를 분석하고, Delphi/Polymarket의 실시간 예측 시장 데이터를 소비하며, 수학적으로 최적화된 헤지 전략을 생성하고, Cronos 블록체인에서 가스리스 트랜잭션을 실행합니다.",
-      "p2": "Polymarket 단독으로 월 200억 달러 이상의 거래량을 처리하고 있으며, 예측 시장 부문은 2025년 635억 달러까지 성장했습니다. 시그널은 실재하지만, 이를 꾸준히 활용하려면 맞춤형 봇, 정교한 리스크 관리, 그리고 24시간 주의가 필요했습니다. ZkVanguard는 이 모든 워크플로우를 한 번의 USDC 예치로 압축하며, 현재 가동 중인 두 가지 수익 계층을 갖추고 있습니다: 모든 볼트 예치에 대한 온체인 프로토콜 수수료(연간 50bps 관리 + 10% 성과 수수료, MSafe 멀티시그가 통제하는 FeeManagerCap으로 라우팅)와 프리미엄 기능(프라이빗 헤지, 프라이빗 포트폴리오 크리에이터, 개인 포트폴리오용 RWA 매니저)에 접근하기 위한 계층형 구독."
+      "p2": "Polymarket 단독으로 월 200억 달러 이상의 거래량을 처리하고 있으며, 예측 시장 부문은 2025년 635억 달러까지 성장했습니다. 시그널은 실재하지만, 이를 꾸준히 활용하려면 맞춤형 봇, 정교한 리스크 관리, 그리고 24시간 주의가 필요했습니다. ZkVanguard는 이 모든 워크플로우를 한 번의 USDC 예치로 압축하며, 현재 가동 중인 두 가지 수익 계층을 갖추고 있습니다: 모든 볼트 예치에 대한 온체인 프로토콜 수수료(연간 50bps 관리 + 10% 성과 수수료, MSafe 멀티시그가 통제하는 FeeManagerCap으로 라우팅)와 프리미엄 기능(프라이빗 헤지 및 프라이빗 포트폴리오 크리에이터)에 접근하기 위한 계층형 구독."
     },
     "introduction": {
       "opportunity": "16조 달러의 기회",
@@ -366,8 +366,8 @@
   "marketOpportunity": {
     "title": "거대한 시장 기회",
     "subtitle": "Polymarket 알파 + AI 에이전트 + 컨슈머 크립토 — 모든 것이 동시에 일어나고 있다",
-    "rwaMarketSize": "Polymarket 거래량",
-    "rwaDescription": "월간 런레이트 (TRM Labs, 2026)",
+    "polymarketVolume": "Polymarket 거래량",
+    "polymarketDescription": "월간 런레이트 (TRM Labs, 2026)",
     "growthRate": "성장률",
     "growthDescription": "2024-2030 시장 확장",
     "targetMarket": "타겟 시장",
@@ -378,7 +378,7 @@
     "traditionalTools": "전통적 리스크 도구",
     "noAiAutomation": "AI 자동화 없음",
     "defiProtocols": "DeFi 프로토콜",
-    "limitedRwa": "예측 시장 시그널 없음",
+    "noPredictionSignals": "예측 시장 시그널 없음",
     "centralizedServices": "중앙화 서비스",
     "custodialRisk": "커스터디 리스크",
     "whyWins": "ZkVanguard가 승리하는 이유",

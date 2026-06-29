@@ -161,7 +161,7 @@
     "abstract": {
       "highlight": "ZkVanguard introduit un changement de paradigme dans la gestion des risques des actifs numériques institutionnels en combinant des agents IA autonomes avec l'intelligence des marchés prédictifs participatifs et la cryptographie zero-knowledge post-quantique. Contrairement aux systèmes réactifs traditionnels qui répondent après les crashs de marché, l'architecture prédictive de ZkVanguard anticipe les événements de volatilité 3 à 7 jours à l'avance, permettant une protection préventive du portefeuille.",
       "p1": "La plateforme orchestre six agents IA spécialisés—Lead, Risque, Hedging, Règlement, Reporting et Surveillance des prix—qui analysent de manière autonome les portefeuilles, consomment les données des marchés prédictifs en temps réel de Delphi/Polymarket, génèrent des stratégies de couverture mathématiquement optimales et exécutent des transactions sans gas sur la blockchain Cronos. Toutes les données sensibles du portefeuille restent privées grâce à notre système de preuves ZK-STARK accéléré par CUDA avec une sécurité cible de 512 bits.",
-      "p2": "Polymarket traite à lui seul plus de 20 milliards de dollars de volume par mois, et le secteur des marchés de prédiction a atteint 63,5 milliards en 2025. Le signal est réel, mais l'exploiter régulièrement a nécessité des bots sur mesure, une gestion sophistiquée du risque et une attention constante. ZkVanguard condense tout ce flux en un seul dépôt USDC en un clic, avec deux couches de revenus actives : des frais de protocole on-chain sur chaque dépôt dans le coffre (50 pb annuels de gestion + 10 % de performance, routés vers une FeeManagerCap contrôlée par multisig MSafe) et des abonnements par paliers pour l'accès aux fonctionnalités premium (couvertures privées, créateur de portefeuilles privés et gestionnaire RWA pour portefeuilles individuels)."
+      "p2": "Polymarket traite à lui seul plus de 20 milliards de dollars de volume par mois, et le secteur des marchés de prédiction a atteint 63,5 milliards en 2025. Le signal est réel, mais l'exploiter régulièrement a nécessité des bots sur mesure, une gestion sophistiquée du risque et une attention constante. ZkVanguard condense tout ce flux en un seul dépôt USDC en un clic, avec deux couches de revenus actives : des frais de protocole on-chain sur chaque dépôt dans le coffre (50 pb annuels de gestion + 10 % de performance, routés vers une FeeManagerCap contrôlée par multisig MSafe) et des abonnements par paliers pour l'accès aux fonctionnalités premium (couvertures privées et créateur de portefeuilles privés)."
     },
     "introduction": {
       "opportunity": "L'opportunité de 16 000 milliards de dollars",
@@ -366,8 +366,8 @@
   "marketOpportunity": {
     "title": "Opportunité de marché massive",
     "subtitle": "Alpha de Polymarket + agents IA + crypto grand public — tout se passe en même temps",
-    "rwaMarketSize": "Volume de Polymarket",
-    "rwaDescription": "Cadence mensuelle (TRM Labs, 2026)",
+    "polymarketVolume": "Volume de Polymarket",
+    "polymarketDescription": "Cadence mensuelle (TRM Labs, 2026)",
     "growthRate": "Taux de croissance",
     "growthDescription": "Expansion du marché 2024-2030",
     "targetMarket": "Marché cible",
@@ -378,7 +378,7 @@
     "traditionalTools": "Outils de risque traditionnels",
     "noAiAutomation": "Pas d'automatisation IA",
     "defiProtocols": "Protocoles DeFi",
-    "limitedRwa": "Pas de signaux de marchés de prédiction",
+    "noPredictionSignals": "Pas de signaux de marchés de prédiction",
     "centralizedServices": "Services centralisés",
     "custodialRisk": "Risque de garde",
     "whyWins": "Pourquoi ZkVanguard gagne",

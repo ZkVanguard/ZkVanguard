@@ -221,7 +221,7 @@ export function PricingSection() {
             Enterprise Solutions
           </h3>
           <p className="text-[15px] text-[#86868b] mb-4">
-            Need a custom solution for your RWA platform? Get white-label deployment, 
+            Need a custom solution for your fund, treasury, or platform? Get white-label deployment,
             dedicated support, and custom SLA guarantees.
           </p>
           <button

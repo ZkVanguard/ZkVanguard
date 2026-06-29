@@ -234,7 +234,7 @@ export function WithdrawModal({
                       Withdraw to your wallet
                     </p>
                     <p className="text-[#86868b] text-xs">
-                      Tokens will be transferred from the RWAManager contract back to your wallet.
+                      Tokens will be transferred from the portfolio contract back to your wallet.
                     </p>
                   </div>
                 </div>

@@ -1,7 +1,11 @@
 # ZkVanguard - System Architecture
 
+> ⚠ **PARTIALLY HISTORICAL.** This doc still describes the original Cronos-EVM
+> framing. The live product is an AI-managed Polymarket-alpha vault on Sui
+> mainnet — see [`CLAUDE.md`](../CLAUDE.md) for current authoritative architecture.
+
 ## Overview
-ZkVanguard is a verifiable multi-agent AI swarm system for institutional RWA risk orchestration on Cronos zkEVM with Zero-Knowledge proofs. The system enables natural language strategy input and autonomous execution through specialized AI agents.
+ZkVanguard is a verifiable multi-agent AI swarm system for autonomous DeFi risk orchestration with Zero-Knowledge proofs. The system enables natural language strategy input and autonomous execution through specialized AI agents.
 
 ## High-Level Architecture
 

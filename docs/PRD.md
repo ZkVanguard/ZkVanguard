@@ -1,4 +1,16 @@
-# Product Requirements Document (PRD)
+# Product Requirements Document (PRD) — ARCHIVED
+
+> ⚠ **THIS DOCUMENT IS HISTORICAL** (Jan 2026, pre-pivot). It describes an earlier
+> framing of ZkVanguard as an "RWA risk management platform on Cronos testnet."
+> The current product is an **AI-managed Polymarket-alpha crypto vault on Sui
+> mainnet**. For accurate, current product framing see:
+> - [`README.md`](../README.md)
+> - [`CLAUDE.md`](../CLAUDE.md) — authoritative repo guide
+> - [`docs/GRANT_HONEST_ASSESSMENT.md`](./GRANT_HONEST_ASSESSMENT.md)
+> - [`docs/GRANT_PITCH_DECK_v2.md`](./GRANT_PITCH_DECK_v2.md)
+>
+> The metrics, audience, deployment chain, and tier targets below are stale.
+
 ## ZkVanguard - AI-Powered Multi-Agent RWA Risk Management Platform
 
 **Version:** 1.0 | **Date:** January 1, 2026 | **Status:** Production-Ready → Beta Launch  

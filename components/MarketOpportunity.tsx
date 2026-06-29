@@ -9,16 +9,16 @@ export function MarketOpportunity() {
   const marketData = [
     {
       icon: DollarSign,
-      label: t('rwaMarketSize'),
-      value: '$16T',
-      description: t('rwaDescription'),
+      label: t('polymarketVolume'),
+      value: '$20B+/mo',
+      description: t('polymarketDescription'),
       iconColor: 'text-claude-orange',
       iconBg: 'bg-claude-orange/12',
     },
     {
       icon: TrendingUp,
       label: t('growthRate'),
-      value: '50x',
+      value: '$63.5B',
       description: t('growthDescription'),
       iconColor: 'text-claude-orange',
       iconBg: 'bg-claude-orange/12',
@@ -26,7 +26,7 @@ export function MarketOpportunity() {
     {
       icon: Globe,
       label: t('targetMarket'),
-      value: '$1.2T',
+      value: '$120B+',
       description: t('targetDescription'),
       iconColor: 'text-claude-orange',
       iconBg: 'bg-claude-orange/12',
@@ -43,7 +43,7 @@ export function MarketOpportunity() {
 
   const competitors = [
     { name: t('traditionalTools'), gap: t('noAiAutomation') },
-    { name: t('defiProtocols'), gap: t('limitedRwa') },
+    { name: t('defiProtocols'), gap: t('noPredictionSignals') },
     { name: t('centralizedServices'), gap: t('custodialRisk') },
   ];
 

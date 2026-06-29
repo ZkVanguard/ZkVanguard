@@ -1,5 +1,9 @@
 # 🚀 FINAL SUBMISSION SUMMARY - ZkVanguard x402 Paytech Hackathon
 
+> ⚠ **HISTORICAL SUBMISSION** (Dec 2025). The product has since pivoted to an
+> AI-managed Polymarket-alpha vault on Sui mainnet. See current framing in
+> [`README.md`](../../README.md) and [`CLAUDE.md`](../../CLAUDE.md).
+
 ## 📋 Executive Summary
 
 **Project**: ZkVanguard - AI-Powered RWA Risk Management Platform

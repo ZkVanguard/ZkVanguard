@@ -10,7 +10,7 @@ export function FiltersStep({ filters, setFilters, onNext, onBack }: {
   onNext: () => void;
   onBack: () => void;
 }) {
-  const categories = ['DeFi', 'Layer1', 'Layer2', 'Gaming', 'NFT', 'Stablecoin', 'RWA'];
+  const categories = ['DeFi', 'Layer1', 'Layer2', 'Gaming', 'NFT', 'Stablecoin'];
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -81,7 +81,6 @@ export function FiltersStep({ filters, setFilters, onNext, onBack }: {
               "🎮 Gaming: Play-to-earn and gaming tokens",
               "🇺🇻 NFT: NFT marketplace and utility tokens",
               "💵 Stablecoin: USD-pegged tokens (USDC, USDT, DAI)",
-              "🏢 RWA: Real-world asset tokens (tokenized bonds, real estate)",
               "",
               "💡 Tip: More categories = better diversification but higher risk variety"
             ]} />

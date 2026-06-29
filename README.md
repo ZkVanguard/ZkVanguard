@@ -37,7 +37,6 @@ The Vault is the lead product. The same ZK + agent rails power three additional 
 | **The Vault** | USDC vault, AI-allocated across BTC / ETH / SUI / CRO from fused prediction-market signals, auto-hedged on BlueFin perps. | Live on Sui mainnet |
 | **Private Hedges** | Confidential perp positions for funds and whales — stealth addresses + commitment hashes; asset, side, size, and PnL stay off-chain. | Live primitive |
 | **Private Portfolio Creator** | Wizard-style custom portfolios via [`zk_proxy_vault`](./contracts/sui/sources/zk_proxy_vault.move) (727 LOC); time-locked withdrawals, ZK ownership proofs. | Live primitive |
-| **RWA Manager** | Per-user tokenized-asset portfolios via [`rwa_manager.move`](./contracts/sui/sources/rwa_manager.move) (586 LOC); AI-agent rebalancing, ed25519 prover attestation. | Live primitive |
 
 ## How it works
 
@@ -199,7 +198,7 @@ All crons run on Upstash QStash, hit `app/api/cron/*` routes, verify the QStash 
 
 ### Planned (post-audit)
 
-- **Tiered subscriptions** bundling premium feature access: Free trial · Retail ($99/mo) · Pro ($499/mo) · Institutional ($2,499/mo) · Enterprise (custom). Targets private-hedge access, RWA-portfolio creation, dedicated SLAs, white-label deployment.
+- **Tiered subscriptions** bundling premium feature access: Free trial · Retail ($99/mo) · Pro ($499/mo) · Institutional ($2,499/mo) · Enterprise (custom). Targets private-hedge access, private portfolio creation, dedicated SLAs, white-label deployment.
 - **Per-trade fees** on the autonomous perp trader
 
 ### Token mechanic (designed, not launched)

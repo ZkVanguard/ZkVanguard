@@ -1,7 +1,7 @@
 {
   "name": "zkvanguard",
   "version": "0.1.0",
-  "description": "AI-managed crypto vault platform on Sui mainnet — Polymarket-alpha vault (lead product), private hedges, private portfolio creator, and RWA manager for individual tokenized portfolios. Seven autonomous AI agents, prediction-market signals fused per asset, ZK-attested decisions, BlueFin perp execution. Protocol fees + tiered subscription revenue.",
+  "description": "AI-managed crypto vault platform on Sui mainnet — Polymarket-alpha vault (lead product), private hedges, and private portfolio creator. Seven autonomous AI agents, prediction-market signals fused per asset, ZK-attested decisions, BlueFin perp execution. Protocol fees + tiered subscription revenue.",
   "author": "ZkVanguard Team",
   "license": "Apache-2.0",
   "keywords": [
@@ -11,7 +11,6 @@
     "polymarket",
     "defi",
     "vault",
-    "rwa",
     "zk-proofs",
     "bluefin",
     "web3"

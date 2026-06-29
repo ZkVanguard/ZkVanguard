@@ -161,11 +161,11 @@
     "abstract": {
       "highlight": "ZkVanguard introduce un cambio di paradigma nella gestione del rischio degli asset digitali istituzionali combinando agenti IA autonomi con intelligenza dei mercati predittivi crowdsourced e crittografia zero-knowledge post-quantistica. A differenza dei sistemi reattivi tradizionali che rispondono dopo i crash di mercato, l'architettura predittiva di ZkVanguard anticipa gli eventi di volatilità con 3-7 giorni di anticipo.",
       "p1": "La piattaforma orchestra sei agenti IA specializzati—Lead, Rischio, Hedging, Settlement, Reporting e Monitor Prezzi—che analizzano autonomamente i portafogli, consumano dati dei mercati predittivi in tempo reale da Delphi/Polymarket, generano strategie di copertura matematicamente ottimali ed eseguono transazioni senza gas sulla blockchain Cronos.",
-      "p2": "Polymarket da solo elabora oltre 20 miliardi di dollari di volume al mese, e il settore dei mercati di previsione è cresciuto fino a 63,5 miliardi nel 2025. Il segnale è reale, ma sfruttarlo con costanza ha richiesto bot personalizzati, una gestione del rischio sofisticata e attenzione costante. ZkVanguard riduce tutto questo flusso a un singolo deposito USDC con un solo click, con due livelli di ricavi già attivi: commissioni di protocollo on-chain su ogni deposito nel vault (50 pb annuali di gestione + 10% di performance, indirizzati a una FeeManagerCap controllata da multisig MSafe) e abbonamenti a livelli per accedere a funzionalità premium (coperture private, creatore di portafogli privati e gestore RWA per portafogli individuali)."
+      "p2": "Polymarket da solo elabora oltre 20 miliardi di dollari di volume al mese, e il settore dei mercati di previsione è cresciuto fino a 63,5 miliardi nel 2025. Il segnale è reale, ma sfruttarlo con costanza ha richiesto bot personalizzati, una gestione del rischio sofisticata e attenzione costante. ZkVanguard riduce tutto questo flusso a un singolo deposito USDC con un solo click, con due livelli di ricavi già attivi: commissioni di protocollo on-chain su ogni deposito nel vault (50 pb annuali di gestione + 10% di performance, indirizzati a una FeeManagerCap controllata da multisig MSafe) e abbonamenti a livelli per accedere a funzionalità premium (coperture private e creatore di portafogli privati)."
     },
     "introduction": {
-      "opportunity": "L'opportunità da 16 trilioni di dollari",
-      "opportunityText": "Secondo il rapporto 2024 del Boston Consulting Group, il mercato degli asset del mondo reale tokenizzati dovrebbe raggiungere i 16 trilioni di dollari entro il 2030.",
+      "opportunity": "L'opportunità dell'alfa dei mercati di previsione",
+      "opportunityText": "Polymarket ha elaborato oltre 20 miliardi di dollari di volume di trading mensile all'inizio del 2026, e il settore dei mercati di previsione è cresciuto fino a 63,5 miliardi nel 2025 (CertiK). Il segnale è reale — ma tre barriere impediscono agli utenti retail di sfruttarlo:",
       "barrier1Title": "Gestione reattiva del rischio:",
       "barrier1": "Gli strumenti esistenti rispondono solo dopo i crash di mercato, risultando in drawdown del 15-30% prima dell'attivazione della protezione",
       "barrier2Title": "Vulnerabilità della privacy:",
@@ -366,19 +366,19 @@
   "marketOpportunity": {
     "title": "Grande opportunità di mercato",
     "subtitle": "Alpha di Polymarket + agenti IA + cripto per il consumatore — tutto accade nello stesso momento",
-    "rwaMarketSize": "Volume di Polymarket",
-    "rwaDescription": "Cadenza mensile (TRM Labs, 2026)",
+    "polymarketVolume": "Volume di Polymarket",
+    "polymarketDescription": "Cadenza mensile (TRM Labs, 2026)",
     "growthRate": "Tasso di crescita",
     "growthDescription": "Espansione mercato 2024-2030",
     "targetMarket": "Mercato target",
     "targetDescription": "Retail cripto-nativo · utenti DeFi · titolari di portafogli individuali",
     "potentialUsers": "Utenti potenziali",
-    "usersDescription": "Scommettitori di Polymarket, appassionati di agenti IA, utenti di vault DeFi, titolari di portafogli tokenizzati",
+    "usersDescription": "Scommettitori di Polymarket, appassionati di agenti IA, utenti di vault DeFi",
     "competitiveEdge": "Il nostro vantaggio competitivo",
     "traditionalTools": "Strumenti di rischio tradizionali",
     "noAiAutomation": "Nessuna automazione AI",
     "defiProtocols": "Protocolli DeFi",
-    "limitedRwa": "Nessun segnale dai mercati di previsione",
+    "noPredictionSignals": "Nessun segnale dai mercati di previsione",
     "centralizedServices": "Servizi centralizzati",
     "custodialRisk": "Rischio di custodia",
     "whyWins": "Perché ZkVanguard vince",

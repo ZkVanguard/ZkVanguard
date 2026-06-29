@@ -1,5 +1,9 @@
 # ZkVanguard - 4-Minute Demo Video Script
 
+> ⚠ **HISTORICAL SCRIPT** (pre-pivot era). Reflects the old "RWA risk management"
+> framing. Current product: AI-managed Polymarket-alpha vault on Sui mainnet —
+> see [`README.md`](../README.md) and [`CLAUDE.md`](../CLAUDE.md).
+
 **Total Duration:** 4 minutes (240 seconds)  
 **Tone:** Professional, confident, visionary  
 **Live Demo:** [zkvanguard.xyz](https://zkvanguard.xyz)

@@ -1,5 +1,9 @@
 # 🚀 DORAHACKS SUBMISSION TEMPLATE
 
+> ⚠ **HISTORICAL SUBMISSION** (Cronos x402 hackathon). The product has since
+> pivoted to an AI-managed Polymarket-alpha vault on Sui mainnet. See current
+> framing in [`README.md`](../../README.md) and [`CLAUDE.md`](../../CLAUDE.md).
+
 **Hackathon**: Cronos x402 Paytech Hackathon  
 **Submission URL**: https://dorahacks.io/hackathon/cronos-x402/detail  
 **Deadline**: [Check DoraHacks platform]

@@ -176,19 +176,19 @@
   "marketOpportunity": {
     "title": "Massive Market Opportunity",
     "subtitle": "Polymarket alpha + AI agents + consumer crypto — all happening at once",
-    "rwaMarketSize": "Polymarket Volume",
-    "rwaDescription": "Monthly run-rate (TRM Labs, 2026)",
+    "polymarketVolume": "Polymarket Volume",
+    "polymarketDescription": "Monthly run-rate (TRM Labs, 2026)",
     "growthRate": "Sector Growth",
     "growthDescription": "Prediction markets 2024–2025",
     "targetMarket": "Target Market",
     "targetDescription": "Crypto-native retail · DeFi users · individual portfolio holders",
     "potentialUsers": "Potential Users",
-    "usersDescription": "Polymarket bettors, AI-agent enthusiasts, DeFi vault users, tokenized-portfolio holders",
+    "usersDescription": "Polymarket bettors, AI-agent enthusiasts, DeFi vault users",
     "competitiveEdge": "Our Competitive Edge",
     "traditionalTools": "Traditional Risk Tools",
     "noAiAutomation": "No AI automation",
     "defiProtocols": "DeFi Protocols",
-    "limitedRwa": "No prediction-market signals",
+    "noPredictionSignals": "No prediction-market signals",
     "centralizedServices": "Centralized Services",
     "custodialRisk": "Custodial risk",
     "whyWins": "Why ZkVanguard Wins",
@@ -269,9 +269,9 @@
       "references": "References"
     },
     "abstract": {
-      "highlight": "ZkVanguard turns Polymarket alpha into a one-click crypto vault. Seven autonomous AI agents fuse prediction-market signals with funding rates and price momentum, allocate USDC across BTC / ETH / SUI / CRO, auto-hedge on BlueFin perpetuals, and ZK-attest every meaningful decision on-chain. The same ZK primitive powers three additional products: private hedges, private portfolio creator, and an RWA manager for individual tokenized-asset portfolios. What used to require bots, capital, and 24/7 attention is now a single deposit.",
+      "highlight": "ZkVanguard turns Polymarket alpha into a one-click crypto vault. Seven autonomous AI agents fuse prediction-market signals with funding rates and price momentum, allocate USDC across BTC / ETH / SUI / CRO, auto-hedge on BlueFin perpetuals, and ZK-attest every meaningful decision on-chain. The same ZK primitive powers two premium products: private hedges and a private portfolio creator. What used to require bots, capital, and 24/7 attention is now a single deposit.",
       "p1": "The platform orchestrates seven specialized AI agents—Lead, Risk, Hedging, Settlement, Reporting, Price Monitor, and Sui Pool—that autonomously read prediction-market signals from Polymarket and Manifold, blend them with BlueFin funding-rate data and Crypto.com price momentum, generate consensus allocations through a 2-of-3 voting threshold on trades above $100K, and execute swaps via the BlueFin aggregator on Sui mainnet. Each meaningful trade decision is committed to the chain through a ZK-STARK proof system (NIST P-521, no trusted setup, CUDA-accelerated when available), giving users verifiable autonomy instead of a black-box model.",
-      "p2": "Polymarket alone now processes $20B+ in monthly volume, and the broader prediction-market sector grew to $63.5B in 2025. The signal is real, but riding it consistently has required custom bots, sophisticated risk management, and constant attention. ZkVanguard collapses that workflow into a one-click USDC deposit, with two revenue layers running today: on-chain protocol fees on every vault deposit (50 bps annual management plus 10% performance, routed to a multisig-controlled FeeManagerCap) and tiered subscription access to premium features (private hedges, portfolio creator, RWA manager). The same ZK rails that secure consumer flow are what unlock confidential institutional and tokenized-asset use cases as the platform scales."
+      "p2": "Polymarket alone now processes $20B+ in monthly volume, and the broader prediction-market sector grew to $63.5B in 2025. The signal is real, but riding it consistently has required custom bots, sophisticated risk management, and constant attention. ZkVanguard collapses that workflow into a one-click USDC deposit, with two revenue layers running today: on-chain protocol fees on every vault deposit (50 bps annual management plus 10% performance, routed to a multisig-controlled FeeManagerCap) and tiered subscription access to premium features (private hedges and the private portfolio creator). The same ZK rails that secure consumer flow are what unlock confidential institutional use cases as the platform scales."
     },
     "introduction": {
       "opportunity": "The Prediction-Market Alpha Opportunity",
@@ -305,7 +305,7 @@
     },
     "conclusion": {
       "title": "Conclusion",
-      "text": "ZkVanguard turns prediction-market alpha into a one-click crypto vault — and uses the same ZK-attested rails to power private hedges, a private portfolio creator, and an RWA manager for individual tokenized-asset portfolios. By combining seven autonomous AI agents, a real-time signal pipeline, BlueFin perp execution, and on-chain ZK proofs on Sui mainnet, we collapse the three barriers that keep retail users from harvesting Polymarket-grade alpha — operational complexity, missing risk management, and unverifiable AI — while keeping protocol fees plus tiered subscription revenue as the dual economic engine."
+      "text": "ZkVanguard turns prediction-market alpha into a one-click crypto vault — and uses the same ZK-attested rails to power private hedges and a private portfolio creator. By combining seven autonomous AI agents, a real-time signal pipeline, BlueFin perp execution, and on-chain ZK proofs on Sui mainnet, we collapse the three barriers that keep retail users from harvesting Polymarket-grade alpha — operational complexity, missing risk management, and unverifiable AI — while keeping protocol fees plus tiered subscription revenue as the dual economic engine."
     }
   }
 }

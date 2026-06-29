@@ -161,11 +161,11 @@
     "abstract": {
       "highlight": "ZkVanguard führt einen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte ein, indem autonome KI-Agenten mit crowdsourced Prognosemarkeintelligenz und post-quantenresistenter Zero-Knowledge-Kryptographie kombiniert werden. Im Gegensatz zu traditionellen reaktiven Systemen, die erst nach Marktcrashs reagieren, antizipiert die prädiktive Architektur von ZkVanguard Volatilitätsereignisse 3-7 Tage im Voraus.",
       "p1": "Die Plattform orchestriert sechs spezialisierte KI-Agenten—Lead, Risiko, Hedging, Settlement, Reporting und Preisüberwachung—die autonom Portfolios analysieren, Echtzeit-Prognosemarktdaten von Delphi/Polymarket konsumieren, mathematisch optimale Hedge-Strategien generieren und gasfreie Transaktionen auf der Cronos-Blockchain ausführen.",
-      "p2": "Polymarket allein verarbeitet inzwischen über 20 Mrd. $ Volumen pro Monat, und der Prognosemarkt-Sektor wuchs 2025 auf 63,5 Mrd. $. Das Signal ist real – aber es konsequent zu nutzen erfordert maßgeschneiderte Bots, ausgereiftes Risikomanagement und ständige Aufmerksamkeit. ZkVanguard kondensiert diesen Workflow in eine einzige USDC-Einzahlung mit einem Klick, mit zwei aktiven Einnahmequellen: On-Chain-Protokollgebühren auf jede Einzahlung (50 Basispunkte jährliche Verwaltung + 10 % Performance, geleitet an eine durch MSafe-Multisig kontrollierte FeeManagerCap) und gestaffelte Abonnements für den Zugang zu Premium-Funktionen (Private Hedges, Privater Portfolio-Builder und RWA-Manager für individuelle Portfolios)."
+      "p2": "Polymarket allein verarbeitet inzwischen über 20 Mrd. $ Volumen pro Monat, und der Prognosemarkt-Sektor wuchs 2025 auf 63,5 Mrd. $. Das Signal ist real – aber es konsequent zu nutzen erfordert maßgeschneiderte Bots, ausgereiftes Risikomanagement und ständige Aufmerksamkeit. ZkVanguard kondensiert diesen Workflow in eine einzige USDC-Einzahlung mit einem Klick, mit zwei aktiven Einnahmequellen: On-Chain-Protokollgebühren auf jede Einzahlung (50 Basispunkte jährliche Verwaltung + 10 % Performance, geleitet an eine durch MSafe-Multisig kontrollierte FeeManagerCap) und gestaffelte Abonnements für den Zugang zu Premium-Funktionen (Private Hedges und Privater Portfolio-Builder)."
     },
     "introduction": {
-      "opportunity": "Die 16-Billionen-Dollar-Chance",
-      "opportunityText": "Laut dem BCG-Bericht 2024 wird der Markt für tokenisierte Real-World-Assets bis 2030 voraussichtlich 16 Billionen Dollar erreichen.",
+      "opportunity": "Die Alpha-Chance der Prognosemärkte",
+      "opportunityText": "Polymarket verarbeitete Anfang 2026 mehr als 20 Mrd. $ monatliches Handelsvolumen, und der Prognosemarkt-Sektor wuchs 2025 auf 63,5 Mrd. $ (CertiK). Das Signal ist real — aber drei Barrieren halten Retail-Nutzer davon ab, es zu nutzen:",
       "barrier1Title": "Reaktives Risikomanagement:",
       "barrier1": "Bestehende Tools reagieren erst nach Marktcrashs, was zu 15-30% Portfolio-Drawdowns führt",
       "barrier2Title": "Datenschutz-Schwachstellen:",
@@ -366,19 +366,19 @@
   "marketOpportunity": {
     "title": "Massive Marktchance",
     "subtitle": "Polymarket-Alpha + KI-Agenten + Consumer-Krypto — alles passiert gleichzeitig",
-    "rwaMarketSize": "Polymarket-Volumen",
-    "rwaDescription": "Monatliche Run-Rate (TRM Labs, 2026)",
+    "polymarketVolume": "Polymarket-Volumen",
+    "polymarketDescription": "Monatliche Run-Rate (TRM Labs, 2026)",
     "growthRate": "Wachstumsrate",
     "growthDescription": "Marktexpansion 2024-2030",
     "targetMarket": "Zielmarkt",
     "targetDescription": "Krypto-native Retail · DeFi-Nutzer · individuelle Portfolio-Halter",
     "potentialUsers": "Potenzielle Nutzer",
-    "usersDescription": "Polymarket-Trader, KI-Agenten-Enthusiasten, DeFi-Vault-Nutzer, Halter tokenisierter Portfolios",
+    "usersDescription": "Polymarket-Trader, KI-Agenten-Enthusiasten, DeFi-Vault-Nutzer",
     "competitiveEdge": "Unser Wettbewerbsvorteil",
     "traditionalTools": "Traditionelle Risiko-Tools",
     "noAiAutomation": "Keine KI-Automatisierung",
     "defiProtocols": "DeFi-Protokolle",
-    "limitedRwa": "Keine Prognosemarkt-Signale",
+    "noPredictionSignals": "Keine Prognosemarkt-Signale",
     "centralizedServices": "Zentralisierte Dienste",
     "custodialRisk": "Verwahrungsrisiko",
     "whyWins": "Warum ZkVanguard gewinnt",

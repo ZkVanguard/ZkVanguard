@@ -1,5 +1,9 @@
 # 🎬 ZkVanguard Complete Demo Walkthrough Guide
 
+> ⚠ **HISTORICAL DEMO SCRIPT** (Jan 2026). Reflects the pre-pivot "RWA risk
+> management" framing. Current product: AI-managed Polymarket-alpha vault on
+> Sui mainnet — see [`README.md`](../../README.md) for live framing.
+
 ## Interactive Demo Script with Speaking Points
 
 **Platform:** ZkVanguard - AI-Powered Multi-Agent RWA Risk Management  

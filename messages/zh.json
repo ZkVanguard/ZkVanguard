@@ -161,7 +161,7 @@
     "abstract": {
       "highlight": "ZkVanguard通过将自主AI代理与众包预测市场智能和后量子零知识密码学相结合，引入了机构数字资产风险管理的范式转变。与传统的在市场崩盘后才做出响应的被动系统不同，ZkVanguard的预测架构能够提前3-7天预测波动事件，实现投资组合的先发保护。",
       "p1": "该平台协调六个专业AI代理——领导代理、风险代理、对冲代理、结算代理、报告代理和价格监控代理——自主分析投资组合，消费来自Delphi/Polymarket的实时预测市场数据，生成数学最优对冲策略，并在Cronos区块链上执行无Gas交易。通过我们的CUDA加速ZK-STARK证明系统（512位目标安全性，通过FRI协议实现180位有效可靠性），所有敏感投资组合数据保持私密，同时通过可验证计算保持完全合规。",
-      "p2": "Polymarket 单一平台目前每月交易量超过 200 亿美元，预测市场板块在 2025 年增长到 635 亿美元。信号是真实的，但要持续地驾驭它，需要自定义机器人、成熟的风险管理和 24/7 的关注。ZkVanguard 将整个工作流压缩成一次性 USDC 存款，一键完成，并由两个同时运行的收入层支撑：每笔金库存款的链上协议费用（年化 50 bps 管理费 + 10% 业绩费，路由到由 MSafe 多签控制的 FeeManagerCap）以及面向高级功能（私密对冲、私密投资组合创建器，以及面向个人投资组合的 RWA 管理器）的分级订阅。"
+      "p2": "Polymarket 单一平台目前每月交易量超过 200 亿美元，预测市场板块在 2025 年增长到 635 亿美元。信号是真实的，但要持续地驾驭它，需要自定义机器人、成熟的风险管理和 24/7 的关注。ZkVanguard 将整个工作流压缩成一次性 USDC 存款，一键完成，并由两个同时运行的收入层支撑：每笔金库存款的链上协议费用（年化 50 bps 管理费 + 10% 业绩费，路由到由 MSafe 多签控制的 FeeManagerCap）以及面向高级功能（私密对冲和私密投资组合创建器）的分级订阅。"
     },
     "introduction": {
       "opportunity": "16万亿美元的机遇",
@@ -366,8 +366,8 @@
   "marketOpportunity": {
     "title": "巨大的市场机会",
     "subtitle": "Polymarket alpha + AI 代理 + 消费级加密 — 一切同时发生",
-    "rwaMarketSize": "Polymarket 月度交易量",
-    "rwaDescription": "月度运行率 (TRM Labs, 2026)",
+    "polymarketVolume": "Polymarket 月度交易量",
+    "polymarketDescription": "月度运行率 (TRM Labs, 2026)",
     "growthRate": "增长率",
     "growthDescription": "2024-2030市场扩张",
     "targetMarket": "目标市场",
@@ -378,7 +378,7 @@
     "traditionalTools": "传统风险工具",
     "noAiAutomation": "无AI自动化",
     "defiProtocols": "DeFi协议",
-    "limitedRwa": "无预测市场信号",
+    "noPredictionSignals": "无预测市场信号",
     "centralizedServices": "中心化服务",
     "custodialRisk": "托管风险",
     "whyWins": "为何ZkVanguard胜出",

@@ -1,4 +1,9 @@
 # 10-Minute MVP Demo Video Script
+
+> ⚠ **HISTORICAL SCRIPT** (Cronos-testnet era). Reflects pre-pivot RWA framing.
+> Current product: AI-managed Polymarket-alpha vault on Sui mainnet — see
+> [`README.md`](../../README.md) and [`CLAUDE.md`](../../CLAUDE.md).
+
 ## ZkVanguard - AI-Powered Multi-Agent RWA Risk Management Platform
 
 **Video Duration:** 10 minutes  

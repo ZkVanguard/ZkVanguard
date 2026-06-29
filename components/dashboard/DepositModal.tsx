@@ -524,8 +524,8 @@ export function DepositModal({
                     </p>
                     <p className="text-[#86868b] text-xs">
                       {selectedToken.isNative
-                        ? 'Native CRO will be wrapped to WCRO (ERC20) and then transferred to the RWAManager.'
-                        : 'Tokens will be transferred to the RWAManager contract for automated strategy execution.'}
+                        ? 'Native CRO will be wrapped to WCRO (ERC20) and then transferred to the portfolio contract.'
+                        : 'Tokens will be transferred to the portfolio contract for automated strategy execution.'}
                     </p>
                   </div>
                 </div>
