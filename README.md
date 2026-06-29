@@ -198,7 +198,10 @@ All crons run on Upstash QStash, hit `app/api/cron/*` routes, verify the QStash 
 
 ### Planned (post-audit)
 
-- **Tiered subscriptions** bundling premium feature access: Free trial · Retail ($99/mo) · Pro ($499/mo) · Institutional ($2,499/mo) · Enterprise (custom). Targets private-hedge access, private portfolio creation, dedicated SLAs, white-label deployment.
+- **Three revenue streams, all mapped to shipped code** (see [`lib/config/pricing.ts`](./lib/config/pricing.ts)):
+  - **Pool fees (passive):** 50 bps mgmt + 10% perf on community-pool TVL, automatic via `community_pool_usdc.move`
+  - **Per-use product fees:** private hedges ($5/25bps), private portfolio creator ($100 + 50bps), custody attestation ($2.5K enrollment + $0.50 per submission)
+  - **Subscriptions:** Free (public APIs) · Retail $99 (private hedges) · Pro $499 (private portfolios + write APIs) · Institutional $2,499 (custody requests + dedicated support) · Enterprise (white-label)
 - **Per-trade fees** on the autonomous perp trader
 
 ### Token mechanic (designed, not launched)

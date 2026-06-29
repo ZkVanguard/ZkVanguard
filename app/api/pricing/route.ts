@@ -28,38 +28,42 @@ export async function GET() {
     // Build display-friendly pricing data
     const tiers: PricingDisplayData[] = Object.values(PRICING_TIERS).map((tier) => {
       const isUnlimitedZk = tier.limits.zkProofsPerMonth === -1;
-      const isUnlimitedHedge = tier.limits.maxHedgePositions === -1;
-      
+      const hedgeLabel = tier.limits.privateHedgesAccess
+        ? tier.limits.maxPrivateHedgePositions === -1
+          ? 'Private hedges · unlimited'
+          : `Private hedges · up to ${tier.limits.maxPrivateHedgePositions}`
+        : 'Pool hedges only';
+
       return {
         tier: tier.tier,
         name: tier.name,
         description: tier.description,
         monthlyPrice: formatPrice(tier.priceMonthly),
         annualPrice: formatPrice(tier.priceAnnual),
-        annualSavings: tier.priceMonthly > 0 
+        annualSavings: tier.priceMonthly > 0
           ? `Save $${getAnnualSavings(tier.tier).toLocaleString()}/year`
           : '',
         features: tier.features,
         limits: {
-          agents: tier.limits.maxAgents === 5 
-            ? 'All 5 AI agents' 
+          agents: tier.limits.maxAgents === 7
+            ? 'All 7 AI agents'
             : `${tier.limits.maxAgents} AI agent${tier.limits.maxAgents > 1 ? 's' : ''}`,
           zkProofs: isUnlimitedZk ? 'Unlimited' : `${tier.limits.zkProofsPerMonth}/month`,
-          hedging: tier.limits.advancedHedging ? 'Advanced' : 'Basic',
-          support: tier.limits.dedicatedSupport 
-            ? 'Dedicated' 
-            : tier.tier === 'free' 
-              ? 'Community' 
+          hedging: hedgeLabel,
+          support: tier.limits.dedicatedSupport
+            ? 'Dedicated'
+            : tier.tier === 'free'
+              ? 'Community'
               : 'Email',
         },
         isPopular: tier.tier === 'pro',
-        ctaText: tier.tier === 'free' 
-          ? 'Start Free Trial' 
-          : tier.tier === 'enterprise' 
-            ? 'Contact Sales' 
-            : 'Get Started',
-        ctaLink: tier.tier === 'enterprise' 
-          ? '/contact' 
+        ctaText: tier.tier === 'free'
+          ? 'Start free'
+          : tier.tier === 'enterprise'
+            ? 'Contact sales'
+            : 'Subscribe',
+        ctaLink: tier.tier === 'enterprise'
+          ? '/contact'
           : `/subscribe?tier=${tier.tier}`,
       };
     });

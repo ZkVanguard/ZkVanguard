@@ -115,7 +115,7 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
           <div>
             <span className="text-[#86868b]">AI Agents</span>
             <p className="text-[#1d1d1f] font-medium">
-              {tierData.limits.maxAgents === 5 ? 'All 5' : tierData.limits.maxAgents}
+              {tierData.limits.maxAgents === 7 ? 'All 7' : tierData.limits.maxAgents}
             </p>
           </div>
           <div>
@@ -125,15 +125,24 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
             </p>
           </div>
           <div>
-            <span className="text-[#86868b]">Hedging</span>
+            <span className="text-[#86868b]">Private hedges</span>
             <p className="text-[#1d1d1f] font-medium">
-              {tierData.limits.advancedHedging ? 'Advanced' : 'Basic'}
+              {tierData.limits.privateHedgesAccess
+                ? tierData.limits.maxPrivateHedgePositions === -1
+                  ? 'Unlimited'
+                  : `Up to ${tierData.limits.maxPrivateHedgePositions}`
+                : '—'}
             </p>
           </div>
           <div>
-            <span className="text-[#86868b]">Portfolio</span>
-            <p className="text-[#1d1d1f] font-medium">
-              {tierData.portfolioRange}
+            <span className="text-[#86868b]">API access</span>
+            <p className="text-[#1d1d1f] font-medium capitalize">
+              {tierData.limits.apiAccess === 'none' ? '—' : tierData.limits.apiAccess}
+              {tierData.limits.apiRateLimitPerMin > 0 && (
+                <span className="text-[11px] text-[#86868b] block">
+                  {tierData.limits.apiRateLimitPerMin === -1 ? 'custom' : `${tierData.limits.apiRateLimitPerMin.toLocaleString()} req/min`}
+                </span>
+              )}
             </p>
           </div>
         </div>
