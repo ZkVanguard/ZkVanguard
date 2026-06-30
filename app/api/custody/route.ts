@@ -19,7 +19,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 12;
+export const maxDuration = 15; // align with most-used bucket so Vercel can consolidate
 
 const SUI_ADDRESS = /^0x[a-fA-F0-9]{64}$/;
 
