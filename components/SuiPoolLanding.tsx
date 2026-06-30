@@ -371,6 +371,66 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────── */}
+      {/* PLATFORM SURFACES — discoverability for the BlackRock-shaped views */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      <section className="py-20 sm:py-24 px-5 lg:px-8 bg-system-bg-secondary border-y border-separator-opaque/20">
+        <div className="max-w-[1100px] mx-auto">
+          <div className="text-center mb-10 sm:mb-12">
+            <div className="inline-block text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary mb-3">
+              Beyond the vault
+            </div>
+            <h2 className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-4">
+              Built like an asset manager, exposed as infrastructure.
+            </h2>
+            <p className="text-callout sm:text-[18px] text-label-secondary max-w-[640px] mx-auto leading-[1.5]">
+              The same risk engine + 7-agent autonomy + ZK attestation that runs
+              this pool is documented and reachable as a B2B API surface for any
+              Sui builder.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <SurfaceCard
+              href="/dashboard/overview"
+              eyebrow="Unified portfolio"
+              title="Your positions, aggregated."
+              body="Single view of pool shares, private hedges, attributed risk — across every product surface."
+            />
+            <SurfaceCard
+              href="/dashboard/risk"
+              eyebrow="Platform risk"
+              title="Live Aladdin-style overview."
+              body="Real-time TVL, drawdown, hedge coverage, cron health, ZK attestation feed. Auto-refresh 60s."
+            />
+            <SurfaceCard
+              href="/dashboard/custody-proofs"
+              eyebrow="Custody attestations"
+              title="Institutional proof-of-backing."
+              body="Custodian-signed attestations bind portfolios to off-chain assets — without revealing the list."
+            />
+            <SurfaceCard
+              href="/developers"
+              eyebrow="API surface"
+              title="Aladdin-as-a-Service."
+              body="~50 endpoints across risk, signals, agents, hedging, ZK proofs. Free public reads · paid write tier."
+            />
+            <SurfaceCard
+              href="/agents"
+              eyebrow="7-agent system"
+              title="Autonomous orchestration."
+              body="Lead, Risk, Hedging, Settlement, Reporting, PriceMonitor, SuiPool — running 24/7 on a cron."
+            />
+            <SurfaceCard
+              href="/pricing"
+              eyebrow="Three-stream model"
+              title="Pool fees + per-use + SaaS."
+              body="Every number maps to shipped code. Free deposit · $99 retail · $499 pro · $2,499 institutional."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────── */}
       {/* FOOTER CTA                                                      */}
       {/* ─────────────────────────────────────────────────────────────── */}
       <section className="py-20 sm:py-28 px-5 lg:px-8 bg-system-bg-primary">
@@ -462,5 +522,32 @@ function TrustCard({
       <div className="text-title-3 sm:text-title-2 font-bold text-label-primary mb-1">{value}</div>
       <div className="text-caption-1 text-label-tertiary leading-[1.4]">{hint}</div>
     </div>
+  );
+}
+
+function SurfaceCard({
+  href, eyebrow, title, body,
+}: {
+  href: string; eyebrow: string; title: string; body: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group block bg-system-bg-primary rounded-ios-xl p-5 sm:p-6 border border-separator-opaque/30 hover:shadow-ios-2 hover:border-ios-blue/30 transition-all duration-300"
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary">
+          {eyebrow}
+        </div>
+        <ArrowRightIcon
+          className="w-4 h-4 text-label-tertiary group-hover:text-ios-blue group-hover:translate-x-1 transition-all"
+          strokeWidth={2}
+        />
+      </div>
+      <h3 className="text-headline font-semibold text-label-primary mb-1.5 leading-tight">
+        {title}
+      </h3>
+      <p className="text-subheadline text-label-secondary leading-[1.5]">{body}</p>
+    </Link>
   );
 }
