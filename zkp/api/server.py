@@ -289,6 +289,122 @@ async def verify_proof(request: VerificationRequest):
         raise HTTPException(status_code=400, detail=f"Verification failed: {str(e)}")
 
 
+class AttestationRequest(BaseModel):
+    """
+    Off-chain → on-chain attestation: prove + sign the commitment_hash with
+    the configured ed25519 prover key, so the on-chain `zk_verifier::verify_proof`
+    Move call passes its `ed25519_verify(sig, pubkey, commitment_hash)` check.
+
+    The prover key MUST live ONLY here, never in the frontend or in Move state.
+    Operator sets ZKV_PROVER_PRIV_KEY_HEX (64 hex chars = 32 bytes) at boot.
+    """
+    proof_type: str = Field(..., description="Type of proof: settlement | risk | rebalance | hedge_existence | hedge_solvency")
+    statement: Dict[str, Any] = Field(..., description="Public statement (must include 'claim' and 'public_inputs')")
+    witness: Dict[str, Any] = Field(..., description="Private witness — never leaves this server")
+    commitment_hash_hex: str = Field(..., description="32-byte hex (no 0x prefix) — the on-chain message the signature binds to")
+
+
+def _load_prover_signing_key():
+    """
+    Load the ed25519 signing key from ZKV_PROVER_PRIV_KEY_HEX env var.
+    Returns (private_key, public_key_bytes_32) or (None, None) if unset.
+    Cached in a module-level dict so we don't re-parse on every request.
+    """
+    if hasattr(_load_prover_signing_key, "_cache"):
+        return _load_prover_signing_key._cache
+    raw = (os.environ.get("ZKV_PROVER_PRIV_KEY_HEX") or "").strip()
+    if not raw:
+        _load_prover_signing_key._cache = (None, None)
+        return None, None
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+        priv_bytes = bytes.fromhex(raw[2:] if raw.startswith("0x") else raw)
+        if len(priv_bytes) != 32:
+            raise ValueError(f"ZKV_PROVER_PRIV_KEY_HEX must be 32 bytes (64 hex chars), got {len(priv_bytes)}")
+        priv = Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        pub_bytes = priv.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        _load_prover_signing_key._cache = (priv, pub_bytes)
+        return priv, pub_bytes
+    except Exception as e:
+        print(f"[WARN] ZKV_PROVER_PRIV_KEY_HEX present but unloadable: {e}")
+        _load_prover_signing_key._cache = (None, None)
+        return None, None
+
+
+@app.post("/api/zk/attest")
+async def attest_commitment(request: AttestationRequest):
+    """
+    Produce a full attested proof bundle for on-chain submission to
+    zk_verifier::verify_proof:
+
+        proof_data = ed25519_sig(64) || STARK-proof JSON bytes
+
+    The on-chain verifier checks the signature against the configured prover
+    pubkey + commitment_hash. The STARK bytes after the signature are opaque
+    to the chain but available off-chain for full re-verification by any
+    third party.
+    """
+    priv, pub = _load_prover_signing_key()
+    if priv is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Prover signing key not configured. Operator must set ZKV_PROVER_PRIV_KEY_HEX before /api/zk/attest is available.",
+        )
+
+    try:
+        commitment_hash = bytes.fromhex(request.commitment_hash_hex[2:] if request.commitment_hash_hex.startswith("0x") else request.commitment_hash_hex)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"commitment_hash_hex must be hex: {e}")
+    if len(commitment_hash) != 32:
+        raise HTTPException(status_code=400, detail=f"commitment_hash must be 32 bytes, got {len(commitment_hash)}")
+
+    # Generate the real STARK proof
+    prover = zk_factory.get_prover(request.proof_type)
+    if not prover:
+        raise HTTPException(status_code=400, detail=f"No prover available for proof type: {request.proof_type}")
+    try:
+        stark_proof = await prover.generate_proof_async(request.statement, request.witness)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"STARK proof generation failed: {e}")
+
+    # Sign the commitment_hash (NOT the STARK proof itself — the on-chain
+    # verifier's `msg` parameter is commitment_hash, so the signature must
+    # bind to that exact 32-byte value).
+    signature = priv.sign(commitment_hash)
+    assert len(signature) == 64
+
+    # Bundle: ed25519 sig (64) || STARK proof bytes (UTF-8 JSON)
+    safe_proof = convert_large_ints_to_strings(stark_proof)
+    stark_bytes = orjson.dumps(safe_proof)
+    proof_data = signature + stark_bytes
+
+    return {
+        "commitment_hash_hex": commitment_hash.hex(),
+        "signature_hex": signature.hex(),
+        "prover_pubkey_hex": pub.hex(),
+        "proof_data_hex": proof_data.hex(),
+        "stark_proof_size_bytes": len(stark_bytes),
+        "stark_proof": safe_proof,
+        "scheme": "ed25519(commitment_hash) || stark_json_bytes",
+        "intended_for": "zk_verifier::verify_proof(state, proof_data, commitment_hash, ...)",
+    }
+
+
+@app.get("/api/zk/prover-pubkey")
+async def get_prover_pubkey():
+    """Return the prover ed25519 pubkey (32-byte hex) so operators can call
+    `zk_verifier::admin_set_prover_pubkey` with the correct value.
+    Returns 404 if no key is configured (insecure-mode fallback active)."""
+    _, pub = _load_prover_signing_key()
+    if pub is None:
+        raise HTTPException(status_code=404, detail="No prover signing key configured (ZKV_PROVER_PRIV_KEY_HEX unset)")
+    return {"prover_pubkey_hex": pub.hex(), "size_bytes": len(pub)}
+
+
 @app.get("/api/zk/stats")
 async def get_zk_stats():
     """Get ZK system statistics"""

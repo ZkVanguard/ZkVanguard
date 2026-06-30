@@ -2529,6 +2529,40 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                     'TRADE',
                     { network, asset, side, size: snappedSize, leverage, notionalUsd: hedgeValueUSD.toFixed(2), orderId: result.orderId },
                   );
+
+                  // Privacy attestation: emit zk_hedge_commitment::store_commitment
+                  // for the hedge we just opened. Hides asset/side/size/leverage/
+                  // entryPrice behind a 32-byte commitment hash. Skips cleanly if
+                  // privacy contracts aren't deployed (mainnet env vars unset).
+                  try {
+                    const { emitPrivateHedgeCommitment } = await import('@/lib/services/sui/cron/private-hedge-emit');
+                    const emit = await emitPrivateHedgeCommitment({
+                      asset, side, size: snappedSize,
+                      notionalValue: hedgeValueUSD, leverage,
+                      entryPrice: price, orderId: result.orderId,
+                    }, network as 'mainnet' | 'testnet');
+                    if (emit.success) {
+                      logger.info('[SUI Cron] Private hedge commitment emitted', {
+                        orderId: result.orderId,
+                        commitment: emit.commitmentHashHex?.slice(0, 16) + '...',
+                        txDigest: emit.txDigest,
+                      });
+                      await notifyDiscord(
+                        `ZK commitment stored for ${asset}-PERP hedge (${emit.commitmentHashHex?.slice(0, 16)}...) — on-chain attestation without revealing position details.`,
+                        'INFO',
+                        { commitmentHashHex: emit.commitmentHashHex, txDigest: emit.txDigest },
+                      );
+                    } else if (!emit.skipped) {
+                      logger.warn('[SUI Cron] Private hedge commitment failed (non-critical)', {
+                        orderId: result.orderId, error: emit.error,
+                      });
+                    }
+                  } catch (zkErr) {
+                    // Privacy emission is best-effort — never fail the cron over it
+                    logger.debug('[SUI Cron] Private hedge emit threw (non-critical)', {
+                      error: zkErr instanceof Error ? zkErr.message : String(zkErr),
+                    });
+                  }
                 } else if (result.success && result.orderId && !filled) {
                   // Order accepted by BlueFin but not yet filled — collateral
                   // is reserved against the resting order. Visible state but

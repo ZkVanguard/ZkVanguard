@@ -243,6 +243,25 @@ class AuthenticZKStark:
             return statement if statement else default
         else:
             return default
+
+    def _statement_hash(self, statement) -> int:
+        """
+        Canonical statement hash that binds BOTH the claim string AND the
+        public_inputs list. Folding public_inputs in here is what prevents a
+        proof generated for one set of public_inputs from verifying against a
+        verifier-supplied different set (soundness gate #1 — required to ship
+        privacy-preserving hedges).
+
+        The list is canonicalized: stringified items joined with a separator
+        that cannot appear inside a JSON-int / JSON-float repr, so two distinct
+        input lists never collide.
+        """
+        claim = str(self._get_statement_value(statement, 'claim', ''))
+        public_inputs = self._get_statement_value(statement, 'public_inputs', [])
+        if not isinstance(public_inputs, (list, tuple)):
+            public_inputs = [public_inputs]
+        pi_canonical = '|'.join(str(x) for x in public_inputs)
+        return self.hash_to_field(claim, '\x1f', pi_canonical)
     
     def _hash(self, data: bytes) -> bytes:
         """Deterministic hash function for internal use"""
@@ -607,7 +626,7 @@ class AuthenticZKStark:
     
     def _generate_proof_standard(self, statement: Dict[str, Any], witness: Dict[str, Any], start_time: float) -> Dict[str, Any]:
         """STANDARD proof generation - maintains verification compatibility with comprehensive witness privacy"""
-        statement_hash = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
+        statement_hash = self._statement_hash(statement)
         
         # STEP 0: CRYPTOGRAPHIC MASKING - mask witness values BEFORE any processing
         masked_witness = self._cryptographically_mask_witness(witness)
@@ -782,7 +801,7 @@ class AuthenticZKStark:
         statement_hash_hex = self.hash_function(statement_str.encode()).hexdigest()
         
         # Convert to field element for consistency with verification - handle both dict and string
-        statement_hash = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
+        statement_hash = self._statement_hash(statement)
         
         # 2. ENHANCED: Multiple polynomial constructions for privacy
         # Generate 3 witness polynomials with different blinding factors
@@ -1131,7 +1150,7 @@ class AuthenticZKStark:
                     proof_statement_hash = int(proof_statement_hash)
             
             # CRITICAL FIX: Compute expected statement hash from provided statement
-            expected_statement_hash = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
+            expected_statement_hash = self._statement_hash(statement)
             
             logger.debug(f": Proof statement hash: {proof_statement_hash}")
             logger.debug(f": Expected statement hash: {expected_statement_hash}")
@@ -1257,7 +1276,7 @@ class AuthenticZKStark:
             expected_statement_hash = self.hash_function(statement_str.encode()).hexdigest()
             
             # Convert to integer for comparison since proof stores it as integer
-            expected_statement_hash_int = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
+            expected_statement_hash_int = self._statement_hash(statement)
             
             logger.debug(": Computing verification work...")
             
@@ -1628,7 +1647,7 @@ class AuthenticZKStark:
         coefficients = []
         
         # Generate polynomial based on statement structure for enhanced security
-        claim_hash = self.hash_to_field(str(self._get_statement_value(statement, 'claim', '')))
+        claim_hash = self._statement_hash(statement)
         
         # Use witness structure to generate additional coefficients
         witness_elements = []
