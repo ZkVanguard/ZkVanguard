@@ -701,14 +701,64 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const tickEpoch = Math.floor(now / (5 * 60 * 1000));
     const clientOrderId = `polyedge_${asset}_${tickEpoch}`;
 
+    // ── AGENT GATE — AG2 + AG4 ──────────────────────────────────────────
+    // Same SafeExecutionGuard + HedgingAgent gate as sui-community-pool.
+    // The polymarket-edge-trader previously had its OWN inline risk gate
+    // ("mirrors RiskAgent's invariants without needing the actual agent");
+    // this unifies it under the same authoritative path so both crons share
+    // limits, cooldowns, and circuit breakers.
+    const { checkBeforeTrade, completeTrade } = await import('@/lib/services/agents/agent-trade-guard');
+    const guard = await checkBeforeTrade({
+      chain: 'sui',
+      asset,
+      intendedSide: side as 'LONG' | 'SHORT',
+      notionalUsd,
+      agentSource: 'polymarket-edge-trader',
+    });
+
+    if (!guard.approved) {
+      logger.warn('[PolymarketEdge] Agent guard BLOCKED', {
+        asset, side, notionalUsd, stage: guard.stage, reason: guard.reason,
+      });
+      await notifyDiscord(
+        `🛡️ PolymarketEdge agent-guard blocked ${asset} ${side} ($${notionalUsd.toFixed(2)}): ${guard.reason}`,
+        'WARN',
+        { stage: guard.stage, asset, side, agentSide: guard.agentSide, agentConfidence: guard.agentConfidence },
+      );
+      return NextResponse.json({
+        success: false,
+        ranAt,
+        attempted: false,
+        blockedBy: 'agent-guard',
+        stage: guard.stage,
+        reason: guard.reason,
+        stats: safeStats,
+        daily,
+      });
+    }
+
     const open = await bf.openHedge({
       symbol,
       side,
       size: sizeQty,
       leverage: LEVERAGE,
       clientOrderId,
-      reason: `polyedge ${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} sources=${prediction.sources.length}`,
+      reason: `polyedge ${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} sources=${prediction.sources.length} | agent: ${guard.reason}`,
     });
+
+    // Settle the SafeGuard execution counter regardless of outcome
+    try {
+      await completeTrade(guard, {
+        chain: 'sui', asset,
+        intendedSide: side as 'LONG' | 'SHORT',
+        notionalUsd,
+        orderId: open.orderId ?? null,
+        success: !!open.success,
+        error: open.error,
+      });
+    } catch {
+      // best-effort; never break trade execution
+    }
 
     if (!open.success) {
       logger.error('[PolymarketEdge] openHedge failed', { error: open.error });

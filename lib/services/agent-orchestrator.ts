@@ -854,8 +854,15 @@ export class AgentOrchestrator {
       if (!this.leadAgent) throw new Error('LeadAgent not initialized');
 
       // Build an "analyze" intent — read-only, no position changes.
-      // requiredAgents covers all 4 specialists wired into the registry;
-      // PriceMonitorAgent is standalone and ticked separately below.
+      // requiredAgents covers the specialists that are MEANINGFUL for the
+      // target chain. SettlementAgent only does work on Cronos (x402 is
+      // Cronos-only); including it on SUI/Oasis/Hedera produces 0 work +
+      // wasted LLM latency. PriceMonitorAgent is ticked separately below.
+      const isCronos = chain === 'cronos';
+      const requiredAgents: Array<'risk' | 'hedging' | 'settlement' | 'reporting'> =
+        isCronos
+          ? ['risk', 'hedging', 'settlement', 'reporting']
+          : ['risk', 'hedging', 'reporting'];
       const intent = {
         action: 'analyze' as const,
         targetPortfolio: portfolioId,
@@ -868,7 +875,7 @@ export class AgentOrchestrator {
           maxSlippage: 0.3,
           timeframe: 3600,
         },
-        requiredAgents: ['risk', 'hedging', 'settlement', 'reporting'] as Array<'risk' | 'hedging' | 'settlement' | 'reporting'>,
+        requiredAgents,
         estimatedComplexity: 'high' as const,
       };
 
@@ -893,6 +900,64 @@ export class AgentOrchestrator {
       const riskData = (report.riskAnalysis ?? null) as null | { totalRisk?: number; riskLevel?: string };
       const hedgeData = (report.hedgingStrategy ?? null) as null | { needsRebalance?: boolean; positions?: unknown[]; recommendations?: unknown[] };
       const settlementData = (report.settlement ?? null) as null | { settled?: number; pending?: number };
+
+      // ── Per-asset agent directives ──────────────────────────────────────
+      // Fuses RiskAgent's risk score + PredictionAggregator's per-asset
+      // direction into a single directive per asset (BTC/ETH/SUI/CRO). The
+      // sui-community-pool cron's auto-hedge step consults this snapshot to
+      // decide whether to open a hedge AND which side. Published to
+      // cron_state via publishDirectives() so the cron path doesn't have to
+      // re-run the LLM.
+      try {
+        const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
+        const perAsset = await PredictionAggregatorService.getPerAssetPredictions(['BTC', 'ETH', 'SUI', 'CRO']);
+        const { publishDirectives } = await import('@/lib/services/agents/agent-trade-guard');
+        const byAsset: Record<string, {
+          asset: string;
+          recommendedSide: 'LONG' | 'SHORT' | null;
+          confidence: number;
+          shouldHedge: boolean;
+          reason: string;
+          riskScore: number;
+          computedAt: number;
+        }> = {};
+        const overallRisk = Math.round(riskData?.totalRisk ?? 50);
+        for (const [asset, pred] of Object.entries(perAsset)) {
+          const dir = pred.direction;
+          let side: 'LONG' | 'SHORT' | null = null;
+          if (pred.recommendation.endsWith('LONG')) side = 'LONG';
+          else if (pred.recommendation.endsWith('SHORT')) side = 'SHORT';
+          else if (dir === 'UP') side = 'LONG';
+          else if (dir === 'DOWN') side = 'SHORT';
+          const shouldHedge = pred.recommendation !== 'WAIT' || dir !== 'NEUTRAL';
+          byAsset[asset.toUpperCase()] = {
+            asset: asset.toUpperCase(),
+            recommendedSide: side,
+            confidence: Math.round(pred.confidence ?? 0),
+            shouldHedge,
+            reason: `${pred.recommendation} (dir=${dir}, conf=${Math.round(pred.confidence ?? 0)}%, cons=${Math.round(pred.consensus ?? 0)}%)`,
+            riskScore: overallRisk,
+            computedAt: Date.now(),
+          };
+        }
+        await publishDirectives({
+          ranAt: Date.now(),
+          chain,
+          riskScore: overallRisk,
+          riskLevel: riskData?.riskLevel ?? 'MEDIUM',
+          byAsset,
+        });
+        logger.info('[Orchestrator] Per-asset directives published', {
+          chain, overallRisk,
+          summary: Object.values(byAsset).map((d) =>
+            `${d.asset}=${d.recommendedSide ?? '?'}/${d.confidence}%${d.shouldHedge ? '' : '/HOLD'}`,
+          ).join(', '),
+        });
+      } catch (dirErr) {
+        logger.warn('[Orchestrator] Per-asset directive computation failed', {
+          error: dirErr instanceof Error ? dirErr.message : String(dirErr),
+        });
+      }
 
       const summary = report.aiSummary ?? `Lead cycle: ${chain} portfolio ${portfolioId}, ` +
         `risk=${riskData?.totalRisk ?? '?'} ` +

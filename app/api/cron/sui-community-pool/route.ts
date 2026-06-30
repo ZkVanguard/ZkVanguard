@@ -2462,13 +2462,55 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   effectiveValue: effectiveValue.toFixed(4),
                   snappedSize, leverage, sentiment,
                 });
+
+                // ── AGENT GATE — AG1 + AG2 ──────────────────────────────
+                // Consult HedgingAgent + RiskAgent (cached from runAutonomous
+                // Cycle) + SafeExecutionGuard before opening. Block on:
+                //   - per-asset HOLD directive
+                //   - high-confidence side mismatch
+                //   - risk score above ceiling
+                //   - position cap / slippage / cooldown breach
+                // Logs to agent_decisions for outcome tracking.
+                const { checkBeforeTrade, completeTrade } = await import('@/lib/services/agents/agent-trade-guard');
+                const guard = await checkBeforeTrade({
+                  chain: 'sui',
+                  asset,
+                  intendedSide: side as 'LONG' | 'SHORT',
+                  notionalUsd: hedgeValueUSD,
+                  agentSource: 'sui-community-pool-cron',
+                });
+
+                if (!guard.approved) {
+                  logger.warn(`[SUI Cron] Agent guard BLOCKED ${asset}-PERP ${side}`, {
+                    stage: guard.stage, reason: guard.reason,
+                  });
+                  await notifyDiscord(
+                    `🛡️ Agent guard blocked ${asset}-PERP ${side} ($${hedgeValueUSD.toFixed(2)}): ${guard.reason}`,
+                    'WARN',
+                    { stage: guard.stage, asset, side, notionalUsd: hedgeValueUSD.toFixed(2), agentSide: guard.agentSide, agentConfidence: guard.agentConfidence },
+                  );
+                  hedges.push({
+                    symbol, side, size: snappedSize,
+                    status: 'BLOCKED_BY_AGENT',
+                    error: guard.reason,
+                  });
+                  continue;
+                }
+
+                if (guard.agentSide && guard.agentSide !== side) {
+                  // Side mismatch under low confidence → log informationally
+                  logger.info(`[SUI Cron] Agent diverged on ${asset} side but confidence too low to block`, {
+                    cronSide: side, agentSide: guard.agentSide, conf: guard.agentConfidence,
+                  });
+                }
+
                 const result = await bluefin.openHedge({
                   symbol,
                   side,
                   size: snappedSize,
                   leverage,
                   portfolioId: -2,
-                  reason: `Auto-hedge: ${side} via ${sentiment} signal (risk=${riskScore}/${threshold})`,
+                  reason: `Auto-hedge: ${side} via ${sentiment} signal (risk=${riskScore}/${threshold}) | agent: ${guard.reason}`,
                 });
 
                 // Post-open verification: BlueFin returns `success` as soon as
@@ -2503,6 +2545,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                     : 'FAILED',
                   orderId: result.orderId, error: result.error,
                 });
+
+                // Settle the SafeGuard execution + record outcome for agent
+                // accuracy tracking. Best-effort; never breaks the cron.
+                try {
+                  await completeTrade(guard, {
+                    chain: 'sui', asset,
+                    intendedSide: side as 'LONG' | 'SHORT',
+                    notionalUsd: hedgeValueUSD,
+                    orderId: result.orderId ?? null,
+                    success: result.success && filled,
+                    error: result.error,
+                  });
+                } catch (settleErr) {
+                  logger.debug('[SUI Cron] completeTrade settle threw (non-fatal)', {
+                    error: settleErr instanceof Error ? settleErr.message : String(settleErr),
+                  });
+                }
 
                 if (result.success && result.orderId && filled) {
                   try {

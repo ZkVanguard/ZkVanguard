@@ -1,0 +1,140 @@
+/**
+ * Agent Signal Tick — proactive reactivity cron
+ *
+ * Restores the EventEmitter "signal:direction-flip" behavior that's wired
+ * at code level inside RiskAgent/HedgingAgent/PriceMonitorAgent but is
+ * non-functional on Vercel serverless (Lambda terminates → subscription
+ * dies). Runs every ~2 min via QStash, polls the Polymarket 5-min ticker,
+ * and triggers the LeadAgent autonomous cycle ONLY when:
+ *
+ *   - The Polymarket 5-min signal has flipped direction since the last tick
+ *   - OR a strong signal (>75% confidence) emerged that wasn't there before
+ *
+ * On flip → re-runs the full agent cycle so directives are fresh, then
+ * pings Discord. The actual hedge re-balance happens on the next
+ * sui-community-pool cron tick (every 30 min) which consumes the refreshed
+ * directives via agent-trade-guard.
+ *
+ * This is cheap (one API call + cached state read) when no flip — so a
+ * 2-min cadence is fine. Cost only matters on actual flips, typically 3-6/day.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyCronRequest } from '@/lib/qstash';
+import { tryClaimCronRun, getCronState, setCronState } from '@/lib/db/cron-state';
+import { logger } from '@/lib/utils/logger';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
+const CRON_KEY = 'agent-signal-tick';
+const TICK_INTERVAL_MS = 90 * 1000;        // claim debounce — 90s
+const STATE_KEY = `${CRON_KEY}:last-signal`;
+const HEARTBEAT_KEY = `cron:lastRun:${CRON_KEY}`;
+
+interface LastSignalState {
+  direction: 'UP' | 'DOWN';
+  confidence: number;
+  windowLabel: string;
+  observedAt: number;
+}
+
+async function handle(request: NextRequest): Promise<NextResponse> {
+  const auth = await verifyCronRequest(request, 'AgentSignalTick');
+  if (auth !== true) return auth;
+
+  const now = Date.now();
+  const claimed = await tryClaimCronRun(CRON_KEY, TICK_INTERVAL_MS, now);
+  if (!claimed) {
+    return NextResponse.json({ skipped: true, reason: 'tick claim debounce' });
+  }
+  await setCronState(HEARTBEAT_KEY, now).catch(() => {});
+
+  try {
+    const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
+    const current = await Polymarket5MinService.getLatest5MinSignal();
+    if (!current) {
+      return NextResponse.json({ success: true, reason: 'no current signal' });
+    }
+
+    const last = await getCronState<LastSignalState>(STATE_KEY);
+
+    const directionFlipped = !!last && last.direction !== current.direction;
+    const strongEmerged = current.confidence >= 75 && (!last || last.confidence < 60);
+
+    const newState: LastSignalState = {
+      direction: current.direction,
+      confidence: current.confidence,
+      windowLabel: current.windowLabel,
+      observedAt: now,
+    };
+    await setCronState(STATE_KEY, newState).catch(() => {});
+
+    // No actionable change → done in ~50ms
+    if (!directionFlipped && !strongEmerged) {
+      logger.debug('[AgentSignalTick] no actionable change', {
+        direction: current.direction, conf: current.confidence,
+      });
+      return NextResponse.json({
+        success: true,
+        actionable: false,
+        direction: current.direction,
+        confidence: current.confidence,
+      });
+    }
+
+    // ACTIONABLE — re-run the LeadAgent autonomous cycle so directives
+    // pick up the new signal. The sui-community-pool cron's next tick will
+    // consume the refreshed directives via agent-trade-guard.
+    logger.info('[AgentSignalTick] signal change — refreshing agent directives', {
+      directionFlipped, strongEmerged,
+      prev: last ? { dir: last.direction, conf: last.confidence } : null,
+      now: { dir: current.direction, conf: current.confidence },
+    });
+
+    const { getAgentOrchestrator } = await import('@/lib/services/agent-orchestrator');
+    const orchestrator = getAgentOrchestrator();
+    const cycle = await orchestrator.runAutonomousCycle({
+      chain: 'sui',
+      portfolioId: -2,
+    });
+
+    // Discord ping — operators want to see the signal-driven refresh
+    try {
+      const { notifyDiscord } = await import('@/lib/utils/discord-notify');
+      const headline = directionFlipped
+        ? `🔄 Signal FLIP ${last?.direction} → ${current.direction} (conf ${current.confidence.toFixed(0)}%)`
+        : `📈 STRONG signal ${current.direction} emerged (conf ${current.confidence.toFixed(0)}%, up from ${last?.confidence?.toFixed(0) ?? '?'}%)`;
+      await notifyDiscord(
+        `${headline} — agent directives refreshed. Risk=${cycle.riskScore ?? '?'} hedge-recs=${cycle.hedgeRecommendations ?? 0}.`,
+        directionFlipped ? 'WARN' : 'INFO',
+        { directionFlipped, strongEmerged, cycle },
+      ).catch(() => {});
+    } catch { /* best-effort */ }
+
+    return NextResponse.json({
+      success: true,
+      actionable: true,
+      directionFlipped,
+      strongEmerged,
+      direction: current.direction,
+      confidence: current.confidence,
+      cycleDurationMs: cycle.durationMs,
+      cycleRiskScore: cycle.riskScore,
+    });
+  } catch (e) {
+    logger.error('[AgentSignalTick] failed', { error: e instanceof Error ? e.message : String(e) });
+    return NextResponse.json(
+      { success: false, error: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handle(request);
+}
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  return handle(request);
+}

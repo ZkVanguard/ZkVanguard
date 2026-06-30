@@ -86,9 +86,82 @@ interface RiskOverviewResponse {
     BTC?: { direction: string; confidence: number };
     ETH?: { direction: string; confidence: number };
   };
+  agents: {
+    cycle: {
+      ranAt: string | null;
+      ageMinutes: number | null;
+      riskScore: number | null;
+      riskLevel: string | null;
+      summary: string | null;
+    };
+    directives: Array<{
+      asset: string;
+      recommendedSide: 'LONG' | 'SHORT' | null;
+      confidence: number;
+      shouldHedge: boolean;
+      reason: string;
+    }>;
+    scorecard: {
+      totalDecisions: number;
+      approvedCount: number;
+      rejectedCount: number;
+      actedOnCount: number;
+      settledCount: number;
+      netPnlUsd: number;
+      winRate: number | null;
+    };
+  };
 }
 
 const POOL_INCEPTION_SHARE_PRICE = 1.0;
+
+/**
+ * Live agent activity surface — what the 7-agent system is recommending
+ * right now, plus how well its past recommendations have done. Drives the
+ * "AI Agent Activity" panel on /dashboard/risk.
+ */
+async function getAgentSection(): Promise<RiskOverviewResponse['agents']> {
+  const empty = {
+    cycle: { ranAt: null, ageMinutes: null, riskScore: null, riskLevel: null, summary: null },
+    directives: [] as RiskOverviewResponse['agents']['directives'],
+    scorecard: { totalDecisions: 0, approvedCount: 0, rejectedCount: 0, actedOnCount: 0, settledCount: 0, netPnlUsd: 0, winRate: null },
+  };
+  try {
+    const [{ getCronState }, { getLatestDirectives }, { getRecentAgentScorecard }] = await Promise.all([
+      import('@/lib/db/cron-state'),
+      import('@/lib/services/agents/agent-trade-guard'),
+      import('@/lib/db/agent-decisions'),
+    ]);
+    const [lastCycle, directives, scorecard] = await Promise.all([
+      getCronState<{ ts: number; success: boolean; riskScore?: number; riskLevel?: string; leadSummary?: string }>('lead-cycle:last-decision'),
+      getLatestDirectives(),
+      getRecentAgentScorecard('sui', 7),
+    ]);
+    const cycleAgeMin = lastCycle?.ts ? Math.floor((Date.now() - lastCycle.ts) / 60_000) : null;
+    return {
+      cycle: {
+        ranAt: lastCycle?.ts ? new Date(lastCycle.ts).toISOString() : null,
+        ageMinutes: cycleAgeMin,
+        riskScore: lastCycle?.riskScore ?? null,
+        riskLevel: lastCycle?.riskLevel ?? null,
+        summary: lastCycle?.leadSummary ?? null,
+      },
+      directives: directives
+        ? Object.values(directives.byAsset).map((d) => ({
+            asset: d.asset,
+            recommendedSide: d.recommendedSide,
+            confidence: d.confidence,
+            shouldHedge: d.shouldHedge,
+            reason: d.reason,
+          }))
+        : [],
+      scorecard,
+    };
+  } catch (e) {
+    logger.warn('[Risk Overview] agent section failed', { error: String(e).slice(0, 200) });
+    return empty;
+  }
+}
 
 /**
  * Read pool's lifetime deposits/withdrawals + ATH directly from the on-chain
@@ -329,6 +402,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       },
       zkAttestations,
       signals,
+      agents: await getAgentSection(),
     };
 
     return NextResponse.json(response);
