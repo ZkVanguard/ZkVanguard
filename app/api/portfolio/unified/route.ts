@@ -153,6 +153,98 @@ async function getPoolHedgeExposure(
   }
 }
 
+/**
+ * Read user's `rwa_manager::Portfolio` objects (Private Portfolio Creator surface).
+ * These are user-owned Move objects created via `rwa_manager::create_portfolio`.
+ * Hot path: 0 portfolios → single RPC round-trip → empty product. Cold path on
+ * any failure → null product, never throws (this is one surface among many).
+ */
+async function getPrivatePortfolios(wallet: string): Promise<{
+  position: ProductPosition | null;
+  warning: string | null;
+}> {
+  try {
+    const packageId = (
+      process.env.NEXT_PUBLIC_SUI_MAINNET_RWA_PACKAGE_ID ||
+      process.env.NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID ||
+      ''
+    ).trim();
+    if (!packageId) return { position: null, warning: null };
+    const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
+
+    const response = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'suix_getOwnedObjects',
+        params: [
+          wallet,
+          {
+            filter: { StructType: `${packageId}::rwa_manager::Portfolio` },
+            options: { showContent: true },
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      return { position: null, warning: `Private portfolio RPC returned HTTP ${response.status}` };
+    }
+    const data = (await response.json()) as {
+      result?: { data?: Array<{ data?: { objectId?: string; content?: { fields?: Record<string, unknown> } } }> };
+    };
+    const objects = data.result?.data || [];
+    if (!objects.length) return { position: null, warning: null };
+
+    // total_value is stored in MIST (u64). Sum across all portfolios owned by the wallet.
+    let totalValueMist = 0n;
+    for (const obj of objects) {
+      const fields = obj.data?.content?.fields || {};
+      const tv = fields.total_value;
+      if (tv !== undefined && tv !== null) {
+        try {
+          totalValueMist += BigInt(String(tv));
+        } catch {
+          // skip non-numeric
+        }
+      }
+    }
+
+    // Convert MIST → SUI → USD using the same live SUI price the rest of the system uses.
+    let suiUsd = 2.5;
+    try {
+      const { getLivePrice } = await import('@/lib/services/market-data/unified-price-provider');
+      const price = await getLivePrice('SUI');
+      if (Number.isFinite(price) && price > 0) suiUsd = price;
+    } catch {
+      // fall through with conservative default
+    }
+    const valueUsd = (Number(totalValueMist) / 1e9) * suiUsd;
+
+    return {
+      position: {
+        product: 'private-portfolios',
+        productLabel: 'Private Portfolios (RWA Manager)',
+        chain: 'sui',
+        valueUsd,
+        costBasisUsd: valueUsd, // no historical basis tracked on-chain
+        unrealizedPnlUsd: 0,
+        count: objects.length,
+        metadata: {
+          backedBy: 'rwa_manager.move',
+          attestationsAvailable: 'See /dashboard/custody-proofs and /api/custody?action=list-attestations',
+        },
+      },
+      warning: null,
+    };
+  } catch (e: unknown) {
+    logger.warn('[Unified] Private portfolio lookup failed', { error: String(e) });
+    return { position: null, warning: `Private portfolio lookup failed: ${String(e)}` };
+  }
+}
+
 async function getZkOwnedHedges(wallet: string): Promise<{
   position: ProductPosition | null;
   hedges: HedgeExposure[];
@@ -292,13 +384,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<UnifiedPor
     let userPoolPctOfTotal = 0;
 
     if (kind === 'sui') {
-      const [suiPool, zkHedges, attributedHedges] = await Promise.all([
+      const [suiPool, zkHedges, attributedHedges, privatePortfolios] = await Promise.all([
         getSuiPoolPosition(wallet),
         getZkOwnedHedges(wallet),
         getWalletAttributedHedges(wallet),
+        getPrivatePortfolios(wallet),
       ]);
 
       if (suiPool.warning) warnings.push(suiPool.warning);
+      if (privatePortfolios.warning) warnings.push(privatePortfolios.warning);
+      if (privatePortfolios.position) products.push(privatePortfolios.position);
       if (suiPool.product) {
         products.push(suiPool.product);
         userPoolPctOfTotal = suiPool.product.percentage || 0;

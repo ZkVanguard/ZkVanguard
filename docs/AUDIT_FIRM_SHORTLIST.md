@@ -10,13 +10,13 @@ Four Move contracts on Sui mainnet at package `0x107292a69eea2f6eaf4a4e4727ee25d
 |---|---|---|
 | `community_pool_usdc.move` | ~620 | Holds USDC, mints shares, NAV oracle in strict mode |
 | `zk_hedge_commitment.move` | 502 | Stealth addresses, nullifiers, commitment storage — drain prevention is critical |
-| `zk_proxy_vault.move` | 727 | PDA-style proxy addresses, time-locked withdrawals, confidential portfolios |
+| `zk_proxy_vault.move` | 727 | PDA-style proxy addresses, time-locked withdrawals, private hedges spot-leg vault |
 | `zk_verifier.move` | 484 | On-chain ZK-STARK verification, ed25519 prover attestation |
+| `rwa_manager.move` | ~510 | Private Portfolio Creator backing — `create_portfolio` / `deposit` / `withdraw`. User-facing surface, must be in scope. |
 
-**Total auditable surface:** ~2,333 LOC of Move + the integration glue with `payment_router.move` and `community_pool_timelock.move`.
+**Total auditable surface:** ~2,843 LOC of Move + the integration glue with `payment_router.move` and `community_pool_timelock.move`.
 
 **Out of scope** (will not be audited under Tranche 1):
-- `rwa_manager.move` — generic portfolio primitive, not actively used in any product flow
 - EVM mirrors on Cronos / Hedera / Oasis / Sepolia (testnet only)
 - Python ZK-STARK prover (separate cryptographic review path)
 

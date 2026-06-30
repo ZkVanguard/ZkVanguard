@@ -409,6 +409,18 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
               body="Custodian-signed attestations bind portfolios to off-chain assets — without revealing the list."
             />
             <SurfaceCard
+              href="/dashboard?modal=portfolio-creator"
+              eyebrow="Private portfolio creator"
+              title="Custom portfolios, ZK-attested."
+              body="Wizard-built portfolios via rwa_manager.move + zk_verifier.move. Prove risk-below-threshold without disclosing positions."
+            />
+            <SurfaceCard
+              href="/zk-proof"
+              eyebrow="ZK-STARK system"
+              title="Post-quantum verifiable AI."
+              body="NIST P-521 STARK prover (Python · CUDA accelerated). Interactive demo: generate + verify a proof in one click."
+            />
+            <SurfaceCard
               href="/developers"
               eyebrow="API surface"
               title="Aladdin-as-a-Service."

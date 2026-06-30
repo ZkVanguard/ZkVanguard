@@ -30,7 +30,7 @@
 | Component | Description |
 |-----------|-------------|
 | **Portfolio Overview** | Real-time balances, P&L, asset allocation |
-| **AI Chat Interface** | Natural language commands with 5 agents |
+| **AI Chat Interface** | Natural language commands with 7 agents (Lead, Risk, Hedging, Settlement, Reporting, PriceMonitor, SuiPool) |
 | **Prediction Insights** | Live Polymarket/Delphi predictions |
 | **Active Hedges** | Open perpetual positions with live P/L |
 | **Risk Metrics** | VaR, Sharpe ratio, volatility charts |

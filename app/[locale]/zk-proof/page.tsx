@@ -162,8 +162,8 @@ function ZKProofPage() {
 
     setIsStoringOnChain(true);
     try {
-      logger.info('Storing proof on Cronos testnet with TRUE gasless');
-      logger.info('Fee: $0.01 USDC + $0.00 CRO (x402 powered)');
+      logger.info('Storing proof on Cronos testnet (interactive demo path) with TRUE gasless');
+      logger.info('Fee: $0.01 USDC + $0.00 CRO (x402 powered). Production ZK attestations write to zk_verifier.move on SUI mainnet via the autonomous agent stack.');
       
       const { convertToContractFormat } = await import('@/lib/api/zk');
       
@@ -177,7 +177,7 @@ function ZKProofPage() {
 
       // Require user signature before sending to server-side storage
       const signatureMessage = [
-        'Chronos Vanguard: Confirm proof storage',
+        'ZkVanguard: Confirm proof storage',
         `Scenario: ${selectedScenario.name}`,
         `Address: ${address}`,
         `Timestamp: ${new Date().toISOString()}`,
@@ -608,7 +608,7 @@ function ZKProofPage() {
                         {isStoringOnChain ? 'Storing On-Chain...' : onChainTxHash ? 'Stored On-Chain ✓' : 'On-Chain Storage'}
                       </div>
                       <div className="text-[#6E6E73] text-sm">
-                        {isStoringOnChain ? 'Submitting gasless transaction...' : onChainTxHash ? 'Permanent proof commitment on Cronos testnet' : 'Wallet connected - storing automatically'}
+                        {isStoringOnChain ? 'Submitting gasless transaction...' : onChainTxHash ? 'Permanent proof commitment on Cronos testnet (demo path · production proofs go to zk_verifier.move on SUI mainnet)' : 'Wallet connected - storing automatically'}
                       </div>
                     </div>
                   </div>
