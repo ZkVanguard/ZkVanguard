@@ -4,9 +4,9 @@
  *
  * Proves the full pipeline works BEFORE the Move contract is deployed:
  *   1. Holder hashes the asset list canonically
- *   2. Holder requests the signed-message bytes from /api/custody/build-message
+ *   2. Holder requests the signed-message bytes from /api/custody (action=build-message)
  *   3. Custodian (simulated locally with a fresh ed25519 keypair) signs them
- *   4. Caller submits to /api/custody/verify for off-chain validation
+ *   4. Caller submits to /api/custody (action=verify) for off-chain validation
  *   5. We round-trip the same flow via the TS SDK to confirm canonical-form
  *      agreement between the SDK, the API, and the Move contract spec
  *
@@ -68,10 +68,10 @@ async function main() {
 
   // ─── Step 2: both sides hash the asset list ───────────────────────────
   console.log('\n── Step 2: canonical asset-list hash via API + SDK ──');
-  const apiHashResp = await fetch(`${API_BASE}/api/custody/hash-assets`, {
+  const apiHashResp = await fetch(`${API_BASE}/api/custody`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ assets }),
+    body: JSON.stringify({ action: 'hash-assets', assets }),
   });
   assert(apiHashResp.ok, `hash-assets endpoint returned ${apiHashResp.status}`);
   const apiHashJson = (await apiHashResp.json()) as { assetListHash: string };
@@ -89,10 +89,11 @@ async function main() {
   const nonce = 1n;
   const validUntil = BigInt(Date.now()) + 30n * 24n * 60n * 60n * 1000n; // 30 days
 
-  const msgResp = await fetch(`${API_BASE}/api/custody/build-message`, {
+  const msgResp = await fetch(`${API_BASE}/api/custody`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      action: 'build-message',
       portfolioId: portfolioId.toString(),
       assetListHash: sdkHashHex,
       nonce: nonce.toString(),
@@ -117,11 +118,12 @@ async function main() {
   ok(`signature: ${bytesToHex(signature).slice(0, 20)}…`);
 
   // ─── Step 5: off-chain verify via API ─────────────────────────────────
-  console.log('\n── Step 5: off-chain verification via /api/custody/verify ──');
-  const verifyResp = await fetch(`${API_BASE}/api/custody/verify`, {
+  console.log('\n── Step 5: off-chain verification via /api/custody action=verify ──');
+  const verifyResp = await fetch(`${API_BASE}/api/custody`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      action: 'verify',
       portfolioId: portfolioId.toString(),
       assetListHash: sdkHashHex,
       nonce: nonce.toString(),

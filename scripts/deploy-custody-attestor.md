@@ -59,7 +59,7 @@ sui client upgrade `
 3. **Smoke test**:
    ```bash
    # Should now return deployed=true with empty attestations[]
-   curl https://www.zkvanguard.xyz/api/custody/list-attestations?wallet=0x<your_wallet>
+   curl "https://www.zkvanguard.xyz/api/custody?action=list-attestations&wallet=0x<your_wallet>"
    ```
 4. **Enroll the first custodian** (test ed25519 key for now):
    ```typescript
@@ -92,10 +92,7 @@ sui client upgrade `
 - `contracts/sui/sources/rwa_custody_attestor.move` (~340 LOC)
 - `contracts/sui/tests/rwa_custody_attestor_tests.move`
 - `lib/services/sui/RwaCustodyAttestService.ts`
-- `app/api/custody/list-attestations/route.ts`
-- `app/api/custody/build-message/route.ts`
-- `app/api/custody/hash-assets/route.ts`
-- `app/api/custody/verify/route.ts`
+- `app/api/custody/route.ts` (single action-dispatched route — list-attestations · build-message · hash-assets · verify)
 - `app/[locale]/dashboard/custody-proofs/page.tsx`
 
 ## Rollback

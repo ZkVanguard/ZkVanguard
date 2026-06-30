@@ -128,7 +128,7 @@ export default function CustodyProofsPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/custody/list-attestations?wallet=${wallet}`)
+    fetch(`/api/custody?action=list-attestations&wallet=${wallet}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -189,11 +189,11 @@ export default function CustodyProofsPage() {
               </li>
               <li>
                 You both compute the canonical SHA-256 hash of that list independently
-                via <code className="bg-white px-1.5 py-0.5 rounded">/api/custody/hash-assets</code>.
+                via <code className="bg-white px-1.5 py-0.5 rounded">POST /api/custody · action: hash-assets</code>.
               </li>
               <li>
                 You request the signed message bytes via
-                <code className="bg-white px-1.5 py-0.5 rounded mx-1">/api/custody/build-message</code>;
+                <code className="bg-white px-1.5 py-0.5 rounded mx-1">POST /api/custody · action: build-message</code>;
                 your custodian signs them with their enrolled ed25519 key.
               </li>
               <li>
@@ -203,7 +203,7 @@ export default function CustodyProofsPage() {
               </li>
               <li>
                 Any counterparty can verify the attestation via
-                <code className="bg-white px-1.5 py-0.5 rounded mx-1">/api/custody/verify</code> — confirming
+                <code className="bg-white px-1.5 py-0.5 rounded mx-1">POST /api/custody · action: verify</code> — confirming
                 portfolio backing without ever seeing the asset list.
               </li>
             </ol>
