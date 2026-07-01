@@ -2104,6 +2104,30 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       }
     }
 
+    // Step 7.9: Position-Drift Auto-Close (AG10) — self-correct misalignment
+    // ═══════════════════════════════════════════════════════════════
+    // For each active real hedge (collateral ≥ $1), ask AgentTradeGuard
+    // whether re-opening the SAME side would now be approved. If not
+    // (agent-directive stage: agent recommends opposite side or HOLD, or
+    // risk-gate stage: systemic risk-ceiling breach), close the position.
+    // Runs BEFORE Step 8 so freed capital can immediately re-hedge on the
+    // correct side in the same tick — pool self-corrects in one cycle.
+    // Kill switch: HEDGE_DRIFT_AUTO_CLOSE_DISABLE=1
+    // ═══════════════════════════════════════════════════════════════
+    let driftResult: { checked: number; drifted: number; closed: number; skipped: number; errors: number; actions: unknown[] } | null = null;
+    try {
+      const bluefinService = BluefinService.getInstance();
+      const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
+      driftResult = await checkAndCloseDrifts('sui', bluefinService);
+      if (driftResult.drifted > 0) {
+        logger.info('[SUI Cron] Drift monitor summary', driftResult);
+      }
+    } catch (driftErr) {
+      logger.warn('[SUI Cron] Drift monitor threw (non-critical — Step 8 continues)', {
+        error: driftErr instanceof Error ? driftErr.message : String(driftErr),
+      });
+    }
+
     // Step 8: Auto-Hedge via BlueFin perpetuals — BTC, ETH, SUI
     // ═══════════════════════════════════════════════════════════════
     // Signal-driven hedging:
