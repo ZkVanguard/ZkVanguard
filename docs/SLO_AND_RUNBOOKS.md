@@ -1,0 +1,309 @@
+# Service Level Objectives + Top-5 Incident Runbooks
+
+> Formal SLOs + step-by-step response for the highest-impact failure modes.
+> Written for a solo operator today; scales to on-call rotation later.
+
+## Part 1 — Service Level Objectives
+
+### Definitions
+
+| Concept | Definition |
+|---|---|
+| **User** | Anyone with active shares in the SUI USDC pool + API consumers of `/api/platform/*`, `/api/portfolio/*` |
+| **Available** | The primary user journey works: deposit works OR withdraw works OR read APIs respond within timeout |
+| **Correct** | Prices are within 100 bps of the reference oracle AND share price computed from on-chain state matches what's returned via API within 50 bps |
+| **Fresh** | NAV snapshot age < 45 min (1.5× cron cadence) |
+
+### Targets
+
+| SLI | Target | Error budget (30d) |
+|---|---|---|
+| API availability (95th %ile response < 2s) | 99.5% | 3.6 hours |
+| NAV freshness | 99.0% | 7.2 hours of stale > 45min |
+| Cron heartbeat (all 10 scheduled crons within 2× cadence) | 99.5% | 3.6 hours |
+| Correct share price (deviation < 50 bps vs on-chain truth) | 99.9% | 43 minutes |
+| Trade execution success (openHedge fills within 10s of orderHash) | 95% | 36 hours |
+| Zero unauthorized state changes (admin actions signed by cap-holder only) | 100% | ZERO tolerance |
+
+### Error budget policy
+
+- **75% consumed** → post-mortem incident review + freeze feature deploys until burn rate falls below 1× budget/day
+- **100% consumed** → mandatory 24h freeze; only reliability fixes ship
+- **200% consumed** → escalate to external assistance (audit firm, on-call engineer)
+
+## Part 2 — Top-5 Incident Runbooks
+
+Each runbook has: **symptom** (what you'll see) → **diagnose** (what to check) → **mitigate** (immediate stop-bleed) → **fix** (root cause) → **verify**.
+
+---
+
+### Runbook 1 — Python ZK prover down
+
+**Symptom**
+- `/api/zk/*` calls return 5xx or timeout
+- Discord silent on `🔀 DRIFT-CLOSED` events even after clear signal flips (the drift monitor calls `checkBeforeTrade` which soft-passes when the ZK attestor is optional — but at scale with `ZK_ATTEST_STRICT=1`, all trades above $1M are blocked)
+- Grafana / logs show `Prover /api/zk/attest failed`
+
+**Diagnose**
+```bash
+# 1. Is the process running?
+curl -m 3 $ZK_PYTHON_API_URL/health
+
+# 2. If it responds but reports errors:
+curl -m 3 $ZK_PYTHON_API_URL/api/zk/prover-pubkey
+# → 404 = ZKV_PROVER_PRIV_KEY_HEX unset → env drift
+# → 500 = CUDA/CuPy driver issue → check nvidia-smi
+
+# 3. If unreachable:
+ps aux | grep "zkp/api/server"       # linux
+Get-Process python                    # windows
+```
+
+**Mitigate (< 5 min)**
+- Set `ZK_ATTEST_STRICT=0` in Vercel env — reverts to soft-skip on prover
+  outage so trades ≤ $1M continue. Trades > $1M will now proceed WITHOUT
+  ZK attestation — safe as long as SafeExecutionGuard's position cap is
+  still enforced.
+- **DO NOT** set `SAFE_GUARD_MAX_POSITION_USD` higher during this window.
+
+**Fix**
+- Restart the prover: `python zkp/api/server.py` (or systemd unit)
+- If CUDA driver crashed: reboot the host. Move to CPU-only via
+  `ZK_CUDA_ENABLED=0` while investigating.
+
+**Verify**
+- `/health` returns `cuda_enabled: true, status: healthy`
+- `scripts/test-zk-stark-e2e.ts` → 4/4 pass
+- Revert `ZK_ATTEST_STRICT=1`
+
+---
+
+### Runbook 2 — BlueFin returns garbage / matching engine unresponsive
+
+**Symptom**
+- Every openHedge returns success + orderHash but `getPositions()` never shows the fill
+- `bluefin-health` cron logs 3-strike de-risk trigger (auto-closes all reduceOnly)
+- Discord: `Auto-hedge PENDING: ... awaiting fill` for > 15 min
+- Manual `/api/admin/bluefin-debug` returns stale positions
+
+**Diagnose**
+```bash
+# 1. Is the BlueFin API up at all?
+curl -m 5 https://api.sui-prod.bluefin.io/markets
+
+# 2. Is it our credentials or theirs?
+curl -sH "Authorization: Bearer $CRON_SECRET" \
+  "https://www.zkvanguard.xyz/api/admin/bluefin-preflight"
+
+# 3. Test-order one signature:
+curl -sH "Authorization: Bearer $CRON_SECRET" \
+  -X POST "https://www.zkvanguard.xyz/api/admin/bluefin-trace-order" \
+  -d '{"symbol":"BTC-PERP","side":"LONG","size":0.001,"leverage":3}'
+```
+
+**Mitigate (< 10 min)**
+- Set `SUI_AUTO_HEDGE_DISABLE=1` in Vercel env → cron stops opening new
+  positions
+- `POST /api/admin/close-bluefin-positions` (CRON_SECRET-gated) → flatten
+  all existing positions to book PnL now instead of leaking on stale orders
+- Notify LPs via Discord: pool paused pending venue investigation
+
+**Fix**
+- If BlueFin API is down: watch their status page, wait
+- If our credentials expired: rotate `BLUEFIN_PRIVATE_KEY` via
+  admin-preflight → new-key
+- If specific market symbol is offline (e.g., SUI-PERP maintenance): set
+  `HEDGE_SKIP_SUI=1` to route around
+
+**Verify**
+- Trace-order returns a fill (positions delta > 0)
+- 3 consecutive `bluefin-health` ticks pass
+- Revert `SUI_AUTO_HEDGE_DISABLE`
+
+---
+
+### Runbook 3 — Aiven Postgres region outage
+
+**Symptom**
+- Every DB-dependent call in `/api/*` returns 500 or hangs
+- Cron routes log `ensureTable failed`, `Failed to get "..."`
+- `analyze-pool-pnl.ts` fails at connection
+
+**Diagnose**
+```bash
+# 1. Is Aiven up?
+curl -m 5 https://api.aiven.io/v1/project/status
+
+# 2. Are we hitting connection limits?
+# Look at Aiven console → PostgreSQL → Metrics → active connections
+
+# 3. Is DNS resolving?
+nslookup pg-eb4412d-ashishregmi2017-fa7c.l.aivencloud.com
+```
+
+**Mitigate (< 30 min)**
+- Set `DB_READ_ONLY_MODE=1` in Vercel env (implement if not present — 1
+  hour eng) → API returns cached values from cron_state instead of live
+  queries
+- On-chain reads still work (pool state via Sui RPC is authoritative for
+  NAV) — surface these on the dashboard with a "DB temporarily
+  unavailable" banner
+
+**Fix**
+- Aiven multi-region failover (if Business tier is active): promote
+  read replica
+- Otherwise: wait, monitor, coordinate with Aiven support
+
+**Verify**
+- Cron heartbeats resume within 2 cycles
+- `analyze-pool-pnl.ts` runs clean
+
+---
+
+### Runbook 4 — Admin key compromise (suspected or confirmed)
+
+**Symptom**
+- Unexpected `AdminEvent` on-chain
+- Unusual fee withdrawals
+- Strict NAV mode toggled without operator action
+- Discord fires unfamiliar TVL cap change
+
+**Diagnose**
+```bash
+# 1. Recent admin transactions via Sui RPC
+sui client txs --address $SUI_ADMIN_ADDRESS --limit 20
+
+# 2. Check any pending MSafe proposals — is someone probing?
+
+# 3. Was the key exposed?
+grep -r "SUI_POOL_ADMIN_KEY" ~ /tmp /var/log 2>/dev/null | head
+```
+
+**Mitigate (< 15 min) — HIGHEST PRIORITY**
+- On the compromised host: `kill -9` every process using the key
+- **DO NOT** delete the key file — forensic evidence
+- Pause the pool via MSafe (if AdminCap already migrated per
+  `docs/ADMINCAP_MSAFE_MIGRATION.md`) or via a fresh cap-holder invoking
+  `admin_set_paused(true)`
+- Set `SUI_AUTO_HEDGE_DISABLE=1` in Vercel
+- Rotate all cron QStash tokens (attacker could forge cron calls)
+
+**Fix**
+- Generate new admin key via Sui CLI
+- If AdminCap still on hot key: emergency-transfer to new address via the
+  compromised key IF it's still under our control (may already be
+  drained). Otherwise: build a governance escape hatch via MSafe.
+- Deploy AdminCap migration to MSafe TODAY (was TA5 runbook prep)
+- Force-close all BlueFin positions
+- Rotate BLUEFIN_PRIVATE_KEY, DATABASE_URL, QSTASH_TOKEN, CRON_SECRET,
+  DISCORD_WEBHOOK_URL
+
+**Verify**
+- 24h continuous monitoring for further anomalies
+- External security review before resuming operations
+- Post-mortem published to LPs
+
+---
+
+### Runbook 5 — Cron cascade failure (multiple crons stop firing)
+
+**Symptom**
+- `/api/health/production` reports 3+ crons > 30 min stale
+- No `Auto-hedge OPENED` events for > 2 hours
+- QStash dashboard shows scheduled crons but no invocations
+
+**Diagnose**
+```bash
+# 1. Are QStash schedules present?
+curl -sH "Authorization: Bearer $QSTASH_TOKEN" $QSTASH_URL/v2/schedules
+
+# 2. Are cron routes throwing 5xx (blocking QStash from marking success)?
+curl -sH "Authorization: Bearer $CRON_SECRET" \
+  https://www.zkvanguard.xyz/api/health/production | jq .components.cronJobs
+
+# 3. Vercel deploy status
+curl -sH "Authorization: Bearer $VERCEL_TOKEN" \
+  "https://api.vercel.com/v6/deployments?projectId=$PROJECT_ID&limit=3"
+```
+
+**Mitigate (< 10 min)**
+- Manually trigger the most critical cron (sui-community-pool) to force a NAV snapshot:
+  ```bash
+  curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
+    https://www.zkvanguard.xyz/api/cron/sui-community-pool
+  ```
+- If Vercel is down: no mitigation — sit tight, monitor Vercel status
+
+**Fix**
+- If the last deploy broke a shared module: `vercel rollback` to previous
+- If QStash schedules were deleted (mis-click): recreate per
+  `docs/AGENT_PIPELINE_ACTIVATION.md`
+- If routes 5xx: fix root cause per stack trace
+
+**Verify**
+- All 10 crons show `cron:lastRun:*` within 2× cadence
+- `/api/health/production` reports healthy
+
+---
+
+## Part 3 — On-call artifacts
+
+### Runbook access matrix
+
+| Scenario | Who has authority | Escalation SLA |
+|---|---|---|
+| Runbooks 1, 2, 5 (technical) | Any engineer with prod access | 30 min ack |
+| Runbook 3 (DB) | Same + Aiven admin | 15 min ack |
+| Runbook 4 (key compromise) | Founder + external security firm | 15 min ack, active response within 1h |
+
+### Communication template — post-incident
+
+```
+[POST-MORTEM] YYYY-MM-DD Incident: <short title>
+
+## What happened
+<one paragraph, plain english>
+
+## User impact
+- Duration: X min
+- Users affected: <count>
+- Funds at risk: $X (specify: at-risk, actually-lost, recovered)
+
+## Timeline (UTC)
+- HH:MM  Discord alert fires
+- HH:MM  On-call ack
+- HH:MM  Mitigation deployed
+- HH:MM  Root cause identified
+- HH:MM  Fix deployed
+- HH:MM  Verified stable
+
+## Root cause
+
+## What went well
+
+## What didn't
+
+## Follow-ups (with owners + dates)
+- [ ] ...
+- [ ] ...
+```
+
+Published within 3 business days of every P0/P1 to LPs + on `/incidents` page.
+
+## Part 4 — Chaos game-day schedule
+
+Once per quarter, deliberately induce each Runbook scenario in a staging env:
+
+- Q1 — Runbook 1 (kill Python prover)
+- Q2 — Runbook 2 (mock BlueFin returning stale data)
+- Q3 — Runbook 3 (revoke DB creds)
+- Q4 — Runbook 5 (delete a QStash schedule)
+
+Runbook 4 (key compromise) is drilled tabletop, never actually — the recovery path is destructive.
+
+## Related
+
+- `docs/AGENT_PIPELINE_ACTIVATION.md` — normal-operation flow
+- `docs/ADMINCAP_MSAFE_MIGRATION.md` — hardens against Runbook 4
+- `docs/HEDGE_PRIVACY_MAINNET_DEPLOY.md` — hardens against Runbook 4
+- CLAUDE.md § Scale-readiness walls — future work

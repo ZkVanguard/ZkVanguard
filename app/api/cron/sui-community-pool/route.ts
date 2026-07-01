@@ -55,7 +55,17 @@ const CRON_LOCK_KEY = 'sui-community-pool';
 // and silently wraps. Mainnet contracts must be redeployed with u128
 // before crossing this threshold. Override only after verifying the
 // new package id has the u128 fixes.
-const NAV_SAFETY_CEILING_USDC = Number(process.env.NAV_SAFETY_CEILING_USDC) || 500_000_000;
+// The Move contract already uses u128 intermediates for every NAV × bps ×
+// time multiplication (community_pool_usdc.move:713, :738, :763), so the
+// arithmetic itself is safe up to $18 trillion (u64::MAX in USDC micro-
+// units). The ceiling here is a defensive shim that also gates against
+// second-order risks:
+//   - accumulated fee counters (u64) — safe up to ~$1.8T total accrued
+//   - BlueFin perp OI ceiling (venue-level) — real limit ~$10-100M today
+//   - single-tx DEX slippage — real limit ~$1-5M
+// $10B is chosen as the *scale-readiness* ceiling; above that the
+// multi-venue router + OTC path must be active or the pool blocks writes.
+const NAV_SAFETY_CEILING_USDC = Number(process.env.NAV_SAFETY_CEILING_USDC) || 10_000_000_000;
 
 // Step 6.6 drift-rebalance tunables. Together they bound the per-tick
 // blast radius — at most MAX_REBALANCE_SELL_USD of any one overweight

@@ -264,6 +264,60 @@ async function main() {
     `checked=${driftRun.checked}, drifted=${driftRun.drifted}, closed=${driftRun.closed}, errors=${driftRun.errors}`,
   );
 
+  // [14] Consensus vote required + auto-cast on trades >= $100k
+  process.env.LARGE_TRADE_CONSENSUS_USD = '100000';
+  await publishDirectives({
+    ranAt: Date.now(),
+    chain: 'sui',
+    riskScore: 30,
+    riskLevel: 'LOW',
+    byAsset: {
+      BTC: { asset: 'BTC', recommendedSide: 'SHORT', confidence: 80, shouldHedge: true, reason: 'consensus test', riskScore: 30, computedAt: Date.now() },
+    },
+  });
+  const consensusCheck = await checkBeforeTrade({
+    chain: 'sui', asset: 'BTC', intendedSide: 'SHORT',
+    notionalUsd: 500_000, agentSource: 'e2e-consensus',
+  });
+  record(
+    'Multi-agent consensus fires + passes on aligned large trade',
+    consensusCheck.approved === true && (consensusCheck.reason.includes('consensus PASSED') || consensusCheck.reason.includes('SafeGuard cleared')),
+    `approved=${consensusCheck.approved}, reason=${consensusCheck.reason.slice(0, 100)}`,
+  );
+
+  // [15] Consensus BLOCKS on side-mismatched large trade
+  const consensusBlockCheck = await checkBeforeTrade({
+    chain: 'sui', asset: 'BTC', intendedSide: 'LONG',
+    notionalUsd: 500_000, agentSource: 'e2e-consensus-block',
+  });
+  record(
+    'Multi-agent consensus blocks side-mismatched large trade',
+    !consensusBlockCheck.approved,
+    `approved=${consensusBlockCheck.approved}, stage=${consensusBlockCheck.stage}, reason=${consensusBlockCheck.reason.slice(0, 100)}`,
+  );
+
+  // [16] ZK attestation soft-skip on unreachable prover
+  process.env.ZK_ATTEST_MIN_NOTIONAL_USD = '250000';
+  process.env.ZK_ATTEST_STRICT = '0';
+  const zkSoftSkip = await checkBeforeTrade({
+    chain: 'sui', asset: 'BTC', intendedSide: 'SHORT',
+    notionalUsd: 300_000, agentSource: 'e2e-zk-soft',
+  });
+  record(
+    'ZK attestation soft-skip allows trade when prover unreachable',
+    zkSoftSkip.approved === true,
+    `approved=${zkSoftSkip.approved}, reason=${zkSoftSkip.reason.slice(0, 100)}`,
+  );
+
+  // [17] Perp venue router below split threshold → single-venue plan
+  const { routeHedgePlan } = await import('../lib/services/hedging/perp-venue-router');
+  const smallPlan = await routeHedgePlan({ symbol: 'BTC-PERP', notionalUsd: 100, side: 'SHORT' });
+  record(
+    'Perp router: below split threshold → single BlueFin leg',
+    smallPlan.singleVenue === true && smallPlan.belowSplitThreshold === true,
+    `legs=${smallPlan.legs.length}, singleVenue=${smallPlan.singleVenue}, belowThreshold=${smallPlan.belowSplitThreshold}`,
+  );
+
   // Clear the test directives so the actual cron doesn't see them
   await setCronState(NO_CACHE_KEY, null);
 

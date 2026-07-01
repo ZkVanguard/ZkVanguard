@@ -1,0 +1,61 @@
+{
+  "_readme": "Vulnerabilities documented + risk-accepted. See docs/SUPPLY_CHAIN_POLICY.md for waiver process. Each entry MUST have: reason, reviewedBy, reviewedAt (ISO date), expires (ISO date, max 90 days out).",
+  "waived": {
+    "@bluefin-exchange/bluefin-v2-client": {
+      "reason": "Transitive dep of BluefinService; no upstream fix available. Only invoked server-side with our own signed requests, not exposed to user input.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@firefly-exchange/library-sui": {
+      "reason": "Bundled with BluefinService for order signing. Server-only. Same risk profile as parent SDK.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@mysten/sui": {
+      "reason": "Core SUI SDK — no upstream fix path exists for the listed CVEs at 1.x. Server-only; we control all inputs. Track upstream at https://github.com/MystenLabs/ts-sdks",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@mysten/dapp-kit": {
+      "reason": "Frontend-only; no server exposure. Same version constraint as @mysten/sui.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@mysten/wallet-standard": {
+      "reason": "Transitive of @mysten/dapp-kit. Client-side wallet detection.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@mysten/zklogin": {
+      "reason": "Used only in optional zkLogin flow (unused by community pool). If we activate zkLogin at scale, re-review.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@mysten/zksend": {
+      "reason": "Transitive; not directly invoked. Track upstream fix.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    },
+    "@modelcontextprotocol/sdk": {
+      "reason": "Anthropic MCP SDK — ReDoS in the pattern parser. We do not accept untrusted MCP input at runtime.",
+      "reviewedBy": "ashishregmi2017@gmail.com",
+      "reviewedAt": "2026-06-30",
+      "expires": "2026-09-28",
+      "ticket": null
+    }
+  }
+}
