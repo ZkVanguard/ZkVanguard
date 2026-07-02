@@ -170,11 +170,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
     apiLatencyMs,
   };
 
+  // Drift-close inline when venue is healthy — gives 5-min reactivity to
+  // signal flips instead of waiting for the 30-min sui-community-pool tick.
+  // ETH SHORT bleeding during a bullish rally was the concrete case this
+  // fixes: agents detected the flip within 2 min but couldn't act until
+  // Step 7.9 of the slow cron. Now bluefin-health runs Step 7.9 every 5min
+  // whenever the venue is up. Skipped on DEGRADED/UNREACHABLE because
+  // closing during venue distress compounds the problem.
+  let driftResult: { checked: number; drifted: number; closed: number; skipped: number; errors: number } | null = null;
   if (status === 'HEALTHY') {
-    logger.info('[BluefinHealth] ✅ venue healthy', { ...signals });
+    try {
+      const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
+      const bf = BluefinService.getInstance();
+      driftResult = await checkAndCloseDrifts('sui', bf);
+      if (driftResult.drifted > 0) {
+        logger.info('[BluefinHealth] Drift monitor cycle', { driftResult });
+      }
+    } catch (driftErr) {
+      logger.warn('[BluefinHealth] Drift-close threw (non-critical)', {
+        error: driftErr instanceof Error ? driftErr.message : String(driftErr),
+      });
+    }
+  }
+
+  if (status === 'HEALTHY') {
+    logger.info('[BluefinHealth] ✅ venue healthy', { ...signals, driftResult });
     return NextResponse.json({
       success: true, ranAt, network, attempted: true,
-      status, signals, consecutiveDegraded: 0, deRiskTriggered: false,
+      status, signals, consecutiveDegraded: 0, deRiskTriggered: false, driftResult,
     });
   }
 

@@ -100,16 +100,45 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       portfolioId: -2,
     });
 
+    // IMMEDIATE drift-close on signal flip. Refreshing directives is only
+    // half the fix — the flipped position also needs to close NOW, not on
+    // the next 30-min sui-cron tick. Wraps in try/catch so a BlueFin
+    // outage never breaks the directive refresh.
+    let driftResult: { checked: number; drifted: number; closed: number; skipped: number; errors: number } | null = null;
+    try {
+      const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+      if (adminKey && directionFlipped) {
+        const { BluefinService } = await import('@/lib/services/sui/BluefinService');
+        const bf = BluefinService.getInstance();
+        // Initialize if needed — BluefinService is a singleton but the
+        // signal-tick cron often lives in a fresh Lambda so the shared
+        // instance may not be booted.
+        await bf.initialize(adminKey, 'mainnet').catch(() => {});
+        const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
+        driftResult = await checkAndCloseDrifts('sui', bf);
+        if (driftResult.drifted > 0) {
+          logger.info('[AgentSignalTick] flip-triggered drift close', driftResult);
+        }
+      }
+    } catch (driftErr) {
+      logger.warn('[AgentSignalTick] drift-close on flip failed (non-critical)', {
+        error: driftErr instanceof Error ? driftErr.message : String(driftErr),
+      });
+    }
+
     // Discord ping — operators want to see the signal-driven refresh
     try {
       const { notifyDiscord } = await import('@/lib/utils/discord-notify');
       const headline = directionFlipped
         ? `🔄 Signal FLIP ${last?.direction} → ${current.direction} (conf ${current.confidence.toFixed(0)}%)`
         : `📈 STRONG signal ${current.direction} emerged (conf ${current.confidence.toFixed(0)}%, up from ${last?.confidence?.toFixed(0) ?? '?'}%)`;
+      const driftLine = driftResult && driftResult.closed > 0
+        ? ` · closed ${driftResult.closed} drifted position(s)`
+        : '';
       await notifyDiscord(
-        `${headline} — agent directives refreshed. Risk=${cycle.riskScore ?? '?'} hedge-recs=${cycle.hedgeRecommendations ?? 0}.`,
+        `${headline} — agent directives refreshed${driftLine}. Risk=${cycle.riskScore ?? '?'} hedge-recs=${cycle.hedgeRecommendations ?? 0}.`,
         directionFlipped ? 'WARN' : 'INFO',
-        { directionFlipped, strongEmerged, cycle },
+        { directionFlipped, strongEmerged, cycle, driftResult },
       ).catch(() => {});
     } catch { /* best-effort */ }
 
@@ -122,6 +151,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       confidence: current.confidence,
       cycleDurationMs: cycle.durationMs,
       cycleRiskScore: cycle.riskScore,
+      driftResult,
     });
   } catch (e) {
     logger.error('[AgentSignalTick] failed', { error: e instanceof Error ? e.message : String(e) });
