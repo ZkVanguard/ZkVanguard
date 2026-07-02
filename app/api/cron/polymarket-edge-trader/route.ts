@@ -160,7 +160,8 @@ interface EdgeResult {
     | 'no-edge'
     | 'signal-flip-exit'
     | 'slippage-exit'
-    | 'daily-cap';
+    | 'daily-cap'
+    | 'skip-asset-too-small-nav';
   trade?: {
     symbol: string;
     asset: SupportedAsset;
@@ -653,7 +654,52 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const notionalUsd = stakeUsd * LEVERAGE;
+    // ── MIN-QTY-AWARE STAKE SIZING ──────────────────────────────────
+    // The trader was making ZERO trades in 30 days despite live signals
+    // because the base $5 stake × 3x lev / asset_price produced a
+    // sub-minQty quantity that snapped to 0. Root cause: stake calc
+    // didn't account for BlueFin's per-symbol minQty. Fix: auto-bump
+    // stake to clear minQty × price × buffer / leverage. If required
+    // stake exceeds MAX_STAKE_PCT_OF_FREE, skip this asset — pool NAV
+    // is too small to hedge it responsibly.
+    const OPEN_BUFFER = 1.5;             // matches BluefinService dust guard
+    const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = 0.7; // hard cap: don't spend >70% of free collateral clearing minQty
+    const actualMinQty = ASSET_STEP[asset]; // ASSET_STEP already stores minQty
+    const minNotionalToClearFloor = actualMinQty * refPrice * OPEN_BUFFER;
+    const minStakeToClearFloor = minNotionalToClearFloor / LEVERAGE;
+
+    let effectiveStake = stakeUsd;
+    if (stakeUsd < minStakeToClearFloor) {
+      const requiredStakePct = minStakeToClearFloor / free;
+      if (requiredStakePct > MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY) {
+        logger.warn('[PolymarketEdge] skipping asset — required stake exceeds safe pct of free', {
+          asset, symbol,
+          computedStake: stakeUsd,
+          minStakeToClearFloor,
+          freeCollateral: free,
+          requiredPct: (requiredStakePct * 100).toFixed(1),
+          maxPct: MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100,
+        });
+        return NextResponse.json({
+          success: true,
+          ranAt,
+          attempted: true,
+          action: 'skip-asset-too-small-nav',
+          stats: safeStats,
+          daily,
+          reason: `${asset}: needs $${minStakeToClearFloor.toFixed(2)} stake to clear minQty ($${(minStakeToClearFloor * LEVERAGE).toFixed(2)} notional at ${LEVERAGE}x); would be ${(requiredStakePct * 100).toFixed(1)}% of free $${free.toFixed(2)} (max ${MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100}%). Pool NAV too small for ${asset}.`,
+        });
+      }
+      logger.info('[PolymarketEdge] auto-bumping stake to clear minQty', {
+        asset, originalStake: stakeUsd.toFixed(2),
+        bumpedStake: minStakeToClearFloor.toFixed(2),
+        originalPct: (stakeUsd / free * 100).toFixed(1),
+        bumpedPct: (minStakeToClearFloor / free * 100).toFixed(1),
+      });
+      effectiveStake = minStakeToClearFloor;
+    }
+
+    const notionalUsd = effectiveStake * LEVERAGE;
     const rawQty = notionalUsd / refPrice;
     const sizeQty = quantize(rawQty, ASSET_STEP[asset]);
 
