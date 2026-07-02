@@ -37,6 +37,68 @@ async function handle(req: NextRequest, dryRun: boolean) {
   // (legacy behavior preserved).
   const symbolFilter = (new URL(req.url).searchParams.get('symbol') || '').trim().toUpperCase();
 
+  // Optional ?mode=drifted — close only positions the AgentTradeGuard would
+  // now reject re-opening (signal-flipped misalignments). Delegates to the
+  // same position-drift-monitor the crons use. Folded into this route so
+  // we don't add a new serverless function slot (Vercel Hobby 12-cap).
+  const mode = (new URL(req.url).searchParams.get('mode') || '').trim().toLowerCase();
+  if (mode === 'drifted') {
+    try {
+      const bf = BluefinService.getInstance();
+      if (dryRun) {
+        // Dry-run: enumerate what checkBeforeTrade would decide per active hedge
+        const { query } = await import('@/lib/db/postgres');
+        const rows = await query<{
+          market: string; side: string; notional_value: string;
+        }>(
+          `SELECT market, side, notional_value FROM hedges
+            WHERE chain='sui' AND status='active' AND COALESCE(notional_value,0) >= 1
+              AND market LIKE '%-PERP'`,
+        );
+        const { checkBeforeTrade } = await import('@/lib/services/agents/agent-trade-guard');
+        const plan = [];
+        for (const r of rows) {
+          const asset = r.market.replace(/-PERP$/i, '').toUpperCase();
+          const side = (r.side || '').toUpperCase() as 'LONG' | 'SHORT';
+          const notionalUsd = Number(r.notional_value);
+          const decision = await checkBeforeTrade({
+            chain: 'sui', asset, intendedSide: side, notionalUsd,
+            agentSource: 'admin-drift-dry-run',
+          });
+          plan.push({
+            symbol: r.market, side, notionalUsd,
+            wouldClose: !decision.approved && (decision.stage === 'agent-directive' || decision.stage === 'risk-gate'),
+            agentSide: decision.agentSide,
+            agentConfidence: decision.agentConfidence,
+            stage: decision.stage,
+            reason: decision.reason,
+          });
+        }
+        return NextResponse.json({
+          success: true, dryRun: true, mode: 'drifted',
+          activeHedgeCount: rows.length,
+          plan,
+          durationMs: Date.now() - startTime,
+        });
+      }
+      const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
+      const result = await checkAndCloseDrifts('sui', bf);
+      logger.info('[close-bluefin-positions?mode=drifted] complete', result);
+      return NextResponse.json({
+        success: true, dryRun: false, mode: 'drifted',
+        ...result,
+        durationMs: Date.now() - startTime,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logger.error('[close-bluefin-positions?mode=drifted] failed', { error: msg });
+      return NextResponse.json({
+        success: false, mode: 'drifted', error: msg,
+        durationMs: Date.now() - startTime,
+      }, { status: 500 });
+    }
+  }
+
   try {
     const bf = BluefinService.getInstance();
     const beforeFree = await bf.getBalance();
