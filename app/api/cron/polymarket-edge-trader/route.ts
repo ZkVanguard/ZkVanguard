@@ -90,17 +90,37 @@ const DAILY_LOSS_CAP_USD = Number(
   process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
 );
 
-type SupportedAsset = 'BTC' | 'ETH';
-const SUPPORTED_ASSETS: SupportedAsset[] = ['BTC', 'ETH'];
+// Multi-asset universe — was 'BTC','ETH' only. Expanded per audit:
+//   BTC: minQty $60 notional (needs $30 stake at 3x lev). Traded when pool ≥ $200.
+//   ETH: minQty $16 notional (needs $8 stake at 3x). Traded when pool ≥ $50.
+//   SUI: minQty $0.72 notional (needs $0.36 stake at 3x). Traded at any NAV. ← THE PRIZE
+//   SOL: minQty $14 notional (needs $7 stake at 3x). Traded when pool ≥ $40.
+// The trader picks the highest-scoring viable signal each tick. Assets whose
+// required stake exceeds MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY (70% of free) are
+// skipped for that tick. Env override:
+//   POLYMARKET_EDGE_ASSETS=BTC,ETH,SUI,SOL   ← default
+type SupportedAsset = 'BTC' | 'ETH' | 'SUI' | 'SOL';
+const DEFAULT_ASSETS: SupportedAsset[] = ['BTC', 'ETH', 'SUI', 'SOL'];
+const ENV_ASSETS = (process.env.POLYMARKET_EDGE_ASSETS || '').trim();
+const SUPPORTED_ASSETS: SupportedAsset[] = ENV_ASSETS
+  ? ENV_ASSETS.split(',').map(s => s.trim().toUpperCase() as SupportedAsset)
+      .filter(a => ['BTC', 'ETH', 'SUI', 'SOL'].includes(a))
+  : DEFAULT_ASSETS;
 
 // Per-asset min order size (BlueFin step). Mirrors MARKET_CONFIG in BluefinService.
 const ASSET_MIN_QTY: Record<SupportedAsset, number> = {
   BTC: 0.001,
   ETH: 0.01,
+  SUI: 1,
+  SOL: 0.1,
 };
+// Per-BlueFin minQty. Both step size AND min quantity (BlueFin uses them
+// interchangeably). See lib/services/sui/BluefinService.ts BLUEFIN_PAIRS.
 const ASSET_STEP: Record<SupportedAsset, number> = {
   BTC: 0.001,
   ETH: 0.01,
+  SUI: 1,
+  SOL: 0.1,
 };
 
 // ── Cron state keys ────────────────────────────────────────────────────────
@@ -726,11 +746,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    // Idempotency: refuse if any of our supported perps already has a position.
+    // Idempotency: refuse if THIS asset's perp already has a position.
+    // Previously blocked ANY supported perp — meaning an open ETH trade
+    // blocked SUI trades even though they're independent bets. Per-asset
+    // check unblocks concurrent multi-market opportunities.
     const positionsPre = await bf.getPositions().catch(() => [] as BluefinPosition[]);
-    const conflict = SUPPORTED_ASSETS.some((a) => findActivePosition(positionsPre, `${a}-PERP`));
+    const conflict = !!findActivePosition(positionsPre, symbol);
     if (conflict) {
-      logger.warn('[PolymarketEdge] BTC/ETH-PERP position already exists — skipping new entry');
+      logger.warn(`[PolymarketEdge] ${symbol} position already exists — skipping new entry`);
       return NextResponse.json({
         success: true,
         ranAt,
@@ -738,7 +761,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         action: 'no-edge',
         stats: safeStats,
         daily,
-        reason: 'pre-existing perp position',
+        reason: `pre-existing ${symbol} position (other assets can still trade)`,
       });
     }
 

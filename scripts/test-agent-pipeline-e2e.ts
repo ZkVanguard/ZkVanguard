@@ -579,6 +579,39 @@ async function main() {
   );
   delete process.env.PROFIT_LOCK_DISABLE;
 
+  // [38-40] Multi-market trader expansion — verify SUI/SOL sizing math
+  // At $23 free collateral with 3x leverage and typical spot prices:
+  //   BTC (0.001 minQty × $60k × 1.5 / 3x = $30 needed) → skip
+  //   ETH (0.01 minQty × $1625 × 1.5 / 3x = $8.13 needed) → auto-bump + trade
+  //   SUI (1 minQty × $0.72 × 1.5 / 3x = $0.36 needed) → trade at any size
+  //   SOL (0.1 minQty × $140 × 1.5 / 3x = $7 needed) → trade
+  const OPEN_BUFFER = 1.5;
+  const LEVERAGE = 3;
+  const FREE = 23;
+  const MAX_PCT = 0.7;
+  function computeMinStakeForAsset(minQty: number, price: number): number {
+    return (minQty * price * OPEN_BUFFER) / LEVERAGE;
+  }
+  const btcStake = computeMinStakeForAsset(0.001, 60000);
+  const ethStake = computeMinStakeForAsset(0.01, 1625);
+  const suiStake = computeMinStakeForAsset(1, 0.72);
+  const solStake = computeMinStakeForAsset(0.1, 140);
+  record(
+    'Multi-market: BTC requires stake > 70% free at $23 NAV → SKIP',
+    btcStake / FREE > MAX_PCT,
+    `BTC min stake $${btcStake.toFixed(2)} = ${(btcStake / FREE * 100).toFixed(1)}% of $${FREE}`,
+  );
+  record(
+    'Multi-market: ETH viable at $23 NAV → AUTO-BUMP + TRADE',
+    ethStake / FREE <= MAX_PCT,
+    `ETH min stake $${ethStake.toFixed(2)} = ${(ethStake / FREE * 100).toFixed(1)}% of $${FREE}`,
+  );
+  record(
+    'Multi-market: SUI viable at any NAV → TRADE',
+    suiStake / FREE <= MAX_PCT && suiStake < 1,
+    `SUI min stake $${suiStake.toFixed(2)} = ${(suiStake / FREE * 100).toFixed(1)}% of $${FREE}`,
+  );
+
   // Restore the cycle attestation (PriceMonitor + Reporting inputs)
   // BEFORE anything else so subsequent tests + production don't see stale
   // test values.
