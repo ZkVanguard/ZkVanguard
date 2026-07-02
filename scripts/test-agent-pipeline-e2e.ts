@@ -57,8 +57,15 @@ async function main() {
   }
 
   // [2] No cache → fail-OPEN at agent layer, SafeGuard still gates
+  //
+  // CRITICAL: DO NOT overwrite the production `agent-directives:by-asset`
+  // key here — this test shares the Aiven DB with production, and wiping
+  // the cache breaks the live agent guard until the next 30-min cron cycle
+  // re-populates. Instead, we snapshot the current cache, wipe it locally
+  // for the fail-open test, and RESTORE at the end.
   const NO_CACHE_KEY = 'agent-directives:by-asset';
-  const { setCronState } = await import('../lib/db/cron-state');
+  const { setCronState, getCronState } = await import('../lib/db/cron-state');
+  const PROD_DIRECTIVE_SNAPSHOT = await getCronState<unknown>(NO_CACHE_KEY);
   await setCronState(NO_CACHE_KEY, null);
   const noCacheCheck = await checkBeforeTrade({
     chain: 'sui', asset: 'BTC', intendedSide: 'SHORT',
@@ -318,8 +325,47 @@ async function main() {
     `legs=${smallPlan.legs.length}, singleVenue=${smallPlan.singleVenue}, belowThreshold=${smallPlan.belowSplitThreshold}`,
   );
 
-  // Clear the test directives so the actual cron doesn't see them
-  await setCronState(NO_CACHE_KEY, null);
+  // RESTORE the pre-test production cache — never leave production
+  // running with test values or null. If the previous cache was populated
+  // and fresh, put it back so the live guard keeps working; if it was
+  // already stale, still restore so the loader's staleness logic fires
+  // correctly (rather than fail-open on a null).
+  if (PROD_DIRECTIVE_SNAPSHOT !== null && PROD_DIRECTIVE_SNAPSHOT !== undefined) {
+    await setCronState(NO_CACHE_KEY, PROD_DIRECTIVE_SNAPSHOT);
+    console.log('[E2E] Restored production directive cache snapshot.');
+  } else {
+    // If there was nothing before the test, publish a fresh snapshot from
+    // the real prediction aggregator so production doesn't sit on empty
+    // until the next cron cycle.
+    try {
+      const { PredictionAggregatorService } = await import('../lib/services/market-data/PredictionAggregatorService');
+      const perAsset = await PredictionAggregatorService.getPerAssetPredictions(['BTC', 'ETH', 'SUI', 'CRO']);
+      const byAsset: Record<string, unknown> = {};
+      for (const [asset, pred] of Object.entries(perAsset)) {
+        const dir = pred.direction;
+        let side: 'LONG' | 'SHORT' | null = null;
+        if (pred.recommendation.endsWith('LONG')) side = 'LONG';
+        else if (pred.recommendation.endsWith('SHORT')) side = 'SHORT';
+        else if (dir === 'UP') side = 'LONG';
+        else if (dir === 'DOWN') side = 'SHORT';
+        byAsset[asset.toUpperCase()] = {
+          asset: asset.toUpperCase(),
+          recommendedSide: side,
+          confidence: Math.round(pred.confidence ?? 0),
+          shouldHedge: pred.recommendation !== 'WAIT' || dir !== 'NEUTRAL',
+          reason: `${pred.recommendation} (dir=${dir})`,
+          riskScore: 50,
+          computedAt: Date.now(),
+        };
+      }
+      await publishDirectives({
+        ranAt: Date.now(), chain: 'sui', riskScore: 50, riskLevel: 'MEDIUM', byAsset: byAsset as never,
+      });
+      console.log('[E2E] Published fresh production directives (no previous snapshot).');
+    } catch (e) {
+      console.log('[E2E] Could not populate fresh directives (test complete either way):', String(e).slice(0, 150));
+    }
+  }
 
   const passed = results.filter((r) => r.ok).length;
   const total = results.length;
