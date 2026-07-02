@@ -395,20 +395,55 @@ export class ReportingAgent extends BaseAgent {
       else if (totalRisk >= 60) riskLevel = 'HIGH';
       else if (totalRisk >= 40) riskLevel = 'MEDIUM';
 
-      // Generate ZK proofs if requested
+      // Generate ZK proofs if requested. RiskReport aggregates over a
+      // reporting period, so the canonical binding is built from the
+      // same period-aggregated numbers rather than a live snapshot —
+      // portfolioValueUsdc = 0 signals "period-report" (no NAV
+      // attestation), and the base score is recomputed to keep the
+      // Python assertion honest.
       let zkProofs: string[] = [];
       if (includeZKProofs) {
         try {
-          const { proofGenerator } = await import('../../zk/prover/ProofGenerator');
-          const proof = await proofGenerator.generateRiskProof({
-            portfolioId: parseInt(portfolioId, 10) || 0,
-            timestamp: new Date(),
-            totalRisk,
-            volatility: avgVolatility,
-            exposures: assetRisks.map(r => ({ asset: r.asset, exposure: r.allocation, contribution: r.contribution })),
-            recommendations: [],
-            marketSentiment: 'neutral',
-          });
+          const [{ proofGenerator }, { computeBaseRiskScore, SENTIMENT_CODE }] = await Promise.all([
+            import('../../zk/prover/ProofGenerator'),
+            import('../../zk/prover/riskCanonical'),
+          ]);
+          const periodPortfolioId = parseInt(portfolioId, 10) || 0;
+          const nowMs = Date.now();
+          const canonicalExposures = assetRisks.map(r => ({
+            asset: r.asset,
+            // allocation + contribution are already in "percentage points".
+            exposureBps: Math.round(r.allocation * 100),
+            contributionBps: Math.round(r.contribution * 100),
+          }));
+          const volatilityBps = Math.round(avgVolatility * 10_000);
+          const baseRiskScore = computeBaseRiskScore(volatilityBps, canonicalExposures);
+          const canonical = {
+            version: 1 as const,
+            portfolioId: periodPortfolioId,
+            chain: 'report' as const,
+            timestampMs: nowMs,
+            portfolioValueUsdc: 0,
+            volatilityBps,
+            exposures: canonicalExposures,
+            sentimentCode: SENTIMENT_CODE.neutral,
+            baseRiskScore,
+            aiRiskScore: null,
+            totalRisk: Math.round(totalRisk),
+            threshold: 100,
+          };
+          const proof = await proofGenerator.generateRiskProof(
+            {
+              portfolioId: periodPortfolioId,
+              timestamp: new Date(nowMs),
+              totalRisk,
+              volatility: avgVolatility,
+              exposures: assetRisks.map(r => ({ asset: r.asset, exposure: r.allocation, contribution: r.contribution })),
+              recommendations: [],
+              marketSentiment: 'neutral',
+            },
+            canonical,
+          );
           zkProofs = [proof.proofHash];
         } catch (error) {
           logger.warn('Failed to generate ZK proof for risk report', { error });

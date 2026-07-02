@@ -15,6 +15,18 @@ import { AgentTask, AgentMessage, RiskAnalysis, TaskResult } from '@shared/types
 import { ethers } from 'ethers';
 import type { FiveMinBTCSignal, SignalEvent } from '../../lib/services/market-data/Polymarket5MinService';
 import { AIMarketIntelligence, type AIMarketContext } from '../../lib/services/AIMarketIntelligence';
+import type { CanonicalRiskInputs } from '../../zk/prover/riskCanonical';
+
+/**
+ * Compliance threshold the STARK proof asserts `totalRisk` stays below.
+ * Env override: RISK_ZK_THRESHOLD (0..100). Default 100 = permissive
+ * (proof always asserts a true claim as long as the risk math is
+ * honest). Set lower to force circuit breaker on high-risk states.
+ */
+const RISK_THRESHOLD_DEFAULT = Math.min(
+  100,
+  Math.max(0, Number(process.env.RISK_ZK_THRESHOLD ?? 100)),
+);
 
 /**
  * Risk Agent specializing in risk analysis and assessment
@@ -206,6 +218,7 @@ export class RiskAgent extends BaseAgent {
 
     // 2. Use AI to analyze risk and generate intelligent recommendations
     let totalRisk = baseRiskScore;
+    let aiRiskScoreForBinding: number | null = null;
     let aiRecommendations: string[] = [];
     
     try {
@@ -256,6 +269,7 @@ REC3: [third recommendation]`;
       if (scoreMatch) {
         const aiRiskScore = Math.min(100, Math.max(0, parseInt(scoreMatch[1], 10)));
         totalRisk = Math.min(100, Math.round((baseRiskScore + aiRiskScore) / 2));
+        aiRiskScoreForBinding = aiRiskScore;
         logger.info('🤖 AI adjusted risk score', { base: baseRiskScore, ai: aiRiskScore, final: totalRisk });
       }
       
@@ -283,9 +297,36 @@ REC3: [third recommendation]`;
       aiEnhanced: aiRecommendations.length > 0,
     });
 
-    // Generate ZK proof for risk calculation
-    const zkProofHash = await this.generateRiskProof(analysis);
-    analysis.zkProofHash = zkProofHash;
+    // Build the canonical binding tuple — everything the STARK proof
+    // needs to prove `f(inputs) → totalRisk`. Portfolio value comes
+    // from the resolved portfolioData; before this refactor it was
+    // hardcoded to $10M in ProofGenerator, so proofs were meaningless
+    // as a NAV attestation.
+    const { SENTIMENT_CODE } = await import('@shared/../zk/prover/riskCanonical');
+    const canonicalInputs = {
+      version: 1 as const,
+      portfolioId,
+      chain,
+      timestampMs: analysis.timestamp.getTime(),
+      portfolioValueUsdc: Math.round((portfolioData?.totalValue ?? 0) * 100),
+      volatilityBps: Math.round(volatility * 10_000),
+      exposures: exposures.map((e) => ({
+        asset: e.asset,
+        // exposure + contribution are already in "percentage points" (0..100),
+        // so ×100 gets us 2-decimal-place basis-point precision.
+        exposureBps: Math.round(e.exposure * 100),
+        contributionBps: Math.round(e.contribution * 100),
+      })),
+      sentimentCode: SENTIMENT_CODE[sentiment],
+      baseRiskScore: Math.round(baseRiskScore),
+      aiRiskScore: aiRiskScoreForBinding,
+      totalRisk: Math.round(totalRisk),
+      threshold: RISK_THRESHOLD_DEFAULT,
+    };
+
+    const { proofHash, binding } = await this.generateRiskProof(analysis, canonicalInputs);
+    analysis.zkProofHash = proofHash;
+    if (binding) analysis.zkBinding = binding;
 
     return analysis;
   }
@@ -911,30 +952,41 @@ REC3: [third recommendation]`;
   }
 
   /**
-   * Generate ZK proof for risk calculation using authentic STARK system
+   * Generate a bound ZK-STARK proof for the risk calculation. The
+   * canonical inputs pin every numeric fed into the risk formula — the
+   * Python prover recomputes the input hash and derived base score and
+   * refuses to generate a proof if anything mismatches.
+   *
+   * Returns both `proofHash` (short fingerprint for downstream
+   * attribution) and `binding` (hashes to attach to `RiskAnalysis`).
+   * `binding` is `undefined` only when the Python prover is offline or
+   * threw — in that case we return an empty proofHash rather than
+   * fabricating one.
    */
-  private async generateRiskProof(analysis: RiskAnalysis): Promise<string> {
+  private async generateRiskProof(
+    analysis: RiskAnalysis,
+    canonical: CanonicalRiskInputs,
+  ): Promise<{ proofHash: string; binding?: RiskAnalysis['zkBinding'] }> {
     logger.info('Generating ZK-STARK proof for risk calculation', {
       agentId: this.id,
       portfolioId: analysis.portfolioId,
+      canonicalVersion: canonical.version,
     });
 
     try {
-      // Import proof generator
       const { proofGenerator } = await import('@shared/../zk/prover/ProofGenerator');
-
-      // Generate STARK proof
-      const zkProof = await proofGenerator.generateRiskProof(analysis);
+      const zkProof = await proofGenerator.generateRiskProof(analysis, canonical);
 
       logger.info('ZK-STARK proof generated successfully', {
         agentId: this.id,
         portfolioId: analysis.portfolioId,
         proofHash: zkProof.proofHash.substring(0, 16) + '...',
+        inputsHash: zkProof.binding?.inputsHash.substring(0, 16) + '...',
         protocol: zkProof.protocol,
         generationTime: zkProof.generationTime,
       });
 
-      return zkProof.proofHash;
+      return { proofHash: zkProof.proofHash, binding: zkProof.binding };
     } catch (error) {
       logger.error('ZK-STARK proof generation failed', {
         error,
@@ -942,8 +994,9 @@ REC3: [third recommendation]`;
         portfolioId: analysis.portfolioId,
       });
 
-      // Return empty proof hash — do not fabricate a fake proof
-      return '';
+      // Do not fabricate a proof. Caller sees empty proofHash + no
+      // binding, and downstream verifiers know to reject.
+      return { proofHash: '' };
     }
   }
 }
