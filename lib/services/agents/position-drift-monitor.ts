@@ -56,6 +56,8 @@ interface BluefinLike {
     executionPrice?: number;
     fees?: number;
     error?: string;
+    /** DUST_LOCKED = position size < minQty at venue level (see BluefinHedgeResult.code) */
+    code?: string;
   }>;
   getPositions(): Promise<Array<{ symbol: string; side: 'LONG' | 'SHORT'; size: number }>>;
 }
@@ -240,18 +242,26 @@ export async function checkAndCloseDrifts(
     }
 
     if (!closeResult.success) {
+      // Distinguish structured DUST_LOCKED from other close failures.
+      // DUST_LOCKED means the position is protocol-trapped and no code
+      // change can fix it — needs BlueFin support. Log as SKIPPED_SMALL
+      // so Discord noise doesn't accumulate every 5min.
+      const isDustLocked = closeResult.code === 'DUST_LOCKED';
       result.actions.push({
         symbol, side: currentSide, notionalUsd,
-        action: 'CLOSE_FAILED',
+        action: isDustLocked ? 'SKIPPED_SMALL' : 'CLOSE_FAILED',
         reason: closeResult.error ?? 'close returned !success',
       });
       await recordAgentDecision({
         chain, agent: 'drift-monitor', asset,
         intendedSide: currentSide, agentApproved: false,
         agentSide: drift.agentSide, agentConfidence: drift.agentConfidence,
-        agentReason: `Drift-close failed: ${(closeResult.error ?? 'unknown').slice(0, 150)}`,
+        agentReason: isDustLocked
+          ? `DUST_LOCKED: ${(closeResult.error ?? 'unknown').slice(0, 200)}`
+          : `Drift-close failed: ${(closeResult.error ?? 'unknown').slice(0, 150)}`,
         notionalUsd, wasActedOn: false, hedgeOrderId: h.order_id ?? null,
       }).catch(() => {});
+      if (isDustLocked) result.skipped++;
       continue;
     }
 

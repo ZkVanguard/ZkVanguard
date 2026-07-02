@@ -134,6 +134,27 @@ export interface BluefinHedgeResult {
   filledSize?: number;
   fees?: number;
   error?: string;
+  /**
+   * Machine-readable error code for callers that want to branch on failure
+   * category instead of parsing the error string. Values:
+   *   - 'DUST_LOCKED'         — position size < minQty; unclosable via reduce
+   *   - 'DUST_RISK'           — open size below OPEN_MIN_QTY_BUFFER × minQty
+   *   - 'BELOW_MIN_QTY'       — pre-snap size < minQty
+   *   - 'BELOW_MIN_QTY_SNAPPED'— post-snap size < minQty
+   *   - 'LEVERAGE_EXCEEDED'   — leverage > maxLeverage for symbol
+   *   - 'NO_MARKET_PRICE'     — market data fetch failed
+   *   - 'NO_POSITION'         — close called with nothing on venue
+   *   - 'VENUE_ERROR'         — non-classified BlueFin API failure
+   */
+  code?: 'DUST_LOCKED' | 'DUST_RISK' | 'BELOW_MIN_QTY' | 'BELOW_MIN_QTY_SNAPPED'
+       | 'LEVERAGE_EXCEEDED' | 'NO_MARKET_PRICE' | 'NO_POSITION' | 'VENUE_ERROR';
+  /** Structured dust classification — populated when code is DUST_LOCKED / DUST_RISK. */
+  dust?: {
+    positionSize: number;
+    minQty: number;
+    stepSize: number;
+    stepMultiples: number;
+  };
   timestamp: number;
   /** Raw BlueFin API response — only populated on close failures for diagnosis. */
   rawResponse?: unknown;
@@ -937,14 +958,56 @@ export class BluefinService {
         throw new Error(`Leverage ${params.leverage}x exceeds max ${pair.maxLeverage}x for ${params.symbol}`);
       }
 
+      // DUST3: prevent creating positions that will immediately become dust.
+      // Opening at exactly minQty leaves no margin — a single partial fill,
+      // funding accrual, or PnL normalization can drop the position size
+      // below minQty and trap it as DUST_LOCKED. Reject sizes below 1.5x
+      // minQty so fresh positions have a buffer.
+      //
+      // Set BLUEFIN_ALLOW_DUST_RISK_OPEN=1 to bypass (for one-off orders
+      // where the operator knowingly accepts the dust exposure).
+      const OPEN_MIN_QTY_BUFFER = 1.5;
+      const bypass = (process.env.BLUEFIN_ALLOW_DUST_RISK_OPEN ?? '') === '1';
+      if (!bypass && params.size < pair.minQuantity * OPEN_MIN_QTY_BUFFER) {
+        logger.warn('[BlueFin] openHedge: DUST_RISK — size below 1.5x minQty buffer', {
+          symbol: params.symbol, size: params.size,
+          minQty: pair.minQuantity, threshold: pair.minQuantity * OPEN_MIN_QTY_BUFFER,
+        });
+        return {
+          success: false,
+          hedgeId,
+          error: `Size ${params.size} < 1.5× minQty ${pair.minQuantity} for ${params.symbol} — would risk creating dust-locked position. Set BLUEFIN_ALLOW_DUST_RISK_OPEN=1 to bypass.`,
+          code: 'DUST_RISK',
+          dust: {
+            positionSize: params.size,
+            minQty: pair.minQuantity,
+            stepSize: pair.stepSize,
+            stepMultiples: params.size / pair.stepSize,
+          },
+          timestamp: Date.now(),
+        };
+      }
+
       // Validate minimum order size and snap to step size
       if (params.size < pair.minQuantity) {
-        throw new Error(`Order size ${params.size} below minimum ${pair.minQuantity} for ${params.symbol}`);
+        return {
+          success: false,
+          hedgeId,
+          error: `Order size ${params.size} below minimum ${pair.minQuantity} for ${params.symbol}`,
+          code: 'BELOW_MIN_QTY',
+          timestamp: Date.now(),
+        };
       }
       // Round down to nearest step size to avoid rejection
       const steppedSize = snapToStepSize(params.size, pair.stepSize);
       if (steppedSize < pair.minQuantity) {
-        throw new Error(`Order size ${params.size} rounds to ${steppedSize} which is below minimum ${pair.minQuantity} for ${params.symbol}`);
+        return {
+          success: false,
+          hedgeId,
+          error: `Order size ${params.size} rounds to ${steppedSize} which is below minimum ${pair.minQuantity} for ${params.symbol}`,
+          code: 'BELOW_MIN_QTY_SNAPPED',
+          timestamp: Date.now(),
+        };
       }
       if (steppedSize !== params.size) {
         logger.info(`[BlueFin] Snapped order size ${params.size} → ${steppedSize} (step=${pair.stepSize}) for ${params.symbol}`);
@@ -1385,7 +1448,27 @@ export class BluefinService {
       const stepSize = pair?.stepSize ?? 0.001;
       const closeSize = snapToStepSize(rawCloseSize, stepSize);
       if (closeSize <= 0 || closeSize < (pair?.minQuantity ?? 0)) {
-        throw new Error(`Close size ${rawCloseSize} snapped to ${closeSize} below minQty ${pair?.minQuantity} for ${params.symbol} — position too small to close on BlueFin`);
+        // DUST2: structured error so callers can distinguish "protocol-locked
+        // dust position" from other close failures. See lib/services/sui/
+        // dust-manager.ts for the full classification semantics.
+        const dustInfo = {
+          positionSize: rawCloseSize,
+          minQty: pair?.minQuantity ?? 0,
+          stepSize,
+          stepMultiples: pair?.stepSize ? rawCloseSize / pair.stepSize : 0,
+        };
+        logger.warn('[BlueFin] closeHedge: DUST_LOCKED — position below minQty', {
+          symbol: params.symbol, ...dustInfo, snappedTo: closeSize,
+        });
+        return {
+          success: false,
+          hedgeId,
+          error: `Position size ${rawCloseSize} < minQty ${pair?.minQuantity} for ${params.symbol} — cannot close via reduce order (dust-locked at venue level)`,
+          code: 'DUST_LOCKED',
+          dust: dustInfo,
+          preCloseSize: rawCloseSize,
+          timestamp: Date.now(),
+        };
       }
       const closeSide = position.side === 'LONG' ? 'SHORT' : 'LONG';
       // Snapshot the pre-close size so we can verify the position actually

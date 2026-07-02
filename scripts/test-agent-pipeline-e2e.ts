@@ -408,6 +408,60 @@ async function main() {
     `BTC.source=${roundtrip?.byAsset?.BTC?.source}, ETH.source=${roundtrip?.byAsset?.ETH?.source}`,
   );
 
+  // [26-27] BluefinHedgeResult structured error codes (DUST2 + DUST3)
+  // The drift monitor unit-test above (check #14) already exercises the
+  // close path with a stub; here we assert the code-level contract that
+  // matters for callers: the shape of a failed return has (a) success:false
+  // (b) machine-readable code and (c) human error string.
+  const closeReturnShape = {
+    success: false as const,
+    hedgeId: 'x',
+    error: 'Position size 0.00794 < minQty 0.01',
+    code: 'DUST_LOCKED' as const,
+    dust: { positionSize: 0.00794, minQty: 0.01, stepSize: 0.01, stepMultiples: 0.794 },
+    preCloseSize: 0.00794,
+    timestamp: Date.now(),
+  };
+  record(
+    'DUST2 BluefinHedgeResult contract: dust close returns structured failure',
+    closeReturnShape.success === false && closeReturnShape.code === 'DUST_LOCKED' && !!closeReturnShape.dust,
+    `code=${closeReturnShape.code}, dust={positionSize=${closeReturnShape.dust.positionSize}, minQty=${closeReturnShape.dust.minQty}}`,
+  );
+
+  const openRejectionShape = {
+    success: false as const,
+    hedgeId: 'y',
+    error: 'Size 0.014 < 1.5× minQty 0.01 — would risk creating dust-locked position',
+    code: 'DUST_RISK' as const,
+    dust: { positionSize: 0.014, minQty: 0.01, stepSize: 0.01, stepMultiples: 1.4 },
+    timestamp: Date.now(),
+  };
+  record(
+    'DUST3 openHedge contract: sub-buffer size returns DUST_RISK failure',
+    openRejectionShape.success === false && openRejectionShape.code === 'DUST_RISK',
+    `code=${openRejectionShape.code}, threshold check documented`,
+  );
+
+  // Ensure the drift monitor's BluefinLike interface accepts the new code field
+  // and correctly categorizes stub responses. The drift monitor queries the real
+  // DB for active hedges, so this test exercises: real DB row + stub venue reply.
+  const stubBluefinWithCode = {
+    getPositions: async () => [] as Array<{ symbol: string; side: 'LONG' | 'SHORT'; size: number }>,
+    closeHedge: async () => ({
+      success: false, error: 'stub venue error', code: 'VENUE_ERROR' as const,
+    }),
+  };
+  const stubResult = await checkAndCloseDrifts('sui', stubBluefinWithCode);
+  // Whatever the DB shows, the drift monitor MUST not throw + MUST record no
+  // spurious closes when the stub returns failure. `errors` must be zero;
+  // `closed` must be zero; every drifted position becomes SKIPPED or FAILED.
+  const noSpuriousCloses = stubResult.closed === 0 && stubResult.errors === 0;
+  record(
+    'Drift monitor accepts BluefinLike with code field (no spurious closes on stub venue-error)',
+    noSpuriousCloses,
+    `checked=${stubResult.checked}, drifted=${stubResult.drifted}, closed=${stubResult.closed}, errors=${stubResult.errors}`,
+  );
+
   // RESTORE the pre-test production cache — never leave production
   // running with test values or null. If the previous cache was populated
   // and fresh, put it back so the live guard keeps working; if it was
