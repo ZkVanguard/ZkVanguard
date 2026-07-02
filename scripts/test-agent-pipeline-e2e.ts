@@ -362,6 +362,52 @@ async function main() {
     `ETH-PERP at $1600 requires ≥ $${minSafeUsd.toFixed(2)} notional to avoid dust risk`,
   );
 
+  // [23-25] HedgingAgent output flow — verify Option B wiring
+  // Publish a directive with source='hedging-agent' and verify the guard
+  // labels its response as LLM-reasoned, not signal-agg.
+  await publishDirectives({
+    ranAt: Date.now(),
+    chain: 'sui',
+    riskScore: 40,
+    riskLevel: 'MEDIUM',
+    byAsset: {
+      BTC: { asset: 'BTC', recommendedSide: 'SHORT', confidence: 85, shouldHedge: true,
+             reason: 'HedgingAgent: sentiment bearish + Delphi risk elevated', riskScore: 40,
+             computedAt: Date.now(), source: 'hedging-agent' },
+      ETH: { asset: 'ETH', recommendedSide: 'LONG', confidence: 78, shouldHedge: true,
+             reason: 'HEDGE_LONG (dir=UP, conf=78%)', riskScore: 40,
+             computedAt: Date.now(), source: 'signal-aggregator' },
+    },
+  });
+
+  const btcHaBlock = await checkBeforeTrade({
+    chain: 'sui', asset: 'BTC', intendedSide: 'LONG', notionalUsd: 50, agentSource: 'e2e-ha-source',
+  });
+  record(
+    'HedgingAgent-sourced directive labels block as LLM-reasoned',
+    !btcHaBlock.approved && btcHaBlock.reason.includes('HedgingAgent(LLM)'),
+    `reason=${btcHaBlock.reason.slice(0, 120)}`,
+  );
+
+  const ethSaBlock = await checkBeforeTrade({
+    chain: 'sui', asset: 'ETH', intendedSide: 'SHORT', notionalUsd: 50, agentSource: 'e2e-ha-source',
+  });
+  record(
+    'Signal-aggregator-sourced directive labels block as signal-agg',
+    !ethSaBlock.approved && ethSaBlock.reason.includes('signal-agg'),
+    `reason=${ethSaBlock.reason.slice(0, 120)}`,
+  );
+
+  // Verify the AgentDirective.source field survives roundtrip through cache
+  const roundtrip = await getLatestDirectives();
+  const btcHasSource = roundtrip?.byAsset?.BTC?.source === 'hedging-agent';
+  const ethHasSource = roundtrip?.byAsset?.ETH?.source === 'signal-aggregator';
+  record(
+    'DirectiveSnapshot.source field roundtrips through cache',
+    btcHasSource === true && ethHasSource === true,
+    `BTC.source=${roundtrip?.byAsset?.BTC?.source}, ETH.source=${roundtrip?.byAsset?.ETH?.source}`,
+  );
+
   // RESTORE the pre-test production cache — never leave production
   // running with test values or null. If the previous cache was populated
   // and fresh, put it back so the live guard keeps working; if it was

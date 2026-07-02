@@ -149,36 +149,40 @@ async function main() {
 
   // ─── 3. HedgingAgent ─────────────────────────────────────────────────
   {
-    // Does the auto-hedge cron consume report.hedgingStrategy?
-    const cronConsumers = grepAcrossFiles(CRON_ROUTES, /hedgingStrategy|report\.hedging/);
-    const guardConsumers = grepAcrossFiles(TRADE_GUARD, /hedgingStrategy|report\.hedging/);
+    // Does the orchestrator consume report.hedgingStrategy.recommendations?
+    const orchestratorConsumers = grepAcrossFiles(ORCHESTRATOR, /hedgeData\?\.recommendations|hedgeRecs|hedgingAgentOverrides|hedging-agent/);
+    const guardConsumers = grepAcrossFiles(TRADE_GUARD, /source.*hedging-agent|directive\.source/);
     reports.push({
       agent: 'HedgingAgent',
       fires: 'YES',
       firesEvidence: `Included in intent.requiredAgents inside runAutonomousCycle; delegated to via LeadAgent`,
       producesOutput: 'YES',
-      outputEvidence: 'HedgeAnalysis{recommendation:{action,market,side,size,leverage}, riskMetrics{portfolioVar, hedgeEffectiveness, fundingCost}}',
+      outputEvidence: 'HedgeAnalysis + SuiHedgeRecommendation[]{asset, side, confidence, reason, suggestedSize}',
       outputConsumers: [
-        `/api/agents/hedging/recommend (user-facing API — ${grepAcrossFiles(['app/api/agents/hedging/recommend/route.ts'], /hedgingStrategy/).totalCount} refs)`,
-        `/api/agents/command (Discord chat interface)`,
-        `/api/chat (LLM chat interface)`,
+        `agent-orchestrator.ts:runAutonomousCycle (${orchestratorConsumers.totalCount} refs) — Layer 2 override of directive cache`,
+        `agent-trade-guard.ts (${guardConsumers.totalCount} refs to directive.source) — labels blocks as HedgingAgent(LLM) vs signal-agg`,
+        `/api/agents/hedging/recommend (dashboard endpoint)`,
+        `/api/agents/command + /api/chat (chat interfaces)`,
       ],
-      affectsTradesVia: cronConsumers.totalCount === 0 && guardConsumers.totalCount === 0
-        ? ['❌ NONE — cron + guard do NOT read report.hedgingStrategy']
-        : ['(some path consumes it — investigate)'],
-      category: cronConsumers.totalCount === 0 && guardConsumers.totalCount === 0
-        ? 'DECORATIVE'
-        : 'LOAD_BEARING',
-      gaps: [
-        cronConsumers.totalCount === 0
-          ? 'sui-community-pool cron: 0 references to report.hedgingStrategy — inline sentiment logic is used instead'
-          : '',
-        guardConsumers.totalCount === 0
-          ? 'agent-trade-guard: 0 references — directive cache is built from PredictionAggregator, NOT HedgingAgent\'s LLM reasoning'
-          : '',
-        'HedgingAgent runs every 30 min → produces LLM-reasoned recommendations → gets stored in cron_state → shown to nobody who trades',
-        'Same underlying signal data (PredictionAggregator) drives the trade guard directly, bypassing HedgingAgent\'s interpretation layer',
-      ].filter(Boolean),
+      affectsTradesVia: orchestratorConsumers.totalCount > 0
+        ? [
+            'runAutonomousCycle:Layer 2 — HedgingAgent\'s per-asset recommendations OVERRIDE PredictionAggregator raw signal in the directive cache',
+            'source=\'hedging-agent\' on directive → trade guard labels the block as LLM-reasoned',
+            'When HedgingAgent has an opinion for an asset, guard consumes ITS side (not the raw signal)',
+            'When HedgingAgent has no opinion for an asset, fallback to PredictionAggregator seamlessly',
+          ]
+        : ['❌ Orchestrator did not consume HedgingAgent output (regression?)'],
+      category: orchestratorConsumers.totalCount > 0 ? 'LOAD_BEARING' : 'DECORATIVE',
+      gaps: orchestratorConsumers.totalCount > 0
+        ? [
+            'On Cronos chain, HedgingAgent\'s createHedgeStrategy path returns a different shape — normalization is defensive but not validated against Cronos production data',
+            'HedgingAgent confidence scale is 0-1 on SUI vs 0-100 on generic; normalized to 0-100 in the fusion loop with a boundary check',
+          ]
+        : [
+            'sui-community-pool cron: 0 references to report.hedgingStrategy — was inline sentiment logic',
+            'agent-trade-guard: 0 references — directive cache was built from PredictionAggregator only',
+            'HedgingAgent ran every 30 min → produced LLM-reasoned recommendations → discarded',
+          ],
     });
   }
 

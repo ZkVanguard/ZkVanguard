@@ -44,6 +44,14 @@ export interface AgentDirective {
   reason: string;
   riskScore: number;                   // 0-100, from RiskAgent
   computedAt: number;                  // ms epoch
+  /**
+   * Provenance of this directive. `hedging-agent` means HedgingAgent's
+   * LLM-reasoned recommendation was the authority; `signal-aggregator`
+   * means it came from PredictionAggregator's fused raw signal (used
+   * when HedgingAgent had no opinion for this asset). Surfaced in guard
+   * responses so operators can distinguish LLM decisions from data-only.
+   */
+  source?: 'hedging-agent' | 'signal-aggregator';
 }
 
 export interface DirectiveSnapshot {
@@ -266,12 +274,12 @@ export async function checkBeforeTrade(params: CheckParams): Promise<GuardDecisi
           chain: params.chain, agent: 'hedging-agent', asset: assetUpper,
           intendedSide: params.intendedSide, agentApproved: false,
           agentSide: directive.recommendedSide, agentConfidence: directive.confidence,
-          agentReason: `Hedging agent says HOLD: ${directive.reason}`,
+          agentReason: `${directive.source === 'hedging-agent' ? 'HedgingAgent(LLM)' : 'Signal aggregator'} says HOLD: ${directive.reason}`,
           notionalUsd: params.notionalUsd, wasActedOn: false,
         });
         return {
           approved: false, stage: 'agent-directive',
-          reason: `HedgingAgent recommends HOLD on ${assetUpper}: ${directive.reason}`,
+          reason: `${directive.source === 'hedging-agent' ? 'HedgingAgent (LLM-reasoned)' : 'Signal aggregator'} recommends HOLD on ${assetUpper}: ${directive.reason}`,
           agentSide: directive.recommendedSide, agentConfidence: directive.confidence,
         };
       }
@@ -281,16 +289,17 @@ export async function checkBeforeTrade(params: CheckParams): Promise<GuardDecisi
         // sentiment-driven default through (agent may not have strong opinion).
         const blockThreshold = Number(process.env.HEDGE_AGENT_SIDE_BLOCK_CONFIDENCE) || 70;
         if (directive.confidence >= blockThreshold) {
+          const sourceLabel = directive.source === 'hedging-agent' ? 'HedgingAgent(LLM)' : 'signal-agg';
           await recordAgentDecision({
             chain: params.chain, agent: 'hedging-agent', asset: assetUpper,
             intendedSide: params.intendedSide, agentApproved: false,
             agentSide: directive.recommendedSide, agentConfidence: directive.confidence,
-            agentReason: `Side mismatch blocked (conf=${directive.confidence} >= ${blockThreshold})`,
+            agentReason: `Side mismatch blocked (${sourceLabel}, conf=${directive.confidence} >= ${blockThreshold})`,
             notionalUsd: params.notionalUsd, wasActedOn: false,
           });
           return {
             approved: false, stage: 'agent-directive',
-            reason: `HedgingAgent (conf=${directive.confidence}%) recommends ${directive.recommendedSide} on ${assetUpper}; cron wants ${params.intendedSide}`,
+            reason: `${sourceLabel} (conf=${directive.confidence}%) recommends ${directive.recommendedSide} on ${assetUpper}; cron wants ${params.intendedSide}`,
             agentSide: directive.recommendedSide, agentConfidence: directive.confidence,
           };
         }
