@@ -113,25 +113,34 @@ async function main() {
   }
 
   // ── 6. PriceMonitorAgent — via cycle.priceMonitor ──────────────────
-  // The subfield isn't surfaced by risk-overview; probe cycle_state DB
+  // The subfield isn't surfaced by risk-overview; try direct DB read first,
+  // fall back to the public /api/agents/lead-cycle/latest endpoint so the
+  // audit stays truthful when the local DB pool is exhausted or unreachable.
+  // Cache-bust the URL — Vercel edge occasionally caches an early null.
+  type PmSnapshot = { priceMonitor?: { pricesFetched?: number; alertsChecked?: number; symbols?: string[] } };
+  let pmSnapshot: PmSnapshot | null = null;
+  let pmSource = 'db';
   try {
     const { getCronState } = await import('../lib/db/cron-state');
-    const lastCycle = await getCronState<{
-      priceMonitor?: { pricesFetched?: number; alertsChecked?: number; symbols?: string[] };
-    }>('lead-cycle:last-decision');
-    const pm = lastCycle?.priceMonitor;
-    if (!pm) {
-      push({ system: 'PriceMonitorAgent', status: 'BROKEN', detail: 'No priceMonitor tick in last cycle', evidence: '' });
-    } else {
-      push({
-        system: 'PriceMonitorAgent',
-        status: pm.pricesFetched && pm.pricesFetched > 0 ? 'LIVE' : 'STALE',
-        detail: `${pm.pricesFetched} prices fetched, ${pm.alertsChecked} alerts checked`,
-        evidence: `symbols: ${(pm.symbols ?? []).join(', ')}`,
-      });
+    pmSnapshot = await getCronState<PmSnapshot>('lead-cycle:last-decision');
+  } catch { /* fall through to HTTP */ }
+  if (!pmSnapshot?.priceMonitor) {
+    const latest = await fetchJson<{ cycle?: PmSnapshot }>(`${PROD}/api/agents/lead-cycle/latest?nocache=${Date.now()}`);
+    if (latest?.cycle?.priceMonitor) {
+      pmSnapshot = latest.cycle;
+      pmSource = 'http';
     }
-  } catch (e) {
-    push({ system: 'PriceMonitorAgent', status: 'UNKNOWN', detail: `DB read failed: ${String(e).slice(0, 100)}`, evidence: '' });
+  }
+  const pm = pmSnapshot?.priceMonitor;
+  if (!pm) {
+    push({ system: 'PriceMonitorAgent', status: 'BROKEN', detail: 'No priceMonitor tick in last cycle (DB + HTTP both empty)', evidence: '' });
+  } else {
+    push({
+      system: 'PriceMonitorAgent',
+      status: pm.pricesFetched && pm.pricesFetched > 0 ? 'LIVE' : 'STALE',
+      detail: `${pm.pricesFetched} prices fetched, ${pm.alertsChecked} alerts checked (via ${pmSource})`,
+      evidence: `symbols: ${(pm.symbols ?? []).join(', ')}`,
+    });
   }
 
   // ── 7. SettlementAgent — should be excluded on SUI ─────────────────
