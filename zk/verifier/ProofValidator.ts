@@ -6,6 +6,11 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { logger } from '@shared/utils/logger';
+import {
+  prepareRiskBinding,
+  RISK_CANONICAL_VERSION,
+  type CanonicalRiskInputs,
+} from '../prover/riskCanonical';
 
 export interface ProofValidationResult {
   valid: boolean;
@@ -14,6 +19,16 @@ export interface ProofValidationResult {
   protocol: string;
   verificationTime: number;
   errors?: string[];
+}
+
+export interface RiskBindingVerification {
+  bound: boolean;
+  errors: string[];
+  recomputed: {
+    inputsHash: string;
+    outputHash: string;
+    commitmentHash: string;
+  };
 }
 
 /**
@@ -218,6 +233,96 @@ export class ProofValidator {
     }
 
     return true;
+  }
+
+  /**
+   * Verify the risk-binding layer without touching the STARK.
+   *
+   * Given the same CanonicalRiskInputs the prover used, recompute the
+   * hashes and compare them to the ones in the proof's statement. If
+   * they don't match, the proof is not bound to *these* inputs — the
+   * statement was built over a different tuple.
+   *
+   * This is a cheap purely-arithmetic check; it doesn't need the Python
+   * server. Combine with `validateProof` (STARK check) to get full
+   * end-to-end soundness under a trusted prover.
+   *
+   * Passes:
+   *   - statement.public_inputs[0] === sha256(canonical(inputs))
+   *   - statement.public_inputs[1] === sha256(u32-BE totalRisk)
+   *   - statement.public_inputs[2] === String(inputs.totalRisk)
+   *   - statement.public_inputs[3] === String(inputs.threshold)
+   *   - statement.public_data.commitmentHash === recomputed commitment
+   *   - statement.public_data.canonicalVersion === CURRENT_VERSION
+   */
+  verifyRiskBinding(
+    proofOrStatement: Record<string, unknown>,
+    canonical: CanonicalRiskInputs,
+  ): RiskBindingVerification {
+    const errors: string[] = [];
+    const statement =
+      (proofOrStatement.statement as Record<string, unknown>) || proofOrStatement;
+    const publicInputs = statement.public_inputs as unknown[] | undefined;
+    const publicData = statement.public_data as Record<string, unknown> | undefined;
+
+    const binding = prepareRiskBinding(canonical);
+    const recomputed = {
+      inputsHash: binding.inputsHash,
+      outputHash: binding.outputHash,
+      commitmentHash: binding.commitmentHash,
+    };
+
+    if (canonical.version !== RISK_CANONICAL_VERSION) {
+      errors.push(
+        `canonical version mismatch: expected ${RISK_CANONICAL_VERSION}, got ${canonical.version}`,
+      );
+    }
+
+    if (!Array.isArray(publicInputs) || publicInputs.length < 4) {
+      errors.push(
+        'statement.public_inputs missing or malformed — expected [inputsHash, outputHash, totalRisk, threshold]',
+      );
+      return { bound: false, errors, recomputed };
+    }
+
+    const [pInputsHash, pOutputHash, pTotalRisk, pThreshold] = publicInputs;
+    if (String(pInputsHash).toLowerCase() !== recomputed.inputsHash) {
+      errors.push(
+        `inputsHash mismatch: statement=${String(pInputsHash).slice(0, 16)}… recomputed=${recomputed.inputsHash.slice(0, 16)}…`,
+      );
+    }
+    if (String(pOutputHash).toLowerCase() !== recomputed.outputHash) {
+      errors.push(
+        `outputHash mismatch: statement=${String(pOutputHash).slice(0, 16)}… recomputed=${recomputed.outputHash.slice(0, 16)}…`,
+      );
+    }
+    if (Number(pTotalRisk) !== Math.round(canonical.totalRisk)) {
+      errors.push(
+        `totalRisk mismatch: statement=${pTotalRisk} canonical=${Math.round(canonical.totalRisk)}`,
+      );
+    }
+    if (Number(pThreshold) !== Math.round(canonical.threshold)) {
+      errors.push(
+        `threshold mismatch: statement=${pThreshold} canonical=${Math.round(canonical.threshold)}`,
+      );
+    }
+
+    if (publicData) {
+      const commitmentHashClaim = String(publicData.commitmentHash || '').toLowerCase();
+      if (commitmentHashClaim && commitmentHashClaim !== recomputed.commitmentHash) {
+        errors.push(
+          `commitmentHash mismatch: statement=${commitmentHashClaim.slice(0, 16)}… recomputed=${recomputed.commitmentHash.slice(0, 16)}…`,
+        );
+      }
+      const versionClaim = Number(publicData.canonicalVersion ?? RISK_CANONICAL_VERSION);
+      if (versionClaim !== RISK_CANONICAL_VERSION) {
+        errors.push(
+          `canonicalVersion in statement (${versionClaim}) differs from expected ${RISK_CANONICAL_VERSION}`,
+        );
+      }
+    }
+
+    return { bound: errors.length === 0, errors, recomputed };
   }
 
   /**

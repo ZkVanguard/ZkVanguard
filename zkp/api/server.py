@@ -27,6 +27,11 @@ if project_root not in sys.path:
 
 from zkp.integration.zk_system_hub import ZKSystemFactory
 from zkp.core.zk_system import AuthenticProofManager
+from zkp.core.risk_canonical import (
+    assert_risk_binding,
+    RiskBindingError,
+    RISK_CANONICAL_VERSION,
+)
 
 
 # Helper to convert large integers to strings for JSON serialization
@@ -366,6 +371,19 @@ async def attest_commitment(request: AttestationRequest):
     prover = zk_factory.get_prover(request.proof_type)
     if not prover:
         raise HTTPException(status_code=400, detail=f"No prover available for proof type: {request.proof_type}")
+
+    # Same RISK_BINDING gate as /api/zk/generate. Attestations are the
+    # on-chain path — mis-signing an unbound proof would let anyone
+    # claim any risk score.
+    is_risk_proof = str(request.proof_type).lower() in ("risk", "risk-calculation")
+    claim_str = str(request.statement.get("claim") or "")
+    is_bound_v1 = claim_str == f"zkv-risk-v{RISK_CANONICAL_VERSION}"
+    if is_risk_proof and is_bound_v1:
+        try:
+            assert_risk_binding(request.statement, request.witness)
+        except RiskBindingError as e:
+            raise HTTPException(status_code=400, detail=f"RISK_BINDING_FAILED: {e}")
+
     try:
         stark_proof = await prover.generate_proof_async(request.statement, request.witness)
     except Exception as e:
@@ -450,6 +468,29 @@ async def _generate_proof_async(
                 witness = {"secret_value": 0, "test_mode": True}
             else:
                 raise ValueError("'witness' is required in the request data")
+
+        # RISK-BINDING GATE: for risk proofs on v1+, refuse to prove
+        # anything that isn't a self-consistent (inputs → totalRisk)
+        # tuple. This is the honesty gate — the STARK trace is fine
+        # either way, but a proof produced without this check would be
+        # meaningless for on-chain risk attestation.
+        is_risk_proof = str(proof_type).lower() in ("risk", "risk-calculation")
+        claim_str = str(statement.get("claim") or "") if isinstance(statement, dict) else ""
+        is_bound_v1 = claim_str == f"zkv-risk-v{RISK_CANONICAL_VERSION}"
+        if is_risk_proof and is_bound_v1:
+            try:
+                normalized_canonical = assert_risk_binding(statement, witness)
+                print(
+                    f"[RISK-BIND] verified inputs→totalRisk binding:"
+                    f" portfolioId={normalized_canonical['portfolioId']}"
+                    f" totalRisk={normalized_canonical['totalRisk']}"
+                    f" threshold={normalized_canonical['threshold']}"
+                )
+            except RiskBindingError as e:
+                # Fail LOUD — do NOT proceed to trace/prove. A proof
+                # generated here would falsely attest to something the
+                # inputs don't support.
+                raise ValueError(f"RISK_BINDING_FAILED: {e}")
 
         # Generate proof asynchronously
         proof_result = await prover.generate_proof_async(statement, witness)
