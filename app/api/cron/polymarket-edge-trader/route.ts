@@ -62,6 +62,12 @@ import {
   type AggregatedPrediction,
 } from '@/lib/services/market-data/PredictionAggregatorService';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+import {
+  SUPPORTED_ASSETS,
+  ASSET_MIN_QTY,
+  ASSET_STEP,
+  type SupportedAsset,
+} from '@/lib/config/trader-assets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,7 +96,7 @@ const DAILY_LOSS_CAP_USD = Number(
   process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
 );
 
-// Multi-asset universe — was 'BTC','ETH' only. Expanded per audit:
+// Multi-asset universe — see lib/config/trader-assets.ts. Rationale:
 //   BTC: minQty $60 notional (needs $30 stake at 3x lev). Traded when pool ≥ $200.
 //   ETH: minQty $16 notional (needs $8 stake at 3x). Traded when pool ≥ $50.
 //   SUI: minQty $0.72 notional (needs $0.36 stake at 3x). Traded at any NAV. ← THE PRIZE
@@ -99,29 +105,6 @@ const DAILY_LOSS_CAP_USD = Number(
 // required stake exceeds MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY (70% of free) are
 // skipped for that tick. Env override:
 //   POLYMARKET_EDGE_ASSETS=BTC,ETH,SUI,SOL   ← default
-type SupportedAsset = 'BTC' | 'ETH' | 'SUI' | 'SOL';
-const DEFAULT_ASSETS: SupportedAsset[] = ['BTC', 'ETH', 'SUI', 'SOL'];
-const ENV_ASSETS = (process.env.POLYMARKET_EDGE_ASSETS || '').trim();
-const SUPPORTED_ASSETS: SupportedAsset[] = ENV_ASSETS
-  ? ENV_ASSETS.split(',').map(s => s.trim().toUpperCase() as SupportedAsset)
-      .filter(a => ['BTC', 'ETH', 'SUI', 'SOL'].includes(a))
-  : DEFAULT_ASSETS;
-
-// Per-asset min order size (BlueFin step). Mirrors MARKET_CONFIG in BluefinService.
-const ASSET_MIN_QTY: Record<SupportedAsset, number> = {
-  BTC: 0.001,
-  ETH: 0.01,
-  SUI: 1,
-  SOL: 0.1,
-};
-// Per-BlueFin minQty. Both step size AND min quantity (BlueFin uses them
-// interchangeably). See lib/services/sui/BluefinService.ts BLUEFIN_PAIRS.
-const ASSET_STEP: Record<SupportedAsset, number> = {
-  BTC: 0.001,
-  ETH: 0.01,
-  SUI: 1,
-  SOL: 0.1,
-};
 
 // ── Cron state keys ────────────────────────────────────────────────────────
 const KEY_ACTIVE = 'polymarket-edge:active-trade';
