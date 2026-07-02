@@ -2452,6 +2452,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 continue;
               }
 
+              // ── DUST5: prevent creating positions that WILL become dust ───
+              // Opening at exactly minQty leaves no buffer; a single partial
+              // fill / funding shrink / PnL normalization can drop the size
+              // below minQty and trap the margin. Require 1.5x minQty (see
+              // OPEN_MIN_QTY_BUFFER in dust-manager.ts). Compare against the
+              // TARGET post-snap size, not the pre-snap raw size.
+              try {
+                const { wouldBecomeDust } = await import('@/lib/services/sui/dust-manager');
+                if (wouldBecomeDust(symbol, snappedSize)) {
+                  const minSafe = spec.minQty * 1.5;
+                  logger.info(`[SUI Cron] Skip ${asset}-PERP: size ${snappedSize} risks dust (< ${minSafe.toFixed(4)} = 1.5x minQty)`, {
+                    snappedSize, minQty: spec.minQty, minSafeSize: minSafe, hedgeValueUSD,
+                  });
+                  hedges.push({ symbol, side, size: snappedSize, status: 'SKIPPED_DUST_RISK' });
+                  continue;
+                }
+              } catch (dustGuardErr) {
+                logger.debug('[SUI Cron] Dust guard threw (non-critical)', {
+                  error: dustGuardErr instanceof Error ? dustGuardErr.message : String(dustGuardErr),
+                });
+              }
+
               // ── T5-A Phase 3 shadow mode ─────────────────────────
               // When PERP_ROUTER_SHADOW=true, compute what the multi-
               // venue router WOULD do alongside the existing BlueFin

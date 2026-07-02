@@ -43,6 +43,32 @@ async function handle(req: NextRequest, dryRun: boolean) {
   // same position-drift-monitor the crons use. Folded into this route so
   // we don't add a new serverless function slot (Vercel Hobby 12-cap).
   const mode = (new URL(req.url).searchParams.get('mode') || '').trim().toLowerCase();
+  // Optional ?mode=dust — report protocol-locked positions below BlueFin's
+  // minQty. GET returns the dust classification for every active position;
+  // POST additionally records to Discord. No close attempted (unclearable).
+  if (mode === 'dust') {
+    try {
+      const bf = BluefinService.getInstance();
+      const { computeDustReport, formatDustReport } = await import('@/lib/services/sui/dust-manager');
+      const report = await computeDustReport(bf);
+      if (!dryRun && report.dustPositions > 0) {
+        await notifyDiscord(formatDustReport(report), 'WARN', { report });
+      }
+      return NextResponse.json({
+        success: true, dryRun, mode: 'dust',
+        report,
+        summary: formatDustReport(report),
+        durationMs: Date.now() - startTime,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return NextResponse.json({
+        success: false, mode: 'dust', error: msg,
+        durationMs: Date.now() - startTime,
+      }, { status: 500 });
+    }
+  }
+
   if (mode === 'drifted') {
     try {
       const bf = BluefinService.getInstance();

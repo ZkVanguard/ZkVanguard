@@ -175,6 +175,44 @@ export async function checkAndCloseDrifts(
       continue;
     }
 
+    // ── Dust guard ────────────────────────────────────────────────
+    // Before attempting close, check the actual VENUE size against BlueFin's
+    // minQty. Positions below minQty are protocol-trapped — attempting close
+    // just produces a "too small" error and Discord noise. Log the classification
+    // to agent_decisions with DUST_LOCKED so operators can see it, then skip.
+    try {
+      const { classifyPosition } = await import('@/lib/services/sui/dust-manager');
+      // Query the venue for the current size (DB `size` field can be stale for
+      // reconstructed rows). If unavailable, fall back to the DB value.
+      let venueSize = Number(h.size ?? 0);
+      try {
+        const venuePositions = await bluefin.getPositions();
+        const venuePos = venuePositions.find((p) => p.symbol === symbol);
+        if (venuePos) venueSize = venuePos.size;
+      } catch { /* stay with DB value */ }
+      const classification = classifyPosition(symbol, venueSize);
+      if (classification.exitPath === 'UNCLEARABLE') {
+        result.actions.push({
+          symbol, side: currentSide, notionalUsd,
+          action: 'SKIPPED_SMALL', // repurpose enum — semantically "protocol-locked dust"
+          reason: `DUST_LOCKED: ${classification.reason}`,
+        });
+        await recordAgentDecision({
+          chain, agent: 'drift-monitor', asset,
+          intendedSide: currentSide, agentApproved: false,
+          agentSide: drift.agentSide, agentConfidence: drift.agentConfidence,
+          agentReason: `DUST_LOCKED (venue size ${venueSize} < minQty ${classification.minQty}) — ${classification.reason}`,
+          notionalUsd, wasActedOn: false, hedgeOrderId: h.order_id ?? null,
+        }).catch(() => {});
+        result.skipped++;
+        continue;
+      }
+    } catch (dustErr) {
+      logger.debug('[DriftMonitor] dust classification threw (non-critical, continuing to close attempt)', {
+        error: dustErr instanceof Error ? dustErr.message : String(dustErr),
+      });
+    }
+
     // Close the position via BlueFin
     logger.warn(`[DriftMonitor] Closing drifted ${symbol} ${currentSide} $${notionalUsd.toFixed(2)}`, {
       stage: drift.stage, agentSide: drift.agentSide, agentConfidence: drift.agentConfidence,

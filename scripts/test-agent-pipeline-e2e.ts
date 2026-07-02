@@ -325,6 +325,43 @@ async function main() {
     `legs=${smallPlan.legs.length}, singleVenue=${smallPlan.singleVenue}, belowThreshold=${smallPlan.belowSplitThreshold}`,
   );
 
+  // [18-22] Dust manager — the class of problem that trapped the ETH-PERP
+  const dust = await import('../lib/services/sui/dust-manager');
+
+  const dustCase = dust.classifyPosition('ETH-PERP', 0.00794);
+  record(
+    'Dust: sub-minQty ETH position classified UNCLEARABLE',
+    dustCase.isDust && dustCase.exitPath === 'UNCLEARABLE',
+    `size=${dustCase.size}, minQty=${dustCase.minQty}, stepMult=${dustCase.stepMultiples.toFixed(3)}, path=${dustCase.exitPath}`,
+  );
+
+  const alignedCase = dust.classifyPosition('ETH-PERP', 0.02);
+  record(
+    'Dust: step-aligned position is NOT dust',
+    !alignedCase.isDust && alignedCase.exitPath === 'REDUCE_ORDER',
+    `size=${alignedCase.size}, path=${alignedCase.exitPath}`,
+  );
+
+  const misalignedCase = dust.classifyPosition('ETH-PERP', 0.01294);
+  record(
+    'Dust: above-minQty non-step-aligned classified ADD_TO_CLEAR',
+    misalignedCase.isDust && misalignedCase.exitPath === 'ADD_TO_CLEAR',
+    `size=${misalignedCase.size}, residueOnStepClose=${(misalignedCase.size % misalignedCase.stepSize).toFixed(6)}`,
+  );
+
+  record(
+    'Dust: wouldBecomeDust rejects sizes below 1.5x minQty',
+    dust.wouldBecomeDust('ETH-PERP', 0.014) === true && dust.wouldBecomeDust('ETH-PERP', 0.016) === false,
+    `0.014→dust=${dust.wouldBecomeDust('ETH-PERP', 0.014)}, 0.016→dust=${dust.wouldBecomeDust('ETH-PERP', 0.016)}`,
+  );
+
+  const minSafeUsd = dust.minSafeOpenNotionalUsd('ETH-PERP', 1600);
+  record(
+    'Dust: minSafeOpenNotionalUsd computes correctly',
+    minSafeUsd === 24, // 0.01 * 1.5 * 1600
+    `ETH-PERP at $1600 requires ≥ $${minSafeUsd.toFixed(2)} notional to avoid dust risk`,
+  );
+
   // RESTORE the pre-test production cache — never leave production
   // running with test values or null. If the previous cache was populated
   // and fresh, put it back so the live guard keeps working; if it was
