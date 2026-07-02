@@ -37,6 +37,7 @@ async function handle(req: NextRequest, dryRun: boolean) {
   // (legacy behavior preserved).
   const symbolFilter = (new URL(req.url).searchParams.get('symbol') || '').trim().toUpperCase();
 
+  // DEPLOY_MARKER_2026_07_02_a — force Vercel to rebuild this route.
   // Optional ?mode=drifted — close only positions the AgentTradeGuard would
   // now reject re-opening (signal-flipped misalignments). Delegates to the
   // same position-drift-monitor the crons use. Folded into this route so

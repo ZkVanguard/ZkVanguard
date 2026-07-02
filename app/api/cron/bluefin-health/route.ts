@@ -170,6 +170,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<HealthResu
     apiLatencyMs,
   };
 
+  // DEPLOY_MARKER_2026_07_02_a — force Vercel to rebuild this route.
   // Drift-close inline when venue is healthy — gives 5-min reactivity to
   // signal flips instead of waiting for the 30-min sui-community-pool tick.
   // ETH SHORT bleeding during a bullish rally was the concrete case this
