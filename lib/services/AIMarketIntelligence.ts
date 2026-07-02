@@ -271,7 +271,11 @@ export class AIMarketIntelligence {
    * Get comprehensive AI market context
    * This is the primary method AI agents should call
    */
-  static async getMarketContext(assets: string[] = ['BTC', 'ETH', 'CRO', 'SUI']): Promise<AIMarketContext> {
+  static async getMarketContext(assets?: string[]): Promise<AIMarketContext> {
+    if (!assets) {
+      const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+      assets = await resolveAgentUniverse();
+    }
     // Check cache first
     const cacheKey = `${this.CACHE_KEY}-${assets.sort().join(',')}`;
     const cached = cache.get<AIMarketContext>(cacheKey);
@@ -1007,8 +1011,12 @@ export class AIMarketIntelligence {
    */
   static async getPredictionsForAgent(
     agentType: 'risk' | 'hedging' | 'pool',
-    assets: string[] = ['BTC', 'ETH', 'CRO', 'SUI']
+    assets?: string[]
   ): Promise<EnhancedPrediction[]> {
+    if (!assets) {
+      const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+      assets = await resolveAgentUniverse();
+    }
     const context = await this.getMarketContext(assets);
     
     // Filter based on agent type

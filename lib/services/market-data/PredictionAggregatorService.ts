@@ -359,7 +359,9 @@ export class PredictionAggregatorService {
   private static async fetchDelphiPredictions(): Promise<PredictionMarket[]> {
     try {
       const { DelphiMarketService } = await import('./DelphiMarketService');
-      const predictions = await DelphiMarketService.getRelevantMarkets(['BTC', 'ETH', 'CRO']);
+      const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+      const assets = await resolveAgentUniverse();
+      const predictions = await DelphiMarketService.getRelevantMarkets(assets);
       // Only return high-impact predictions
       return predictions.filter(p => p.impact === 'HIGH' || p.impact === 'MODERATE').slice(0, 5);
     } catch (error) {

@@ -179,8 +179,12 @@ export async function runPolyDiscoverTick(): Promise<PolyDiscoverTickResult> {
       );
     }
 
-    // Relevance
-    const relevanceCtx = { poolAssets: ['BTC', 'ETH', 'SUI'], rebalanceMinutes: 30 };
+    // Relevance — score newly-discovered markets against the full agent
+    // universe (pool + trader + dynamic Polymarket). Sourced from the
+    // shared composer so this file never falls out of sync with the pool
+    // struct or trader config.
+    const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+    const relevanceCtx = { poolAssets: await resolveAgentUniverse(), rebalanceMinutes: 30 };
     const ranked = broad
       .filter(m => m.horizon !== '5min')
       .map(m => ({ market: m, relevance: scoreRelevance(m, relevanceCtx) }))

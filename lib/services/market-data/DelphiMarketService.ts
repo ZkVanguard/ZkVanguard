@@ -688,7 +688,11 @@ export class DelphiMarketService {
    * Get top prediction markets by volume
    */
   static async getTopMarkets(limit: number = 10): Promise<PredictionMarket[]> {
-    const markets = await this.getRelevantMarkets(['BTC', 'ETH', 'CRO', 'USDC']);
+    const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+    const universe = await resolveAgentUniverse();
+    // USDC stays in the query because Delphi tags stablecoin / macro markets
+    // with it — it's not an agent asset, just a filter tag.
+    const markets = await this.getRelevantMarkets([...universe, 'USDC']);
     return markets
       .sort((a, b) => parseFloat(b.volume.replace(/[^0-9.]/g, '')) - parseFloat(a.volume.replace(/[^0-9.]/g, '')))
       .slice(0, limit);

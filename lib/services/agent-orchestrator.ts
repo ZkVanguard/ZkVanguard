@@ -921,7 +921,11 @@ export class AgentOrchestrator {
       //   - The trade guard reads whichever the orchestrator picked
       try {
         const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
-        const perAsset = await PredictionAggregatorService.getPerAssetPredictions(['BTC', 'ETH', 'SUI', 'CRO']);
+        // Single source of truth for the agent universe (pool + trader + dynamic).
+        // See lib/config/agent-universe.ts for composition rules.
+        const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+        const assetUniverse = await resolveAgentUniverse();
+        const perAsset = await PredictionAggregatorService.getPerAssetPredictions(assetUniverse);
         const { publishDirectives } = await import('@/lib/services/agents/agent-trade-guard');
         const byAsset: Record<string, {
           asset: string;

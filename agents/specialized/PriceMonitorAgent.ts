@@ -38,12 +38,13 @@ export interface MonitorConfig {
   alertWebhookUrl?: string;
 }
 
-// Configurable price feeds - using Crypto.com API
-const PRICE_FEEDS: Record<string, string> = {
-  BTC: 'https://api.crypto.com/v2/public/get-ticker?instrument_name=BTC_USDT',
-  ETH: 'https://api.crypto.com/v2/public/get-ticker?instrument_name=ETH_USDT',
-  CRO: 'https://api.crypto.com/v2/public/get-ticker?instrument_name=CRO_USDT',
-};
+/**
+ * Crypto.com ticker URL for an asset symbol. Universe is composed at fetch
+ * time from `resolveAgentUniverse()` (pool + trader + dynamic Polymarket)
+ * — no hardcoded per-asset entries in this file.
+ */
+const cryptoComTickerUrl = (symbol: string): string =>
+  `https://api.crypto.com/v2/public/get-ticker?instrument_name=${symbol}_USDT`;
 
 /**
  * PriceMonitorAgent - Autonomous price monitoring with x402 settlement
@@ -285,9 +286,11 @@ export class PriceMonitorAgent {
   ingestCentralizedPrices(snapshot: MarketSnapshot): void {
     this.centralizedSnapshot = snapshot;
 
-    // Convert snapshot into PriceData and store in history
+    // Convert snapshot into PriceData and store in history — no per-symbol
+    // filter: any asset the centralized manager sends is worth remembering.
+    // The read paths (getPriceHistory, alerts) key by symbol so unwanted
+    // entries are inert.
     for (const [symbol, assetPrice] of snapshot.prices) {
-      if (!PRICE_FEEDS[symbol] && !['SUI'].includes(symbol)) continue; // Only track symbols we care about
 
       const priceData: PriceData = {
         symbol,
@@ -319,7 +322,6 @@ export class PriceMonitorAgent {
     if (this.centralizedSnapshot && (Date.now() - this.centralizedSnapshot.timestamp) < 15_000) {
       const prices = new Map<string, PriceData>();
       for (const [symbol, assetPrice] of this.centralizedSnapshot.prices) {
-        if (!PRICE_FEEDS[symbol] && !['SUI'].includes(symbol)) continue;
         prices.set(symbol, {
           symbol,
           price: assetPrice.price,
@@ -333,15 +335,18 @@ export class PriceMonitorAgent {
       return prices;
     }
 
-    // Fallback: independent fetch
+    // Fallback: independent fetch across the composed agent universe
+    // (pool + trader + dynamic Polymarket).
     const prices = new Map<string, PriceData>();
+    const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+    const symbols = await resolveAgentUniverse();
 
-    for (const [symbol, url] of Object.entries(PRICE_FEEDS)) {
+    for (const symbol of symbols) {
       try {
-        const priceData = await this.fetchPrice(symbol, url);
+        const priceData = await this.fetchPrice(symbol, cryptoComTickerUrl(symbol));
         if (priceData) {
           prices.set(symbol, priceData);
-          
+
           // Store in history
           const history = this.priceHistory.get(symbol) || [];
           history.push(priceData);
@@ -592,10 +597,12 @@ export class PriceMonitorAgent {
    * Get agent status
    */
   getStatus(): AgentStatus {
+    // Tracked symbols reflect the priceHistory keys populated by the most
+    // recent tick — that's the live universe, not a hardcoded declaration.
     return {
       isRunning: this.isRunning,
       alertCount: this.alerts.size,
-      trackedSymbols: Object.keys(PRICE_FEEDS),
+      trackedSymbols: Array.from(this.priceHistory.keys()),
       pollingIntervalMs: this.config.pollingIntervalMs,
       x402Enabled: this.config.enableX402Settlement,
     };
