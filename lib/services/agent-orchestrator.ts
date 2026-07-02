@@ -1029,6 +1029,33 @@ export class AgentOrchestrator {
         `hedge-recs=${hedgeData?.recommendations?.length ?? 0} ` +
         `settlements=${settlementData?.settled ?? 0}`;
 
+      // Publish cycle attestation so the AgentTradeGuard can consult PriceMonitor
+      // + Reporting output when gating trades. Two new gates:
+      //   - PRICE_ALERT_GATE: alertsTriggered > 0 in the last cycle → tighten
+      //     drift-close cadence + reject open trades on the alerted symbol
+      //     until the next cycle clears it
+      //   - REPORTING_ZK_ATTEST_GATE: for large trades, require the most
+      //     recent cycle to have produced ≥ 1 ZK proof (ReportingAgent)
+      try {
+        const { setCronState } = await import('@/lib/db/cron-state');
+        await setCronState('cycle-attestation:last', {
+          ranAt: Date.now(),
+          chain,
+          zkProofsCount: report.zkProofs?.length ?? 0,
+          priceAlerts: {
+            alertsTriggered: priceMonitorTick?.alertsTriggered ?? 0,
+            symbolsAlerted: priceMonitorTick?.symbols ?? [],
+            fiveMinProcessed: priceMonitorTick?.fiveMinProcessed ?? false,
+          },
+          reportingSummary: (report.aiSummary ?? '').slice(0, 300),
+          success: report.status === 'success',
+        });
+      } catch (attErr) {
+        logger.warn('[Orchestrator] cycle-attestation write failed', {
+          error: attErr instanceof Error ? attErr.message : String(attErr),
+        });
+      }
+
       return {
         success: report.status === 'success',
         ranAt,

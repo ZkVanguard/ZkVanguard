@@ -212,6 +212,7 @@ async function main() {
   // ─── 5. PriceMonitorAgent ────────────────────────────────────────────
   {
     const tickCalls = grepAcrossFiles(ORCHESTRATOR, /priceMonitorAgent\?\.tick|priceMonitorAgent\.tick/);
+    const guardConsumers = grepAcrossFiles(TRADE_GUARD, /priceAlerts|alertsTriggered|price-monitor-agent/);
     reports.push({
       agent: 'PriceMonitorAgent',
       fires: 'YES',
@@ -219,17 +220,21 @@ async function main() {
       producesOutput: 'YES',
       outputEvidence: 'tick result{pricesFetched, alertsChecked, alertsTriggered, fiveMinProcessed, symbols[]}',
       outputConsumers: [
-        `lead-cycle:last-decision.priceMonitor (cron_state storage)`,
+        `cycle-attestation:last cron_state (published by orchestrator each cycle)`,
+        `agent-trade-guard.ts (${guardConsumers.totalCount} refs — reads priceAlerts, blocks opens on alerted symbols)`,
+        `lead-cycle:last-decision.priceMonitor (dashboard state)`,
         `/api/agents/monitor (user-facing alert config API)`,
-        `Discord alerts if user-configured price threshold breached`,
       ],
-      affectsTradesVia: [
-        '❌ NONE — alerts are for external notification; do NOT feed into trade guard, drift monitor, or auto-hedge',
-      ],
-      category: 'OBSERVABILITY',
+      affectsTradesVia: guardConsumers.totalCount > 0
+        ? [
+            'checkBeforeTrade: PriceMonitor gate — if alertsTriggered > 0 on this symbol, opens are blocked until next cycle',
+            'Drift-close is INTENTIONALLY unaffected (closing during a price alert is desirable)',
+            'Bypass via HEDGE_IGNORE_PRICE_ALERTS=1 env',
+          ]
+        : ['❌ NONE — priceAlerts not consumed'],
+      category: guardConsumers.totalCount > 0 ? 'LOAD_BEARING' : 'OBSERVABILITY',
       gaps: [
         'Its 5-min ticker subscriptions (RiskAgent/HedgingAgent style) die on Vercel serverless — the tick() one-shot is what fires each cycle',
-        'No trading path reads its alerts — purely operator-facing',
       ],
     });
   }
@@ -258,7 +263,7 @@ async function main() {
 
   // ─── 7. ReportingAgent ───────────────────────────────────────────────
   {
-    const reportingConsumers = grepAcrossFiles(CRON_ROUTES.concat(TRADE_GUARD), /reportingAgent|report\.reporting|report\.zkProofs/);
+    const guardZkGate = grepAcrossFiles(TRADE_GUARD, /zkProofsCount|REPORTING_ZK_REQUIRED_USD|reporting-agent/);
     reports.push({
       agent: 'ReportingAgent',
       fires: 'YES',
@@ -266,17 +271,20 @@ async function main() {
       producesOutput: 'YES',
       outputEvidence: 'Report{summary, zkProofs[], audit trail}',
       outputConsumers: [
-        `/api/agents/reporting/generate (user-facing)`,
-        `report.zkProofs.length recorded in cycle result`,
-        `Discord log lines on completion`,
+        `cycle-attestation:last.zkProofsCount (published every cycle)`,
+        `agent-trade-guard.ts (${guardZkGate.totalCount} refs — enforces ZK proof ≥ 1 for trades ≥ $1M)`,
+        `/api/agents/reporting/generate (user-facing detailed reports)`,
+        `Discord log lines`,
       ],
-      affectsTradesVia: reportingConsumers.totalCount > 0
-        ? [`consumed by ${reportingConsumers.totalCount} trade-path sites (investigate)`]
-        : ['❌ NONE — no cron or guard reads reportingStrategy'],
-      category: 'OBSERVABILITY',
+      affectsTradesVia: guardZkGate.totalCount > 0
+        ? [
+            'checkBeforeTrade: ReportingAgent gate — large trades (≥ REPORTING_ZK_REQUIRED_USD, default $1M) blocked if the last cycle produced 0 ZK proofs',
+            'STRICT mode (ZK_ATTEST_STRICT=1) enforces the gate; soft mode logs but allows',
+          ]
+        : ['❌ NONE — no gate consumes zkProofs'],
+      category: guardZkGate.totalCount > 0 ? 'LOAD_BEARING' : 'OBSERVABILITY',
       gaps: [
-        'Runs every 30 min → produces audit report → shown only in /api/agents/reporting/generate',
-        'zkProofs count logged but the proofs themselves aren\'t used for anything downstream (grant-review only)',
+        'ZK proof CONTENT is not currently verified downstream — only the COUNT gates trades. Full content verification is grant tranche 2 work.',
       ],
     });
   }

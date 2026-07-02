@@ -462,6 +462,72 @@ async function main() {
     `checked=${stubResult.checked}, drifted=${stubResult.drifted}, closed=${stubResult.closed}, errors=${stubResult.errors}`,
   );
 
+  // [29-31] PriceMonitor + Reporting agent → trade guard wiring
+  // Simulate a cycle attestation with alertsTriggered on BTC + zkProofsCount=0.
+  // Verify the guard uses that data to block trades.
+  await setCronState('cycle-attestation:last', {
+    ranAt: Date.now(),
+    chain: 'sui',
+    zkProofsCount: 0,
+    priceAlerts: {
+      alertsTriggered: 1,
+      symbolsAlerted: ['BTC'],
+      fiveMinProcessed: false,
+    },
+    reportingSummary: 'e2e test attestation',
+    success: true,
+  });
+
+  await publishDirectives({
+    ranAt: Date.now(), chain: 'sui', riskScore: 40, riskLevel: 'MEDIUM',
+    byAsset: {
+      BTC: { asset: 'BTC', recommendedSide: 'SHORT', confidence: 80, shouldHedge: true,
+             reason: 'e2e', riskScore: 40, computedAt: Date.now(), source: 'hedging-agent' },
+      ETH: { asset: 'ETH', recommendedSide: 'SHORT', confidence: 80, shouldHedge: true,
+             reason: 'e2e', riskScore: 40, computedAt: Date.now(), source: 'signal-aggregator' },
+    },
+  });
+
+  const btcAlertBlock = await checkBeforeTrade({
+    chain: 'sui', asset: 'BTC', intendedSide: 'SHORT', notionalUsd: 100, agentSource: 'e2e-pm',
+  });
+  record(
+    'PriceMonitor gate: BTC price alert blocks new BTC open',
+    !btcAlertBlock.approved && btcAlertBlock.reason.includes('PriceMonitorAgent alert'),
+    `approved=${btcAlertBlock.approved}, reason=${btcAlertBlock.reason.slice(0, 100)}`,
+  );
+
+  const ethNoAlertPass = await checkBeforeTrade({
+    chain: 'sui', asset: 'ETH', intendedSide: 'SHORT', notionalUsd: 100, agentSource: 'e2e-pm',
+  });
+  record(
+    'PriceMonitor gate: no ETH alert → ETH open proceeds normally',
+    ethNoAlertPass.approved === true,
+    `approved=${ethNoAlertPass.approved}, reason=${ethNoAlertPass.reason.slice(0, 100)}`,
+  );
+
+  // ReportingAgent ZK gate — requires STRICT mode to block. Test both modes.
+  process.env.ZK_ATTEST_STRICT = '1';
+  process.env.REPORTING_ZK_REQUIRED_USD = '1000000';
+  const largeSizeBlock = await checkBeforeTrade({
+    chain: 'sui', asset: 'ETH', intendedSide: 'SHORT', notionalUsd: 2_000_000, agentSource: 'e2e-ra',
+  });
+  record(
+    'ReportingAgent gate: STRICT mode blocks $2M trade when zkProofsCount=0',
+    !largeSizeBlock.approved && largeSizeBlock.reason.includes('ReportingAgent'),
+    `approved=${largeSizeBlock.approved}, reason=${largeSizeBlock.reason.slice(0, 100)}`,
+  );
+
+  process.env.ZK_ATTEST_STRICT = '0';
+  const largeSizeSoftPass = await checkBeforeTrade({
+    chain: 'sui', asset: 'ETH', intendedSide: 'SHORT', notionalUsd: 2_000_000, agentSource: 'e2e-ra-soft',
+  });
+  record(
+    'ReportingAgent gate: soft mode allows same trade (warns but does not block)',
+    largeSizeSoftPass.approved === true,
+    `approved=${largeSizeSoftPass.approved}, reason=${largeSizeSoftPass.reason.slice(0, 100)}`,
+  );
+
   // RESTORE the pre-test production cache — never leave production
   // running with test values or null. If the previous cache was populated
   // and fresh, put it back so the live guard keeps working; if it was

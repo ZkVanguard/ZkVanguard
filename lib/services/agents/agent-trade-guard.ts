@@ -122,6 +122,48 @@ export interface CheckParams {
 
 const LARGE_TRADE_CONSENSUS_USD = Number(process.env.LARGE_TRADE_CONSENSUS_USD) || 100_000;
 const ZK_ATTEST_USD = Number(process.env.ZK_ATTEST_MIN_NOTIONAL_USD) || 1_000_000;
+/** Threshold above which the ReportingAgent's ZK proof output is required. */
+const REPORTING_ZK_REQUIRED_USD = Number(process.env.REPORTING_ZK_REQUIRED_USD) || 1_000_000;
+
+/**
+ * Load the last LeadAgent cycle's attestation (PriceMonitor alerts +
+ * ReportingAgent ZK proof count). Used to gate trades:
+ *   - PriceMonitor alerts trigger → tighten drift + block opens on the alerted symbol
+ *   - ReportingAgent must have produced ZK proofs before large trades
+ */
+async function loadCycleAttestation(): Promise<{
+  ranAt: number;
+  chain: string;
+  zkProofsCount: number;
+  priceAlerts: { alertsTriggered: number; symbolsAlerted: string[]; fiveMinProcessed: boolean };
+  reportingSummary: string;
+  success: boolean;
+} | null> {
+  try {
+    const v = await getCronState<{
+      ranAt?: number;
+      chain?: string;
+      zkProofsCount?: number;
+      priceAlerts?: { alertsTriggered?: number; symbolsAlerted?: string[]; fiveMinProcessed?: boolean };
+      reportingSummary?: string;
+      success?: boolean;
+    }>('cycle-attestation:last');
+    if (!v || typeof v.ranAt !== 'number') return null;
+    if (Date.now() - v.ranAt > STALE_AFTER_MS) return null;
+    return {
+      ranAt: v.ranAt,
+      chain: v.chain ?? 'sui',
+      zkProofsCount: Number(v.zkProofsCount ?? 0),
+      priceAlerts: {
+        alertsTriggered: Number(v.priceAlerts?.alertsTriggered ?? 0),
+        symbolsAlerted: Array.isArray(v.priceAlerts?.symbolsAlerted) ? v.priceAlerts!.symbolsAlerted!.map(String) : [],
+        fiveMinProcessed: !!v.priceAlerts?.fiveMinProcessed,
+      },
+      reportingSummary: String(v.reportingSummary ?? ''),
+      success: v.success !== false,
+    };
+  } catch { return null; }
+}
 
 /**
  * Auto-cast votes for the 3 specialist agents (risk/hedging/settlement)
@@ -340,6 +382,58 @@ export async function checkBeforeTrade(params: CheckParams): Promise<GuardDecisi
         agentSide: directive?.recommendedSide ?? null,
         agentConfidence: directive?.confidence ?? null,
       };
+    }
+
+    // ─── PriceMonitor gate — if last cycle triggered an alert on this asset,
+    // it means a user-configured threshold was breached. Reject new opens on
+    // that symbol until the next cycle clears it. Drift-close is unaffected
+    // (which is the point — you WANT to close during price alerts).
+    const attestation = await loadCycleAttestation();
+    if (attestation && attestation.priceAlerts.alertsTriggered > 0) {
+      const alertedOnThisAsset = attestation.priceAlerts.symbolsAlerted.some(
+        (s) => s.toUpperCase() === assetUpper || s.toUpperCase().startsWith(assetUpper),
+      );
+      if (alertedOnThisAsset) {
+        await recordAgentDecision({
+          chain: params.chain, agent: 'price-monitor-agent', asset: assetUpper,
+          intendedSide: params.intendedSide, agentApproved: false,
+          agentSide: directive?.recommendedSide ?? null,
+          agentConfidence: directive?.confidence ?? null,
+          agentReason: `PriceMonitor threshold alert on ${assetUpper} — new opens blocked`,
+          notionalUsd: params.notionalUsd, wasActedOn: false,
+        });
+        return {
+          approved: false, stage: 'agent-directive',
+          reason: `PriceMonitorAgent alert active on ${assetUpper} (${attestation.priceAlerts.alertsTriggered} triggered this cycle). Wait for next cycle or set HEDGE_IGNORE_PRICE_ALERTS=1 to bypass.`,
+          agentSide: directive?.recommendedSide ?? null,
+          agentConfidence: directive?.confidence ?? null,
+        };
+      }
+    }
+
+    // ─── ReportingAgent gate — large trades require the last cycle to have
+    // produced ≥ 1 ZK proof (via ReportingAgent → LeadAgent chain). This
+    // ties ReportingAgent's output into the trade path: no proof, no
+    // large trade. Small trades unaffected. Bypass in soft mode when
+    // ZK_ATTEST_STRICT != 1.
+    if (params.notionalUsd >= REPORTING_ZK_REQUIRED_USD) {
+      const zkCount = attestation?.zkProofsCount ?? 0;
+      if (zkCount === 0 && (process.env.ZK_ATTEST_STRICT ?? '').trim() === '1') {
+        await recordAgentDecision({
+          chain: params.chain, agent: 'reporting-agent', asset: assetUpper,
+          intendedSide: params.intendedSide, agentApproved: false,
+          agentSide: directive?.recommendedSide ?? null,
+          agentConfidence: directive?.confidence ?? null,
+          agentReason: `ReportingAgent ZK proof required for trade ≥ $${REPORTING_ZK_REQUIRED_USD} but last cycle produced 0 proofs`,
+          notionalUsd: params.notionalUsd, wasActedOn: false,
+        });
+        return {
+          approved: false, stage: 'safe-execution-guard',
+          reason: `ReportingAgent audit gate FAIL: notional $${params.notionalUsd} ≥ $${REPORTING_ZK_REQUIRED_USD} requires ≥ 1 ZK proof from last cycle; got ${zkCount}. STRICT mode active.`,
+          agentSide: directive?.recommendedSide ?? null,
+          agentConfidence: directive?.confidence ?? null,
+        };
+      }
     }
 
     // ─── Layer 3: 2/3 multi-agent CONSENSUS on trades above threshold ────
