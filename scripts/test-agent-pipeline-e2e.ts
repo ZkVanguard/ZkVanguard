@@ -58,15 +58,18 @@ async function main() {
 
   // [2] No cache → fail-OPEN at agent layer, SafeGuard still gates
   //
-  // CRITICAL: DO NOT overwrite the production `agent-directives:by-asset`
-  // key here — this test shares the Aiven DB with production, and wiping
-  // the cache breaks the live agent guard until the next 30-min cron cycle
-  // re-populates. Instead, we snapshot the current cache, wipe it locally
-  // for the fail-open test, and RESTORE at the end.
+  // CRITICAL: DO NOT overwrite the production keys — this test shares the
+  // Aiven DB with production, and wiping them breaks the live agent guard
+  // until the next 30-min cron cycle re-populates. Snapshot BOTH the
+  // directive cache AND the cycle-attestation (which now feeds PriceMonitor
+  // + ReportingAgent gates), wipe locally, restore at the end.
   const NO_CACHE_KEY = 'agent-directives:by-asset';
+  const CYCLE_ATT_KEY = 'cycle-attestation:last';
   const { setCronState, getCronState } = await import('../lib/db/cron-state');
   const PROD_DIRECTIVE_SNAPSHOT = await getCronState<unknown>(NO_CACHE_KEY);
+  const PROD_ATTESTATION_SNAPSHOT = await getCronState<unknown>(CYCLE_ATT_KEY);
   await setCronState(NO_CACHE_KEY, null);
+  await setCronState(CYCLE_ATT_KEY, null); // clean slate for the fail-open test
   const noCacheCheck = await checkBeforeTrade({
     chain: 'sui', asset: 'BTC', intendedSide: 'SHORT',
     notionalUsd: 100, agentSource: 'e2e',
@@ -462,10 +465,12 @@ async function main() {
     `checked=${stubResult.checked}, drifted=${stubResult.drifted}, closed=${stubResult.closed}, errors=${stubResult.errors}`,
   );
 
-  // [29-31] PriceMonitor + Reporting agent → trade guard wiring
+  // [29-32] PriceMonitor + Reporting agent → trade guard wiring
   // Simulate a cycle attestation with alertsTriggered on BTC + zkProofsCount=0.
   // Verify the guard uses that data to block trades.
-  await setCronState('cycle-attestation:last', {
+  // NOTE: this test MUST come near the end because it pollutes the cache
+  // for subsequent tests. Snapshot+restore at teardown handles it.
+  await setCronState(CYCLE_ATT_KEY, {
     ranAt: Date.now(),
     chain: 'sui',
     zkProofsCount: 0,
@@ -527,6 +532,62 @@ async function main() {
     largeSizeSoftPass.approved === true,
     `approved=${largeSizeSoftPass.approved}, reason=${largeSizeSoftPass.reason.slice(0, 100)}`,
   );
+
+  // [33-37] Profit-lock guard — caps risk allocation as drawdown grows
+  const { applyProfitLock } = await import('../lib/services/sui/cron/profit-lock-guard');
+
+  // No drawdown → no clamp
+  const noDD = applyProfitLock({ BTC: 40, ETH: 30, SUI: 15, CRO: 15, USDC: 0 }, 100, 100);
+  record(
+    'Profit-lock: 0% drawdown → no clamp',
+    noDD.active === false && noDD.riskAllocationCap === 100,
+    `active=${noDD.active}, cap=${noDD.riskAllocationCap}%`,
+  );
+
+  // 8% drawdown → risk capped somewhere between 60-80%
+  const midDD = applyProfitLock({ BTC: 40, ETH: 30, SUI: 15, CRO: 15, USDC: 0 }, 92, 100);
+  record(
+    'Profit-lock: 8% drawdown → risk cap in 60-80% range',
+    midDD.active === true && midDD.riskAllocationCap >= 60 && midDD.riskAllocationCap <= 80,
+    `active=${midDD.active}, cap=${midDD.riskAllocationCap}%, USDC=${midDD.cappedAllocations.USDC}%`,
+  );
+
+  // 15% drawdown → aggressive clamp
+  const bigDD = applyProfitLock({ BTC: 40, ETH: 30, SUI: 15, CRO: 15, USDC: 0 }, 85, 100);
+  const totalRisk = (bigDD.cappedAllocations.BTC ?? 0) + (bigDD.cappedAllocations.ETH ?? 0) + (bigDD.cappedAllocations.SUI ?? 0) + (bigDD.cappedAllocations.CRO ?? 0);
+  record(
+    'Profit-lock: 15% drawdown → USDC dominant, risk reduced significantly',
+    bigDD.active === true && (bigDD.cappedAllocations.USDC ?? 0) >= 60 && totalRisk <= 40,
+    `USDC=${bigDD.cappedAllocations.USDC}%, totalRisk=${totalRisk}%`,
+  );
+
+  // 25% drawdown → 100% USDC (all-defensive mode)
+  const extremeDD = applyProfitLock({ BTC: 40, ETH: 30, SUI: 15, CRO: 15, USDC: 0 }, 75, 100);
+  record(
+    'Profit-lock: 25% drawdown → 100% USDC defensive mode',
+    extremeDD.active === true && extremeDD.cappedAllocations.USDC === 100,
+    `USDC=${extremeDD.cappedAllocations.USDC}%, BTC=${extremeDD.cappedAllocations.BTC}%`,
+  );
+
+  // Disable flag bypasses the guard
+  process.env.PROFIT_LOCK_DISABLE = '1';
+  const disabled = applyProfitLock({ BTC: 40, ETH: 30, SUI: 15, CRO: 15, USDC: 0 }, 60, 100);
+  record(
+    'Profit-lock: PROFIT_LOCK_DISABLE=1 bypasses guard even at 40% drawdown',
+    disabled.active === false,
+    `active=${disabled.active}, reason=${disabled.reason.slice(0, 80)}`,
+  );
+  delete process.env.PROFIT_LOCK_DISABLE;
+
+  // Restore the cycle attestation (PriceMonitor + Reporting inputs)
+  // BEFORE anything else so subsequent tests + production don't see stale
+  // test values.
+  if (PROD_ATTESTATION_SNAPSHOT !== null && PROD_ATTESTATION_SNAPSHOT !== undefined) {
+    await setCronState(CYCLE_ATT_KEY, PROD_ATTESTATION_SNAPSHOT);
+    console.log('[E2E] Restored production cycle-attestation snapshot.');
+  } else {
+    await setCronState(CYCLE_ATT_KEY, null);
+  }
 
   // RESTORE the pre-test production cache — never leave production
   // running with test values or null. If the previous cache was populated

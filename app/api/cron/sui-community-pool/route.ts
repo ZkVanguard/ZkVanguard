@@ -1409,6 +1409,47 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       } catch {
         // best-effort — fall back to minQty-only clamp
       }
+      // ── PROFIT-LOCK GUARD ─────────────────────────────────────────
+      // Before hedgeability clamp, cap RISK allocation based on drawdown
+      // from rolling peak NAV. Prevents the tiny-pool "slow bleed" where
+      // spot LONG positions decay while hedges can't cover them at
+      // sub-minQty scale. Env-tunable via PROFIT_LOCK_DRAWDOWN_START (5%)
+      // and PROFIT_LOCK_ZERO_RISK_AT (20%). Disable with PROFIT_LOCK_DISABLE=1.
+      try {
+        const peakNavForLock = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+        const { applyProfitLock } = await import('@/lib/services/sui/cron/profit-lock-guard');
+        const lockDecision = applyProfitLock(
+          aiResult.allocations as Record<string, number>,
+          navUsd,
+          peakNavForLock,
+        );
+        if (lockDecision.active) {
+          logger.warn('[SUI Cron] Profit-lock guard capped risk allocation', {
+            drawdownPct: lockDecision.drawdownPct.toFixed(2),
+            peakNav: peakNavForLock.toFixed(2),
+            navUsd: navUsd.toFixed(2),
+            riskCap: lockDecision.riskAllocationCap,
+            before: lockDecision.originalAllocations,
+            after: lockDecision.cappedAllocations,
+          });
+          await notifyDiscord(
+            `🛡️ Profit-lock ACTIVE: NAV $${navUsd.toFixed(2)} is ${lockDecision.drawdownPct.toFixed(1)}% below peak $${peakNavForLock.toFixed(2)}. Risk capped at ${lockDecision.riskAllocationCap}%, ${lockDecision.cappedAllocations.USDC ?? 0}% held in USDC.`,
+            'WARN',
+            {
+              drawdownPct: lockDecision.drawdownPct,
+              riskCap: lockDecision.riskAllocationCap,
+              before: lockDecision.originalAllocations,
+              after: lockDecision.cappedAllocations,
+            },
+          ).catch(() => {});
+          aiResult.allocations = lockDecision.cappedAllocations as typeof aiResult.allocations;
+        }
+      } catch (lockErr) {
+        logger.warn('[SUI Cron] Profit-lock guard threw (non-critical)', {
+          error: lockErr instanceof Error ? lockErr.message : String(lockErr),
+        });
+      }
+
       const clamp = clampAllocationsToHedgeable({
         navUsd,
         allocations: aiResult.allocations as Record<string, number>,
