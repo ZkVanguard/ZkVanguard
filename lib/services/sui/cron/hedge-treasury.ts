@@ -929,16 +929,17 @@ export async function ensurePoolLiquidityForWithdraw(
     shortfall: shortfall.toFixed(6),
   });
 
-  // Cooldown gate — open_hedge asserts current_time >= last_hedge_time + cooldown_ms
-  const now = Date.now();
-  const cooldownEndsAt = state.lastHedgeTime + state.cooldownMs;
-  if (now < cooldownEndsAt) {
-    const waitMs = cooldownEndsAt - now;
-    return {
-      success: false,
-      error: `Hedge cooldown active — pool top-up blocked for ${Math.ceil(waitMs / 1000)}s. Please retry.`,
-    };
-  }
+  // Strategy A (cooldown-free): if there's an active hedge whose collateral
+  // the admin can afford to return in a single close_hedge, use that — close
+  // has no cooldown check. Move's `close_hedge` requires `coin::value(funds)
+  // >= expected_return`, where `expected_return = collateral + pnl` for a
+  // profitable settlement. So admin needs to hand over `collateral +
+  // shortfall` USDC to net-add `shortfall` to state.balance.
+  //
+  // Strategy B (fallback): no viable existing hedge, so open a new bridge
+  // hedge with a tiny collateral of our choosing, then close it. Pays the
+  // cooldown check.
+  const activeHedges = await getActiveHedges(network);
 
   // Compute the largest collateral we can push into open_hedge, bounded by
   // MIN_RESERVE_RATIO_BPS (2000 = 20%) and the state's max_hedge_ratio_bps.
@@ -947,27 +948,79 @@ export async function ensurePoolLiquidityForWithdraw(
   const maxByReserve = state.poolBalanceUsdc - (state.onchainNavUsdc * MIN_RESERVE_RATIO_BPS / 10000);
   const maxHedgeTotal = state.onchainNavUsdc * state.maxHedgeRatioBps / 10000;
   const maxByRatio = Math.max(0, maxHedgeTotal - state.totalHedgedUsdc);
-  // Daily cap = 50% of NAV (DAILY_HEDGE_CAP_BPS in Move contract)
   const maxByDaily = Math.max(0, state.onchainNavUsdc * 0.5 - dailyHedgedTodayUsdc);
   const maxCollateral = Math.min(maxByReserve, maxByRatio, maxByDaily);
 
-  if (maxCollateral <= 0.000001) {
+  // Read admin USDC once — we'll iterate strategies against this budget.
+  let adminUsdc = await getAdminUsdcBalance(network);
+
+  // Score reusable hedges by admin affordability: cheapest collateral first,
+  // filtered to ones we can actually pay off (collateral + shortfall ≤ admin).
+  const reusableHedges = [...activeHedges]
+    .filter(h => h.hedgeId.length === 32)
+    .sort((a, b) => a.collateralUsdc - b.collateralUsdc);
+  let reuseTarget: { hedgeId: number[]; collateralUsdc: number } | null = null;
+  for (const h of reusableHedges) {
+    if (h.collateralUsdc + shortfall <= adminUsdc) {
+      reuseTarget = h;
+      break;
+    }
+  }
+
+  // Fallback plan for Strategy B (only relevant if we can't reuse).
+  const bridgeCollateral = Math.min(maxCollateral * 0.5, 0.10);
+  const canRunStrategyB = maxCollateral > 0.000001
+    && Date.now() >= state.lastHedgeTime + state.cooldownMs;
+
+  // If we can't reuse AND can't open a bridge, try to bring admin USDC up
+  // via reverse swaps and re-evaluate reuse (the cheapest existing hedge
+  // may become affordable).
+  if (!reuseTarget && !canRunStrategyB && reusableHedges.length > 0) {
+    const cheapest = reusableHedges[0];
+    const usdcNeeded = cheapest.collateralUsdc + shortfall - adminUsdc;
+    if (usdcNeeded > 0) {
+      try {
+        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+        const mds = getMarketDataService();
+        const prices: Record<string, number> = {};
+        for (const a of POOL_ASSETS) {
+          try {
+            const p = await mds.getTokenPrice(a);
+            if (p?.price > 0) prices[a] = p.price;
+          } catch { /* skip missing prices */ }
+        }
+        const swap = await replenishAdminUsdc(network, usdcNeeded, prices);
+        logger.info('[hedge-treasury] Replenished admin USDC to afford cheapest existing hedge', {
+          hedgeCollateral: cheapest.collateralUsdc.toFixed(6),
+          needed: usdcNeeded.toFixed(6),
+          swapped: swap.swapped.toFixed(6),
+        });
+        adminUsdc = await getAdminUsdcBalance(network);
+        if (cheapest.collateralUsdc + shortfall <= adminUsdc) {
+          reuseTarget = cheapest;
+        }
+      } catch (err) {
+        logger.warn('[hedge-treasury] Reverse-swap for reuse path failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  // Nothing viable — surface a clear error.
+  if (!reuseTarget && !canRunStrategyB) {
+    const cooldownRemainingS = Math.max(0, Math.ceil((state.lastHedgeTime + state.cooldownMs - Date.now()) / 1000));
     return {
       success: false,
-      error: `Pool cannot open a bridge hedge (maxCollateral=$${maxCollateral.toFixed(6)}). ` +
-        `poolBalance=$${state.poolBalanceUsdc.toFixed(4)}, reserve=$${(state.onchainNavUsdc * 0.2).toFixed(4)}. ` +
-        `Admin cannot top up until the pool balance covers the 20% reserve floor.`,
+      error: reusableHedges.length > 0
+        ? `Cannot top up: cheapest existing hedge collateral is $${reusableHedges[0].collateralUsdc.toFixed(4)}, admin has $${adminUsdc.toFixed(4)} (need $${(reusableHedges[0].collateralUsdc + shortfall).toFixed(4)}). Bridge hedge blocked: ${cooldownRemainingS}s cooldown or capacity=$${maxCollateral.toFixed(4)}.`
+        : `Cannot top up: no existing hedge to reuse and bridge hedge blocked (${cooldownRemainingS}s cooldown, maxCollateral=$${maxCollateral.toFixed(4)}).`,
     };
   }
 
-  // Pick a small collateral (< maxCollateral). Using the max would leave the
-  // pool below the min-reserve after open — we want a tiny bridge that comes
-  // right back in the close leg.
-  const collateralUsdc = Math.min(maxCollateral * 0.5, 0.10);
-  const adminNeedsUsdc = collateralUsdc + shortfall;
-
-  // Ensure admin has enough USDC. If not, try to swap non-USDC assets.
-  let adminUsdc = await getAdminUsdcBalance(network);
+  // Ensure admin has enough USDC for the chosen path. If not, reverse-swap.
+  const chosenCollateral = reuseTarget ? reuseTarget.collateralUsdc : bridgeCollateral;
+  const adminNeedsUsdc = shortfall + chosenCollateral;
   if (adminUsdc < adminNeedsUsdc) {
     const usdcShortfall = adminNeedsUsdc - adminUsdc;
     try {
@@ -1001,21 +1054,33 @@ export async function ensurePoolLiquidityForWithdraw(
     }
   }
 
-  const openResult = await openMicroHedgeAndGetId(network, collateralUsdc);
-  if (!openResult.success || !openResult.hedgeId) {
-    return { success: false, error: openResult.error || 'open_hedge failed', openTxDigest: openResult.txDigest };
+  // Execute chosen strategy.
+  let hedgeId: number[];
+  let openTxDigest: string | undefined;
+  let closingCollateral: number;
+  if (reuseTarget) {
+    hedgeId = reuseTarget.hedgeId;
+    closingCollateral = reuseTarget.collateralUsdc;
+    logger.info('[hedge-treasury] Reusing existing hedge for top-up (cooldown-free path)', {
+      hedgeId: Buffer.from(hedgeId).toString('hex').slice(0, 16),
+      collateralUsdc: closingCollateral.toFixed(6),
+      activeCount: activeHedges.length,
+    });
+  } else {
+    const openResult = await openMicroHedgeAndGetId(network, bridgeCollateral);
+    if (!openResult.success || !openResult.hedgeId) {
+      return { success: false, error: openResult.error || 'open_hedge failed', openTxDigest: openResult.txDigest };
+    }
+    hedgeId = openResult.hedgeId;
+    openTxDigest = openResult.txDigest;
+    closingCollateral = bridgeCollateral;
+    await new Promise(r => setTimeout(r, 500));
   }
 
-  // Small settle delay. signAndExecuteTransaction already awaited effects, but
-  // close_hedge's `active_hedges` lookup goes through a fresh RPC read that can
-  // lag a step. 500ms is enough in practice — the 1500ms we started with was
-  // padding for the Vercel 15s timeout, which we've now bumped to 60s.
-  await new Promise(r => setTimeout(r, 500));
-
-  const returnAmount = collateralUsdc + shortfall;
+  const returnAmount = closingCollateral + shortfall;
   const closeResult = await returnUsdcToPool(
     network,
-    openResult.hedgeId,
+    hedgeId,
     returnAmount,
     shortfall,     // pnl_usdc — treated as profit accrual back to pool
     true,          // is_profit
@@ -1024,23 +1089,26 @@ export async function ensurePoolLiquidityForWithdraw(
   if (!closeResult.success) {
     return {
       success: false,
-      error: `open_hedge succeeded but close_hedge failed: ${closeResult.error || 'unknown'}. Hedge left open; cron will reconcile.`,
-      openTxDigest: openResult.txDigest,
+      error: reuseTarget
+        ? `close_hedge failed on existing hedge: ${closeResult.error || 'unknown'}.`
+        : `open_hedge succeeded but close_hedge failed: ${closeResult.error || 'unknown'}. Hedge left open; cron will reconcile.`,
+      openTxDigest,
       closeTxDigest: closeResult.txDigest,
     };
   }
 
   logger.info('[hedge-treasury] Pool topped up for withdrawal', {
+    strategy: reuseTarget ? 'A (reuse existing hedge)' : 'B (open new bridge)',
     shortfall: shortfall.toFixed(6),
-    collateralUsdc: collateralUsdc.toFixed(6),
-    openTx: openResult.txDigest,
+    closingCollateral: closingCollateral.toFixed(6),
+    openTx: openTxDigest,
     closeTx: closeResult.txDigest,
   });
 
   return {
     success: true,
     toppedUpBy: shortfall,
-    openTxDigest: openResult.txDigest,
+    openTxDigest,
     closeTxDigest: closeResult.txDigest,
   };
 }

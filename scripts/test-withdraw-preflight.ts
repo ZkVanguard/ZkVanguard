@@ -97,13 +97,14 @@ async function main() {
 
   if (process.argv.includes('--write')) {
     console.log('\n=== Test 5: WRITE PATH — actually top up the pool ===');
-    // Pick a target payout large enough to force top-up but small enough to
-    // keep the on-chain gas cost + admin USDC drain minimal.
-    const targetShares = 0.02; // 0.02 shares
-    const sharesRaw = BigInt(Math.floor(targetShares * 1e6));
+    // Pick a target payout that FORCES a top-up: expected payout must exceed
+    // pool balance so the helper goes down the open/close path. Use a small
+    // margin (~$0.10 over balance) to keep the actual admin USDC drain tiny.
+    const targetPayoutRaw = state.poolBalanceRaw + 100_000n; // pool + $0.10
+    const sharesRaw = (targetPayoutRaw * state.totalSharesRaw) / state.totalNavRaw + 1n;
     const payoutRaw = (sharesRaw * state.totalNavRaw) / state.totalSharesRaw;
     const payoutUsdc = Number(payoutRaw) / 1e6;
-    console.log(`  Target payout: ${targetShares} shares -> $${payoutUsdc.toFixed(6)} USDC`);
+    console.log(`  Target payout: ${(Number(sharesRaw) / 1e6).toFixed(6)} shares -> $${payoutUsdc.toFixed(6)} USDC`);
     console.log(`  Pool balance before: $${state.poolBalanceUsdc.toFixed(6)}`);
 
     const result = await ensurePoolLiquidityForWithdraw('mainnet', payoutUsdc);
