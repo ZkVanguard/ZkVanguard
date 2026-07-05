@@ -1092,7 +1092,7 @@ export async function POST(request: NextRequest) {
       const { shares } = body;
       if (!shares) {
         return NextResponse.json(
-          { success: false, error: 'Shares required (scaled by 10^18)' },
+          { success: false, error: 'Shares required (raw u64, scaled by 10^6)' },
           { status: 400 }
         );
       }
@@ -1105,13 +1105,64 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      
+
       // Fetch pool stats first to ensure poolStateId is cached
       await service.getPoolStats();
-      
+
       // USDC pool uses 6 decimals for shares
       const sharesNum = Number(sharesScaled) / 1e6;
-      
+
+      // Preflight pool liquidity. The pool contract's on-chain USDC balance
+      // must cover `calculate_assets_for_shares(state, shares_to_burn)` or the
+      // Move `withdraw` entry aborts with E_INSUFFICIENT_BALANCE. When pool
+      // capital has been swapped into wBTC/wETH/SUI on the admin wallet, the
+      // pool balance drifts far below NAV — a live user withdrawal cannot
+      // succeed until the pool is topped up. Do that here before letting the
+      // client sign.
+      try {
+        const { readPoolLiquidityState, ensurePoolLiquidityForWithdraw } = await import('@/lib/services/sui/cron/hedge-treasury');
+        const liq = await readPoolLiquidityState(network);
+        if (liq && liq.totalSharesRaw > 0n) {
+          // Mirror Move calculate_assets_for_shares exactly:
+          // (total_nav_raw * shares_to_burn) / total_shares_raw   [u128 intermediate]
+          const expectedPayoutRaw = (sharesScaled * liq.totalNavRaw) / liq.totalSharesRaw;
+          const expectedPayoutUsdc = Number(expectedPayoutRaw) / 1e6;
+
+          const topUp = await ensurePoolLiquidityForWithdraw(network, expectedPayoutUsdc);
+          if (!topUp.success) {
+            logger.warn('[SUI-API] Withdraw preflight top-up failed', {
+              expectedPayoutUsdc: expectedPayoutUsdc.toFixed(6),
+              poolBalance: liq.poolBalanceUsdc.toFixed(6),
+              error: topUp.error,
+            });
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Pool liquidity insufficient for withdrawal ($${expectedPayoutUsdc.toFixed(2)} needed, pool has $${liq.poolBalanceUsdc.toFixed(2)}). ${topUp.error || 'Top-up failed.'}`,
+                data: {
+                  code: 'POOL_LIQUIDITY_INSUFFICIENT',
+                  poolBalanceUsdc: liq.poolBalanceUsdc,
+                  expectedPayoutUsdc,
+                },
+                chain: 'sui',
+                network,
+              },
+              { status: 503 }
+            );
+          }
+          if (topUp.toppedUpBy) {
+            logger.info('[SUI-API] Withdraw preflight topped up pool', {
+              toppedUpBy: topUp.toppedUpBy.toFixed(6),
+              openTx: topUp.openTxDigest,
+              closeTx: topUp.closeTxDigest,
+            });
+          }
+        }
+      } catch (preflightErr) {
+        logger.error('[SUI-API] Withdraw preflight threw', { error: preflightErr instanceof Error ? preflightErr.message : preflightErr });
+        // Fall through — let the on-chain revert surface if preflight itself broke.
+      }
+
       const params = service.buildWithdrawParams(sharesNum);
 
       // Clear caches so next poll returns fresh data

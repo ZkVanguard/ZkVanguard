@@ -1341,7 +1341,7 @@ export function useCommunityPool(propAddress?: string) {
           dispatchPool({ type: 'SET_SUCCESS', payload: null });
         }, 3000);
       } else {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction failed. Please try again.' });
+        dispatchPool({ type: 'SET_ERROR', payload: result.error || 'Transaction failed. Please try again.' });
       }
     } catch (err: any) {
       logger.error('SUI deposit error', err);
@@ -1423,20 +1423,22 @@ export function useCommunityPool(propAddress?: string) {
       
       // Step 3: Execute transaction
       const result = await suiExecuteTransaction(tx);
-      
+
       if (result.success) {
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'complete' });
         dispatchPool({ type: 'SET_SUCCESS', payload: `Withdrew ~$${estimatedUsd.toFixed(2)} USD! Tx: ${result.digest.slice(0, 10)}...` });
         dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: '' });
         dispatchTx({ type: 'SET_SHOW_WITHDRAW', payload: false });
-        
+
         // Refresh pool data after a short delay
         setTimeout(() => {
           fetchPoolData(true);
           dispatchPool({ type: 'SET_SUCCESS', payload: null });
         }, 3000);
       } else {
-        dispatchPool({ type: 'SET_ERROR', payload: 'Transaction failed. Please try again.' });
+        // Surface the actual wallet/on-chain error so users understand what went wrong
+        // (e.g. E_INSUFFICIENT_BALANCE when the pool is short of USDC).
+        dispatchPool({ type: 'SET_ERROR', payload: result.error || 'Transaction failed. Please try again.' });
       }
     } catch (err: any) {
       logger.error('SUI withdraw error', err);

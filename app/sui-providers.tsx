@@ -70,9 +70,9 @@ interface SuiContextType {
   disconnectWallet: () => void;
   
   // Transactions
-  executeTransaction: (tx: unknown) => Promise<{ digest: string; success: boolean }>;
+  executeTransaction: (tx: unknown) => Promise<{ digest: string; success: boolean; error?: string }>;
   signTransaction: (txBytes: Uint8Array) => Promise<{ signature: string }>;
-  sponsoredExecute: (tx: unknown) => Promise<{ digest: string; success: boolean }>;
+  sponsoredExecute: (tx: unknown) => Promise<{ digest: string; success: boolean; error?: string }>;
   
   // Utilities
   getExplorerUrl: (type: 'tx' | 'address' | 'object', value: string) => string;
@@ -288,7 +288,7 @@ function SuiContextProvider({
     disconnect();
   }, [disconnect]);
 
-  const executeTransaction = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean }> => {
+  const executeTransaction = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean; error?: string }> => {
     if (!isConnected) {
       throw new Error('Wallet not connected');
     }
@@ -317,8 +317,8 @@ function SuiContextProvider({
       return {
         digest: '',
         success: false,
-        ...(isUserRejection ? {} : { error: message }),
-      } as { digest: string; success: boolean };
+        error: isUserRejection ? 'User rejected the transaction' : message,
+      };
     }
   }, [isConnected, isWrongNetwork, walletNetwork, network, signAndExecute]);
 
@@ -336,7 +336,7 @@ function SuiContextProvider({
   // Sponsored execute: 2-step flow
   // Step 1: Server sets gas fields on unbuilt tx → returns modified tx
   // Step 2: Wallet builds + signs → server admin co-signs the same bytes + executes
-  const sponsoredExecute = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean }> => {
+  const sponsoredExecute = useCallback(async (tx: unknown): Promise<{ digest: string; success: boolean; error?: string }> => {
     if (!isConnected || !address) throw new Error('Wallet not connected');
     if (isWrongNetwork) throw new Error(`Wrong network: wallet is on ${walletNetwork || 'unknown'}, app expects ${network}`);
 
@@ -390,8 +390,8 @@ function SuiContextProvider({
       return {
         digest: '',
         success: false,
-        ...(isUserRejection ? {} : { error: message }),
-      } as { digest: string; success: boolean };
+        error: isUserRejection ? 'User rejected the transaction' : message,
+      };
     }
   }, [isConnected, isWrongNetwork, walletNetwork, network, address, walletSignTx]);
 
