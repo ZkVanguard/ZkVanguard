@@ -1131,23 +1131,57 @@ export async function POST(request: NextRequest) {
           const expectedPayoutRaw = (sharesScaled * liq.totalNavRaw) / liq.totalSharesRaw;
           const expectedPayoutUsdc = Number(expectedPayoutRaw) / 1e6;
 
-          // Compute what a user CAN withdraw right now, bounded by:
-          //   (a) pool balance — can't pay more USDC than the contract holds
-          //   (b) max_single_withdrawal_bps — Move cap = X% of NAV per tx
-          // Whichever is smaller. This drives the actionable guidance below.
-          const maxByBalance = liq.poolBalanceUsdc;
+          // Two independent limits per single withdraw:
+          //   (a) pool balance — Move `withdraw` reverts if payout > pool USDC
+          //       balance (E_INSUFFICIENT_BALANCE). Fixable via preflight top-up.
+          //   (b) max_single_withdrawal_bps — Move asserts payout ≤ nav × bps.
+          //       Not fixable in-request — it's a hard per-tx circuit breaker.
           const maxByCapUsdc = liq.totalNavUsdc * liq.maxSingleWithdrawalBps / 10000;
-          const maxWithdrawableUsdc = Math.min(maxByBalance, maxByCapUsdc);
           const sharePrice = liq.totalSharesRaw > 0n
             ? Number(liq.totalNavRaw) / Number(liq.totalSharesRaw)
             : 1;
-          const maxWithdrawableShares = sharePrice > 0 ? maxWithdrawableUsdc / sharePrice : 0;
 
-          const topUp = await ensurePoolLiquidityForWithdraw(network, expectedPayoutUsdc);
+          // Cap-check upfront. A payout above maxByCapUsdc WILL abort on-chain
+          // (E_MAX_WITHDRAWAL_EXCEEDED) even if the pool has enough balance,
+          // so reject early with the cap-bounded max so the frontend's
+          // auto-fill lands on a number the Move contract will accept.
+          if (expectedPayoutUsdc > maxByCapUsdc + 0.001) {
+            const capShares = maxByCapUsdc / sharePrice;
+            const capPct = (liq.maxSingleWithdrawalBps / 100).toFixed(1);
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Withdrawal exceeds per-transaction cap: pool allows up to ${capPct}% of NAV per tx (${capShares.toFixed(4)} shares ≈ $${maxByCapUsdc.toFixed(2)}). Split into multiple withdrawals to fully unwind ${sharesNum.toFixed(4)} shares.`,
+                data: {
+                  code: 'POOL_LIQUIDITY_INSUFFICIENT',
+                  poolBalanceUsdc: liq.poolBalanceUsdc,
+                  expectedPayoutUsdc,
+                  maxWithdrawableUsdc: maxByCapUsdc,
+                  maxWithdrawableShares: capShares,
+                  maxSingleWithdrawalBps: liq.maxSingleWithdrawalBps,
+                  sharePrice,
+                },
+                chain: 'sui',
+                network,
+              },
+              { status: 503 }
+            );
+          }
+
+          // At/under cap. Try to top up pool balance to cover this specific
+          // payout. Bounded by cap so we don't waste effort past what the user
+          // could actually withdraw.
+          const topUpTarget = Math.min(expectedPayoutUsdc, maxByCapUsdc);
+          const topUp = await ensurePoolLiquidityForWithdraw(network, topUpTarget);
           if (!topUp.success) {
+            // Re-read balance in case top-up made partial progress before failing.
+            const liq2 = await readPoolLiquidityState(network).catch(() => null);
+            const postBalance = liq2?.poolBalanceUsdc ?? liq.poolBalanceUsdc;
+            const maxWithdrawableUsdc = Math.min(postBalance, maxByCapUsdc);
+            const maxWithdrawableShares = sharePrice > 0 ? maxWithdrawableUsdc / sharePrice : 0;
             logger.warn('[SUI-API] Withdraw preflight top-up failed', {
               expectedPayoutUsdc: expectedPayoutUsdc.toFixed(6),
-              poolBalance: liq.poolBalanceUsdc.toFixed(6),
+              poolBalance: postBalance.toFixed(6),
               maxWithdrawableUsdc: maxWithdrawableUsdc.toFixed(6),
               error: topUp.error,
             });
@@ -1157,10 +1191,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
               {
                 success: false,
-                error: `Pool liquidity insufficient for withdrawal ($${expectedPayoutUsdc.toFixed(2)} needed, pool has $${liq.poolBalanceUsdc.toFixed(2)}).${suggestion} ${topUp.error || ''}`.trim(),
+                error: `Pool liquidity insufficient for withdrawal ($${expectedPayoutUsdc.toFixed(2)} needed, pool has $${postBalance.toFixed(2)}).${suggestion} ${topUp.error || ''}`.trim(),
                 data: {
                   code: 'POOL_LIQUIDITY_INSUFFICIENT',
-                  poolBalanceUsdc: liq.poolBalanceUsdc,
+                  poolBalanceUsdc: postBalance,
                   expectedPayoutUsdc,
                   maxWithdrawableUsdc,
                   maxWithdrawableShares,
