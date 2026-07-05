@@ -30,7 +30,11 @@ import {
 import { hedgePnLTracker } from '@/lib/services/hedging/HedgePnLTracker';
 
 export const runtime = 'nodejs';
-export const maxDuration = 10;
+// 30s — POST does hedgePnLTracker.getPortfolioPnLSummary (per-hedge market
+// data fan-out) + snapshot record + performance metrics. GET does DB
+// history read + metrics + optional hedge PnL. Both were flaky at 10s on
+// cold-start (observed 504s in prod).
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 interface HistoryResponse {
