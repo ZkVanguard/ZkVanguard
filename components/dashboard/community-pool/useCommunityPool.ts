@@ -1414,6 +1414,14 @@ export function useCommunityPool(propAddress?: string) {
 
       const json = await res.json().catch(() => ({ success: false, error: `Withdraw API returned ${res.status} with an unparseable response` }));
       if (!json.success) {
+        // On POOL_LIQUIDITY_INSUFFICIENT the API returns maxWithdrawableShares —
+        // auto-fill the input so the user can retry immediately at the size
+        // that will actually clear. Preserves the informational error message
+        // above the input.
+        const suggestedShares = json.data?.maxWithdrawableShares;
+        if (json.data?.code === 'POOL_LIQUIDITY_INSUFFICIENT' && typeof suggestedShares === 'number' && suggestedShares > 0.001) {
+          dispatchTx({ type: 'SET_SUI_WITHDRAW_SHARES', payload: suggestedShares.toFixed(4) });
+        }
         dispatchPool({ type: 'SET_ERROR', payload: json.error });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
         dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });

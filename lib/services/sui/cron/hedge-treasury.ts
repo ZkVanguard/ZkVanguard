@@ -699,6 +699,8 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
   onchainNavUsdc: number;
   totalNavUsdc: number;
   maxHedgeRatioBps: number;
+  maxSingleWithdrawalBps: number;
+  dailyWithdrawalCapBps: number;
   lastHedgeTime: number;
   cooldownMs: number;
   dailyHedgedTodayRaw: bigint;
@@ -726,6 +728,8 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
         }};
       }};
       total_shares?: string;
+      max_single_withdrawal_bps?: string;
+      daily_withdrawal_cap_bps?: string;
     };
 
     const obj = await suiClient.getObject({
@@ -784,6 +788,8 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
       onchainNavUsdc: Number(onchainNavRaw) / 1e6,
       totalNavUsdc: Number(totalNavRaw) / 1e6,
       maxHedgeRatioBps,
+      maxSingleWithdrawalBps: Number(fields.max_single_withdrawal_bps || 2500),
+      dailyWithdrawalCapBps: Number(fields.daily_withdrawal_cap_bps || 5000),
       lastHedgeTime,
       cooldownMs,
       dailyHedgedTodayRaw,
