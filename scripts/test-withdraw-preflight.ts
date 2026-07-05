@@ -94,6 +94,45 @@ async function main() {
   }
 
   console.log('\n=== ALL READ-ONLY TESTS COMPLETE ===');
+
+  if (process.argv.includes('--write')) {
+    console.log('\n=== Test 5: WRITE PATH — actually top up the pool ===');
+    // Pick a target payout large enough to force top-up but small enough to
+    // keep the on-chain gas cost + admin USDC drain minimal.
+    const targetShares = 0.02; // 0.02 shares
+    const sharesRaw = BigInt(Math.floor(targetShares * 1e6));
+    const payoutRaw = (sharesRaw * state.totalNavRaw) / state.totalSharesRaw;
+    const payoutUsdc = Number(payoutRaw) / 1e6;
+    console.log(`  Target payout: ${targetShares} shares -> $${payoutUsdc.toFixed(6)} USDC`);
+    console.log(`  Pool balance before: $${state.poolBalanceUsdc.toFixed(6)}`);
+
+    const result = await ensurePoolLiquidityForWithdraw('mainnet', payoutUsdc);
+    console.log(`  result: ${JSON.stringify(result, null, 2)}`);
+
+    if (!result.success) {
+      console.error('  FAIL: top-up did not succeed');
+      process.exit(1);
+    }
+    if (result.alreadyLiquid) {
+      console.log('  NOTE: pool was already liquid, top-up short-circuited');
+    } else {
+      console.log(`  Topped up by: $${(result.toppedUpBy || 0).toFixed(6)}`);
+      console.log(`  open tx: ${result.openTxDigest}`);
+      console.log(`  close tx: ${result.closeTxDigest}`);
+    }
+
+    // Read state again to verify pool balance now covers the payout
+    const after = await readPoolLiquidityState('mainnet');
+    if (after) {
+      console.log(`  Pool balance after: $${after.poolBalanceUsdc.toFixed(6)}`);
+      if (after.poolBalanceRaw >= payoutRaw) {
+        console.log(`  PASS: pool balance now covers the target payout`);
+      } else {
+        console.error(`  FAIL: pool balance ${after.poolBalanceUsdc} still < payout ${payoutUsdc}`);
+        process.exit(1);
+      }
+    }
+  }
 }
 
 main().catch(err => {

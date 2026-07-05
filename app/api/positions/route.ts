@@ -87,29 +87,91 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        const [{ getSuiUsdcPoolService }, { getMarketDataService }] = await Promise.all([
-          import('@/lib/services/sui/SuiCommunityPoolService'),
+        const [{ SUI_USDC_POOL_CONFIG }, { getMarketDataService }] = await Promise.all([
+          import('@/lib/types/sui-pool-types'),
           import('@/lib/services/market-data/RealMarketDataService'),
         ]);
-        const service = getSuiUsdcPoolService('mainnet');
+        const poolConfig = SUI_USDC_POOL_CONFIG.mainnet;
         const mds = getMarketDataService();
 
-        // 1) Pool share + 2) wallet coin balances + 3) live prices, all in parallel
+        // Lightweight path: avoid service.getPoolStats() and
+        // service.getMemberPosition() — both fan out to BlueFin auth +
+        // getBalance/getPositions and admin wallet reads via
+        // safeBluefinSnapshot, which on a cold Vercel lambda routinely
+        // exceeds the 30s serverless cap (observed 504s in prod). NAV here
+        // is derived from on-chain balance + the cron-attested external NAV
+        // dynamic field — the same values getPoolStats uses for the "no
+        // BlueFin, no admin balances" fallback path.
         const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
-        const balancesP = fetch(rpcUrl, {
+        const rpcCall = (method: string, params: unknown[]) => fetch(rpcUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'suix_getAllBalances', params: [address] }),
-        }).then(r => r.json()).then(j => (j.result as Array<{ coinType: string; totalBalance: string }>) || []).catch(() => []);
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        }).then(r => r.json());
 
-        const [stats, user, balances, pBtc, pEth, pSui] = await Promise.all([
-          service.getPoolStats(),
-          service.getMemberPosition(address),
+        const poolStateId = poolConfig.poolStateId;
+        const poolStateP = poolStateId
+          ? rpcCall('sui_getObject', [poolStateId, { showContent: true }]).catch(() => null)
+          : Promise.resolve(null);
+        const externalNavP = poolStateId
+          ? rpcCall('suix_getDynamicFieldObject', [poolStateId, { type: 'vector<u8>', value: Array.from(Buffer.from('external_nav_usdc')) }]).catch(() => null)
+          : Promise.resolve(null);
+        const balancesP = rpcCall('suix_getAllBalances', [address])
+          .then(j => (j.result as Array<{ coinType: string; totalBalance: string }>) || [])
+          .catch(() => [] as Array<{ coinType: string; totalBalance: string }>);
+
+        const [poolStateRes, externalNavRes, balances, pBtc, pEth, pSui] = await Promise.all([
+          poolStateP,
+          externalNavP,
           balancesP,
           mds.getTokenPrice('BTC').then(p => p?.price ?? 0).catch(() => 0),
           mds.getTokenPrice('ETH').then(p => p?.price ?? 0).catch(() => 0),
           mds.getTokenPrice('SUI').then(p => p?.price ?? 0).catch(() => 0),
         ]);
+
+        // Parse pool state (balance, total_shares, members-table id)
+        const poolFields = (poolStateRes as { result?: { data?: { content?: { fields?: Record<string, unknown> } } } } | null)
+          ?.result?.data?.content?.fields;
+        const balanceValue = typeof poolFields?.balance === 'string'
+          ? poolFields.balance
+          : ((poolFields?.balance as { fields?: { value?: string }; value?: string } | undefined)?.fields?.value
+             || (poolFields?.balance as { value?: string } | undefined)?.value
+             || '0');
+        const poolBalanceUsdc = Number(balanceValue || '0') / 1e6;
+        const totalSharesRaw = BigInt(poolFields?.total_shares as string || '0');
+        const externalNavValue = (externalNavRes as { result?: { data?: { content?: { fields?: { value?: string } } } } } | null)
+          ?.result?.data?.content?.fields?.value || '0';
+        const externalNavUsdc = Number(externalNavValue) / 1e6;
+        const totalNAVUsdc = poolBalanceUsdc + externalNavUsdc;
+        const totalShares = Number(totalSharesRaw) / 1e6;
+        const sharePrice = totalShares > 0 ? totalNAVUsdc / totalShares : 1;
+        const memberCount = Number((poolFields?.members as { fields?: { size?: string } } | undefined)?.fields?.size || '0');
+        const membersTableId = ((poolFields?.members as { fields?: { id?: { id?: string } } } | undefined)?.fields?.id?.id) || null;
+
+        // Look up the caller's member row (one dynamic-field lookup, fast).
+        let memberSharesRaw = 0n;
+        let memberDepositedUsdc = 0;
+        let memberJoinedAt = 0;
+        if (membersTableId) {
+          try {
+            const memberRes = await rpcCall('suix_getDynamicFieldObject', [membersTableId, { type: 'address', value: address }]);
+            const mf = ((memberRes as { result?: { data?: { content?: { fields?: { value?: { fields?: Record<string, unknown> }; fields?: Record<string, unknown> } } } } })
+              ?.result?.data?.content?.fields?.value?.fields
+              || (memberRes as { result?: { data?: { content?: { fields?: Record<string, unknown> } } } })
+              ?.result?.data?.content?.fields
+              || {}) as Record<string, unknown>;
+            memberSharesRaw = BigInt(mf.shares as string || '0');
+            memberDepositedUsdc = Number(mf.deposited_usdc || 0) / 1e6;
+            memberJoinedAt = Number(mf.joined_at || 0);
+          } catch {
+            // Member not in table — treat as non-member.
+          }
+        }
+        const shares = Number(memberSharesRaw) / 1e6;
+        const shareValueUsd = shares * sharePrice;
+        const percentage = totalSharesRaw > 0n
+          ? Number((memberSharesRaw * 10000n) / totalSharesRaw) / 100
+          : 0;
 
         // Coin type catalog — canonical 64-char address form
         const canon = (t: string) => {
@@ -130,9 +192,6 @@ export async function GET(request: NextRequest) {
         let totalValue = 0;
 
         // Pool share
-        const shares = Number(user?.shares ?? 0);
-        const shareValueUsd = Number(user?.valueUsd ?? 0);
-        const sharePrice = Number(stats?.sharePriceUsd ?? stats?.sharePrice ?? 1);
         if (shares > 0) {
           positions.push({
             id: 'sui-community-pool',
@@ -147,11 +206,12 @@ export async function GET(request: NextRequest) {
             currentValue: shareValueUsd,
             value: shareValueUsd,
             valueUsd: shareValueUsd,
-            percentage: Number(user?.percentage ?? 0),
-            poolNav: Number(stats?.totalNAVUsd ?? stats?.totalNAV ?? 0),
-            poolMembers: Number(stats?.memberCount ?? 0),
-            joinedAt: Number(user?.joinedAt ?? 0),
-            isMember: !!user?.isMember,
+            percentage,
+            poolNav: totalNAVUsdc,
+            poolMembers: memberCount,
+            joinedAt: memberJoinedAt,
+            isMember: true,
+            costBasisUsd: memberDepositedUsdc,
           });
           totalValue += shareValueUsd;
         }
