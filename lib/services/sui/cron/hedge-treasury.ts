@@ -806,11 +806,14 @@ async function openMicroHedgeAndGetId(
   collateralUsdc: number,
 ): Promise<{ success: boolean; txDigest?: string; hedgeId?: number[]; error?: string }> {
   const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  const agentCapId = (process.env.SUI_AGENT_CAP_ID || process.env.SUI_ADMIN_CAP_ID || '').trim();
+  // open_hedge Move signature takes `&AgentCap`, NOT `&AdminCap`. Falling back
+  // to SUI_ADMIN_CAP_ID here would produce a runtime TypeMismatch: the cap
+  // object types are distinct in the community_pool_usdc module.
+  const agentCapId = (process.env.SUI_AGENT_CAP_ID || '').trim();
   const poolConfig = SUI_USDC_POOL_CONFIG[network];
 
   if (!adminKey) return { success: false, error: 'SUI_POOL_ADMIN_KEY not configured' };
-  if (!agentCapId) return { success: false, error: 'SUI_AGENT_CAP_ID / SUI_ADMIN_CAP_ID not configured' };
+  if (!agentCapId) return { success: false, error: 'SUI_AGENT_CAP_ID not configured (do NOT fall back to SUI_ADMIN_CAP_ID — Move expects AgentCap, not AdminCap)' };
   if (!poolConfig.packageId || !poolConfig.poolStateId) {
     return { success: false, error: 'Pool package or state ID not configured' };
   }
@@ -904,16 +907,17 @@ export async function ensurePoolLiquidityForWithdraw(
     return { success: false, error: 'expectedPayoutUsdc must be a positive number' };
   }
 
-  // Small buffer over the exact payout to survive rounding + share-price drift
-  // between this preflight and the user's on-chain withdraw.
-  const BUFFER_USDC = 0.05;
+  // Buffer over the exact payout to survive share-price drift between this
+  // preflight and the user's on-chain withdraw. 0.5% relative + $0.001 floor:
+  // relative-sizing keeps small pools from over-topping-up while still
+  // covering NAV movement during the round-trip.
+  const target = expectedPayoutUsdc * 1.005 + 0.001;
 
   const state = await readPoolLiquidityState(network);
   if (!state) {
     return { success: false, error: 'Failed to read pool liquidity state' };
   }
 
-  const target = expectedPayoutUsdc + BUFFER_USDC;
   if (state.poolBalanceUsdc >= target) {
     return { success: true, alreadyLiquid: true };
   }
