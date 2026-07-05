@@ -27,7 +27,7 @@ import {
   type ChartDataPoint,
   type PerformanceMetrics 
 } from '@/lib/services/cronos/OnChainPortfolioHistoryService';
-import { hedgePnLTracker } from '@/lib/services/hedging/HedgePnLTracker';
+import { hedgePnLTracker, type HedgePnLUpdate } from '@/lib/services/hedging/HedgePnLTracker';
 
 export const runtime = 'nodejs';
 // 30s — POST does hedgePnLTracker.getPortfolioPnLSummary (per-hedge market
@@ -134,7 +134,7 @@ interface RecordSnapshotBody {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as RecordSnapshotBody;
-    
+
     if (!body.address || typeof body.totalValue !== 'number') {
       return NextResponse.json(
         { error: 'address and totalValue are required' },
@@ -143,27 +143,55 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info(`[Portfolio History API] Recording on-chain snapshot for ${body.address.slice(0, 10)}... value=$${body.totalValue.toFixed(2)}`);
-    
+
     const historyService = getOnChainHistoryService();
-    
-    // Get real hedge PnL from tracker
-    const hedgeSummary = await hedgePnLTracker.getPortfolioPnLSummary(undefined, body.address);
-    
+
+    // Each sub-call is best-effort: hedgePnLTracker fans out to market-data
+    // fetches, historyService.getPerformanceMetrics may hit slow DB paths.
+    // Wrap independently so a single upstream stall never turns the whole
+    // POST into a 500 — we still record the snapshot and return whatever
+    // sub-results we have. Previously an intermittent throw here (observed
+    // ~17s in prod) was surfacing as an opaque "Internal server error".
+    const emptyHedgeSummary = {
+      totalHedges: 0,
+      totalNotional: 0,
+      totalUnrealizedPnL: 0,
+      avgPnLPercentage: 0,
+      profitable: 0,
+      unprofitable: 0,
+      details: [] as HedgePnLUpdate[],
+    };
+    const hedgeSummary = await hedgePnLTracker
+      .getPortfolioPnLSummary(undefined, body.address)
+      .catch((err: unknown) => {
+        logger.warn('[Portfolio History API] getPortfolioPnLSummary failed — using zeros', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return emptyHedgeSummary as typeof emptyHedgeSummary & { details: HedgePnLUpdate[] };
+      });
+
     // Record snapshot with real on-chain data
-    const snapshot = await historyService.recordSnapshot(
-      body.address,
-      {
-        totalValue: body.totalValue,
-        positions: body.positions || [],
-      },
-      {
-        totalHedges: hedgeSummary.totalHedges,
-        totalNotional: hedgeSummary.totalNotional,
-        totalUnrealizedPnL: hedgeSummary.totalUnrealizedPnL,
-        details: hedgeSummary.details,
-      },
-      body.blockNumber
-    );
+    const snapshot = await historyService
+      .recordSnapshot(
+        body.address,
+        {
+          totalValue: body.totalValue,
+          positions: body.positions || [],
+        },
+        {
+          totalHedges: hedgeSummary.totalHedges,
+          totalNotional: hedgeSummary.totalNotional,
+          totalUnrealizedPnL: hedgeSummary.totalUnrealizedPnL,
+          details: hedgeSummary.details,
+        },
+        body.blockNumber
+      )
+      .catch((err: unknown) => {
+        logger.warn('[Portfolio History API] recordSnapshot failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      });
 
     if (!snapshot) {
       return NextResponse.json({
@@ -177,8 +205,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get updated metrics
-    const metrics = await historyService.getPerformanceMetrics(body.address);
+    // Get updated metrics — best-effort. On failure return the snapshot
+    // without metrics so the client at least sees the recording succeeded.
+    const metrics = await historyService.getPerformanceMetrics(body.address).catch((err: unknown) => {
+      logger.warn('[Portfolio History API] getPerformanceMetrics failed — omitting metrics', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    });
 
     return NextResponse.json({
       success: true,
@@ -197,14 +231,16 @@ export async function POST(request: NextRequest) {
         totalNotional: hedgeSummary.totalNotional,
         totalUnrealizedPnL: hedgeSummary.totalUnrealizedPnL,
       },
-      metrics: {
-        totalPnL: metrics.totalPnL,
-        totalPnLPercentage: metrics.totalPnLPercentage,
-        dailyPnL: metrics.dailyPnL,
-        dailyPnLPercentage: metrics.dailyPnLPercentage,
-        activeHedges: metrics.activeHedges,
-        totalHedgePnL: metrics.totalHedgePnL,
-      },
+      ...(metrics ? {
+        metrics: {
+          totalPnL: metrics.totalPnL,
+          totalPnLPercentage: metrics.totalPnLPercentage,
+          dailyPnL: metrics.dailyPnL,
+          dailyPnLPercentage: metrics.dailyPnLPercentage,
+          activeHedges: metrics.activeHedges,
+          totalHedgePnL: metrics.totalHedgePnL,
+        },
+      } : {}),
     });
   } catch (error) {
     logger.error('[Portfolio History API] POST error', error);
