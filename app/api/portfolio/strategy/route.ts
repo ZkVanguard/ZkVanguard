@@ -9,7 +9,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
-export const maxDuration = 10;
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 /**

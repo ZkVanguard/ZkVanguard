@@ -4,7 +4,7 @@ import { query } from '@/lib/db/postgres';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
-export const maxDuration = 10;
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 /**

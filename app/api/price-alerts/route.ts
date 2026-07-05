@@ -18,7 +18,7 @@ import { errMsg, errName } from '@/lib/utils/error-handler';
 
 export const dynamic = 'force-dynamic';
 
-export const maxDuration = 10;
+export const maxDuration = 30;
 /**
  * GET: Get current price alert status
  */

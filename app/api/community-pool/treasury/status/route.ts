@@ -14,7 +14,7 @@ import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';
 
-export const maxDuration = 10;
+export const maxDuration = 30;
 // Cache the treasury address (derived from env var, but only the public address)
 let cachedTreasuryAddress: string | null = null;
 

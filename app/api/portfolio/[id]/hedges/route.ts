@@ -11,7 +11,7 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 
-export const maxDuration = 10;
+export const maxDuration = 30;
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }

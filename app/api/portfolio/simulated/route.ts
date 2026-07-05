@@ -4,7 +4,7 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
-export const maxDuration = 10;
+export const maxDuration = 30;
 
 /**
  * Simulated Portfolio Management API

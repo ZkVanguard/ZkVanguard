@@ -5,7 +5,7 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 // Force dynamic rendering (uses request.url)
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10;
+export const maxDuration = 30;
 
 /**
  * Proxy endpoint for Polymarket API to avoid CORS issues.

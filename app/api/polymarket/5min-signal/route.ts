@@ -15,7 +15,7 @@ import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5Min
  */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10;
+export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
   const limited = readLimiter.check(req);

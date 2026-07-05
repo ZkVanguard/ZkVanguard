@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
-export const maxDuration = 10;
+export const maxDuration = 30;
 
 /**
  * Agent Activity Feed API Route
