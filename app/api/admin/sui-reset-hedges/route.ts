@@ -84,8 +84,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Build transaction
     const usdcType = poolConfig.usdcCoinType;
+
+    // Read prior external_nav_usdc so we can bundle a re-attestation in the same PTB.
+    // admin_reset_hedge_state wipes the external_nav dynamic fields; with strict mode
+    // ON, deposits/withdraws then revert until re-attested. Bundling closes that window.
+    // If the read fails, ABORT — pushing 0 would silently underpay withdrawers.
+    let priorExternalNavRaw: bigint;
+    {
+      const inspectTx = new Transaction();
+      inspectTx.moveCall({
+        target: `${poolConfig.packageId}::${poolConfig.moduleName}::get_external_nav_usdc`,
+        typeArguments: [usdcType],
+        arguments: [inspectTx.object(poolConfig.poolStateId!)],
+      });
+      inspectTx.setSender('0x0000000000000000000000000000000000000000000000000000000000000001');
+      const inspectBytes = await inspectTx.build({ client, onlyTransactionKind: true });
+      const inspect = await client.devInspectTransactionBlock({
+        sender: '0x0000000000000000000000000000000000000000000000000000000000000001',
+        transactionBlock: inspectBytes,
+      });
+      if (inspect.effects?.status?.status !== 'success') {
+        return NextResponse.json({
+          success: false,
+          error: `Prior external_nav unreadable (devInspect: ${inspect.effects?.status?.error ?? 'unknown'}) — reset aborted to avoid pushing wrong NAV`,
+          duration: Date.now() - startTime,
+        }, { status: 500 });
+      }
+      const raw = inspect.results?.[0]?.returnValues?.[0]?.[0];
+      if (!Array.isArray(raw) || raw.length < 8) {
+        return NextResponse.json({
+          success: false,
+          error: 'Prior external_nav returned unexpected shape — reset aborted',
+          duration: Date.now() - startTime,
+        }, { status: 500 });
+      }
+      let v = 0n;
+      for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(raw[i]);
+      priorExternalNavRaw = v;
+    }
+
     const tx = new Transaction();
-    
+
     tx.moveCall({
       target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_reset_hedge_state`,
       typeArguments: [usdcType],
@@ -95,8 +134,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         tx.object('0x6'),                   // Clock
       ],
     });
+    tx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_attest_external_nav`,
+      typeArguments: [usdcType],
+      arguments: [
+        tx.object(adminCapId),
+        tx.object(poolConfig.poolStateId!),
+        tx.pure.u64(priorExternalNavRaw),
+        tx.object('0x6'),
+      ],
+    });
 
-    tx.setGasBudget(50_000_000);
+    tx.setGasBudget(60_000_000);
 
     // Execute
     const result = await client.signAndExecuteTransaction({

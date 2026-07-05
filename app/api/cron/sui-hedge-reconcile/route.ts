@@ -255,6 +255,65 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     }
 
     const usdcType = SUI_USDC_COIN_TYPE[network];
+
+    // Read the current external_nav_usdc value BEFORE the reset. admin_reset_hedge_state
+    // wipes both external_nav dynamic fields; if strict mode is on, deposits and withdraws
+    // then revert with E_EXTERNAL_NAV_STALE until the next sui-community-pool cron re-attests
+    // (up to 30 min later). We bundle a fresh re-attestation into the same PTB so the pool
+    // never enters that blocked state. The reset only removes phantom on-chain hedge
+    // over-reporting; the true off-chain NAV (external_nav_usdc value) is unchanged, so we
+    // push the same value back.
+    // If we can't confirm the prior value, ABORT the reset. Falling through with 0
+    // would silently underpay withdrawers (the exact bug strict mode was built to
+    // prevent). Better to leave drift unrepaired for one reconcile cycle than to
+    // push a wrong NAV.
+    let priorExternalNavRaw: bigint | null = null;
+    try {
+      const inspectTx = new Transaction();
+      inspectTx.moveCall({
+        target: `${poolConfig.packageId}::${poolConfig.moduleName}::get_external_nav_usdc`,
+        typeArguments: [usdcType],
+        arguments: [inspectTx.object(poolConfig.poolStateId!)],
+      });
+      inspectTx.setSender('0x0000000000000000000000000000000000000000000000000000000000000001');
+      const inspectBytes = await inspectTx.build({ client: suiClient, onlyTransactionKind: true });
+      const inspect = await suiClient.devInspectTransactionBlock({
+        sender: '0x0000000000000000000000000000000000000000000000000000000000000001',
+        transactionBlock: inspectBytes,
+      });
+      if (inspect.effects?.status?.status !== 'success') {
+        throw new Error(`devInspect failed: ${inspect.effects?.status?.error ?? 'unknown'}`);
+      }
+      const raw = inspect.results?.[0]?.returnValues?.[0]?.[0];
+      if (!Array.isArray(raw) || raw.length < 8) {
+        throw new Error(`unexpected returnValue shape: ${JSON.stringify(raw)}`);
+      }
+      let v = 0n;
+      for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(raw[i]);
+      priorExternalNavRaw = v;
+    } catch (readErr) {
+      logger.error('[SuiHedgeReconcile] Could not read prior external_nav — aborting reset', {
+        error: errMsg(readErr),
+      });
+      await notifyDiscord(
+        `Hedge-state drift detected but reset ABORTED — could not read prior external_nav (RPC issue). Will retry next reconcile tick. Δ=$${deltaUsdc.toFixed(2)}.`,
+        'WARN',
+        { network, error: errMsg(readErr) },
+      );
+      return NextResponse.json({
+        success: true,
+        ranAt,
+        network,
+        attempted: true,
+        onChainHedges: onChainCount,
+        liveBluefinPositions: liveCount,
+        driftDetected: true,
+        driftDetails: { onChainHedgesUsdc: onChainHedgedUsdc, liveMarginUsdc, deltaUsdc },
+        resetExecuted: false,
+        reason: 'prior external_nav unreadable — reset aborted to avoid pushing wrong NAV',
+      });
+    }
+
     const tx = new Transaction();
     tx.moveCall({
       target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_reset_hedge_state`,
@@ -265,7 +324,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
         tx.object('0x6'),
       ],
     });
-    tx.setGasBudget(20_000_000);
+    tx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_attest_external_nav`,
+      typeArguments: [usdcType],
+      arguments: [
+        tx.object(adminCapId),
+        tx.object(poolConfig.poolStateId!),
+        tx.pure.u64(priorExternalNavRaw),
+        tx.object('0x6'),
+      ],
+    });
+    tx.setGasBudget(30_000_000);
 
     const result = await suiClient.signAndExecuteTransaction({
       signer: keypair,
@@ -275,13 +344,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     const ok = result.effects?.status?.status === 'success';
 
     if (ok) {
-      logger.info('[SuiHedgeReconcile] ✅ admin_reset_hedge_state succeeded — drift repaired', {
+      const reAttestedUsd = Number(priorExternalNavRaw) / 1e6;
+      logger.info('[SuiHedgeReconcile] ✅ admin_reset_hedge_state + re-attest bundled — drift repaired', {
         txDigest: result.digest,
         clearedHedgesCount: onChainCount,
         clearedHedgedUsdc: onChainHedgedUsdc.toFixed(4),
+        reAttestedExternalNavUsd: reAttestedUsd.toFixed(4),
       });
       await notifyDiscord(
-        `Drift repaired: cleared ${onChainCount} phantom hedge(s) ($${onChainHedgedUsdc.toFixed(2)}). Withdrawal cap correct again.`,
+        `Drift repaired: cleared ${onChainCount} phantom hedge(s) ($${onChainHedgedUsdc.toFixed(2)}), re-attested external NAV $${reAttestedUsd.toFixed(2)}. Withdrawals stay open.`,
         'INFO',
         { network, txDigest: result.digest },
       );

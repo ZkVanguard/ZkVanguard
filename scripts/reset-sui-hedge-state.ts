@@ -129,8 +129,41 @@ async function main() {
   }
 
   const usdcType = poolConfig.usdcCoinType;
+
+  // Bundle re-attest in same PTB so strict mode never blocks user flow post-reset.
+  // Abort if we can't read the prior value — pushing 0 would silently underpay.
+  let priorExternalNavRaw: bigint;
+  {
+    const inspectTx = new Transaction();
+    inspectTx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::get_external_nav_usdc`,
+      typeArguments: [usdcType],
+      arguments: [inspectTx.object(poolConfig.poolStateId!)],
+    });
+    inspectTx.setSender('0x0000000000000000000000000000000000000000000000000000000000000001');
+    const inspectBytes = await inspectTx.build({ client, onlyTransactionKind: true });
+    const inspect = await client.devInspectTransactionBlock({
+      sender: '0x0000000000000000000000000000000000000000000000000000000000000001',
+      transactionBlock: inspectBytes,
+    });
+    if (inspect.effects?.status?.status !== 'success') {
+      console.error(`   ❌ Could not read prior external_nav: ${inspect.effects?.status?.error ?? 'unknown'}`);
+      console.error('   Aborting reset — pushing 0 would underpay withdrawers.');
+      process.exit(1);
+    }
+    const raw = inspect.results?.[0]?.returnValues?.[0]?.[0];
+    if (!Array.isArray(raw) || raw.length < 8) {
+      console.error(`   ❌ Prior external_nav returned unexpected shape: ${JSON.stringify(raw)}`);
+      process.exit(1);
+    }
+    let v = 0n;
+    for (let i = 7; i >= 0; i--) v = (v << 8n) | BigInt(raw[i]);
+    priorExternalNavRaw = v;
+    console.log(`   Prior external_nav: $${(Number(priorExternalNavRaw) / 1e6).toFixed(4)} (will re-attest in same PTB)`);
+  }
+
   const tx = new Transaction();
-  
+
   tx.moveCall({
     target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_reset_hedge_state`,
     typeArguments: [usdcType],
@@ -140,8 +173,18 @@ async function main() {
       tx.object('0x6'),                   // Clock
     ],
   });
+  tx.moveCall({
+    target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_attest_external_nav`,
+    typeArguments: [usdcType],
+    arguments: [
+      tx.object(adminCapId),
+      tx.object(poolConfig.poolStateId!),
+      tx.pure.u64(priorExternalNavRaw),
+      tx.object('0x6'),
+    ],
+  });
 
-  tx.setGasBudget(50_000_000);
+  tx.setGasBudget(60_000_000);
 
   try {
     const result = await client.signAndExecuteTransaction({
