@@ -21,7 +21,11 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
-export const maxDuration = 10;
+// 30s covers cold-start latency for calculateRiskMetrics (DB NAV history)
+// + calculateRealTimeVolatility (parallel market-data API calls). The 10s
+// cap was flaky in prod — a cold Vercel lambda + a slow Crypto.com response
+// was enough to trip it.
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 // Cache duration for risk metrics (5 minutes)

@@ -8,7 +8,10 @@ import { getCached, setCached } from '@/lib/db/ui-cache';
 
 export const runtime = 'nodejs';
 
-export const maxDuration = 10;
+// 30s to cover cold-start latency for the SUI branch (RPC + market data
+// fan-out) and the EVM branch (portfolio-data provider chain). 10s was
+// flaky in prod — a cold lambda + a single slow upstream tripped it.
+export const maxDuration = 30;
 // Force dynamic rendering - this route uses request.url
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +71,21 @@ export async function GET(request: NextRequest) {
     // the user held 23.43 pool shares ($43.88) plus $10.61 USDC in their
     // wallet ready to deposit. Cached 30 s server-side.
     if (address.length > 42) {
+      // Two-tier cache read (matches the EVM branch below). Was missing here,
+      // so every SUI-address request did a full RPC + market-data fan-out —
+      // that's what was tripping the maxDuration in prod on cold starts.
+      const memCached = positionsCache.get(address);
+      if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
+        logger.info(`[Positions API] SUI memory cache HIT for ${address.slice(0, 10)}...`);
+        return NextResponse.json(memCached.data);
+      }
+      const dbCached = await getDbCachedPositions(address);
+      if (dbCached) {
+        positionsCache.set(address, { data: dbCached, timestamp: Date.now() });
+        logger.info(`[Positions API] SUI DB cache HIT (cold-start recovery) for ${address.slice(0, 10)}...`);
+        return NextResponse.json(dbCached);
+      }
+
       try {
         const [{ getSuiUsdcPoolService }, { getMarketDataService }] = await Promise.all([
           import('@/lib/services/sui/SuiCommunityPoolService'),
