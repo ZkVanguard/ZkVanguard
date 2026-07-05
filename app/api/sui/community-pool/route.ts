@@ -30,7 +30,10 @@ import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
 import { verifyCronRequest } from '@/lib/qstash';
 
 export const runtime = 'nodejs';
-export const maxDuration = 15;
+// 60s to give the withdraw preflight room to run its open+close top-up
+// round-trip (~8-13s locally, more with Vercel cold-start latency) without
+// hitting the serverless timeout. Read-only actions still return in <1s.
+export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 type NetworkType = 'testnet' | 'mainnet';

@@ -1382,14 +1382,37 @@ export function useCommunityPool(propAddress?: string) {
       // USDC pool shares use 6 decimals (matching USDC). API divides input by 1e6.
       const sharesRaw = BigInt(Math.floor(shares * 1_000_000));
 
-      // Step 1: Get transaction params from API
-      const res = await fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shares: sharesRaw.toString() }),
-      });
-      
-      const json = await res.json();
+      // Step 1: Get transaction params from API.
+      //
+      // The server preflight tops up the on-chain pool balance when the
+      // contract is short. That round-trip (open_hedge + close_hedge, both
+      // awaiting finality) can take 10-20s and — on a Vercel cold-start —
+      // occasionally exceed the serverless timeout, returning a 504. In that
+      // case the top-up txs have almost certainly already been submitted and
+      // will land shortly, so we retry once after a delay: the second call
+      // hits the "already liquid" branch and returns fast.
+      const fetchWithdrawParams = async () =>
+        fetch(`/api/sui/community-pool?action=withdraw&network=${suiNetwork}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shares: sharesRaw.toString() }),
+        });
+
+      let res = await fetchWithdrawParams();
+      if (res.status === 504) {
+        logger.warn('Withdraw preflight timed out (504) — retrying after top-up settles');
+        await new Promise(r => setTimeout(r, 15000));
+        res = await fetchWithdrawParams();
+      }
+
+      if (res.status === 504) {
+        dispatchPool({ type: 'SET_ERROR', payload: 'Pool liquidity is being prepared on-chain. Please wait ~30 seconds and try again.' });
+        dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });
+        dispatchTx({ type: 'SET_TX_STATUS', payload: 'idle' });
+        return;
+      }
+
+      const json = await res.json().catch(() => ({ success: false, error: `Withdraw API returned ${res.status} with an unparseable response` }));
       if (!json.success) {
         dispatchPool({ type: 'SET_ERROR', payload: json.error });
         dispatchTx({ type: 'SET_ACTION_LOADING', payload: false });

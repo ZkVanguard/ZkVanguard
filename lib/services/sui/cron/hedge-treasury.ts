@@ -1006,8 +1006,11 @@ export async function ensurePoolLiquidityForWithdraw(
     return { success: false, error: openResult.error || 'open_hedge failed', openTxDigest: openResult.txDigest };
   }
 
-  // Small settle delay to make sure the hedge is visible in RPC state before close
-  await new Promise(r => setTimeout(r, 1500));
+  // Small settle delay. signAndExecuteTransaction already awaited effects, but
+  // close_hedge's `active_hedges` lookup goes through a fresh RPC read that can
+  // lag a step. 500ms is enough in practice — the 1500ms we started with was
+  // padding for the Vercel 15s timeout, which we've now bumped to 60s.
+  await new Promise(r => setTimeout(r, 500));
 
   const returnAmount = collateralUsdc + shortfall;
   const closeResult = await returnUsdcToPool(
