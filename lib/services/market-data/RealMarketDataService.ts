@@ -227,7 +227,7 @@ class RealMarketDataService {
   async getTokenPrice(symbol: string): Promise<MarketPrice> {
     const cacheKey = symbol.toUpperCase();
     const now = Date.now();
-    
+
     // Stablecoins - always $1
     if (['USDC', 'USDT', 'DEVUSDC', 'DEVUSDCE', 'DAI', 'MOCKUSDC'].includes(cacheKey)) {
       return {
@@ -238,6 +238,12 @@ class RealMarketDataService {
         timestamp: now,
         source: 'stablecoin',
       };
+    }
+
+    // SUIPOOL — SUI Community Pool share price. Not a Crypto.com ticker; resolve
+    // from the on-chain pool state. Cached 30s to keep this cheap under polling.
+    if (cacheKey === 'SUIPOOL') {
+      return this._getSuiPoolSharePrice(symbol);
     }
     
     // Check cache first (instant return)
@@ -290,6 +296,55 @@ class RealMarketDataService {
     } finally {
       this.pendingRequests.delete(cacheKey);
     }
+  }
+
+  /**
+   * SUIPOOL is the SUI Community Pool share price (USDC per share). It's not a
+   * Crypto.com ticker; we resolve it from the on-chain pool state. Cached in the
+   * same `priceCache` map with a 30s TTL — the poll cadence from the frontend is
+   * every 15s per subscriber, so cache absorbs bursts.
+   */
+  private async _getSuiPoolSharePrice(symbol: string): Promise<MarketPrice> {
+    const cacheKey = 'SUIPOOL';
+    const now = Date.now();
+    const cached = this.priceCache.get(cacheKey);
+    if (cached && now - cached.timestamp < 30_000) {
+      return {
+        symbol,
+        price: cached.price,
+        change24h: cached.change24h,
+        volume24h: cached.volume24h,
+        timestamp: cached.timestamp,
+        source: 'sui-pool',
+      };
+    }
+    try {
+      const { getSuiUsdcPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
+      const svc = getSuiUsdcPoolService();
+      const stats = await svc.getPoolStats();
+      const price = Number(stats.sharePriceUsdc) || 0;
+      if (price > 0) {
+        this.priceCache.set(cacheKey, {
+          price,
+          change24h: 0,
+          high24h: price,
+          low24h: price,
+          volume24h: 0,
+          timestamp: now,
+        });
+        return { symbol, price, change24h: 0, volume24h: 0, timestamp: now, source: 'sui-pool' };
+      }
+    } catch (err) {
+      logger.warn('[RealMarketData] SUIPOOL resolve failed', { error: err instanceof Error ? err.message : String(err) });
+    }
+    // Serve stale cache up to 1h before giving up
+    if (cached && now - cached.timestamp < 3_600_000) {
+      return {
+        symbol, price: cached.price, change24h: 0, volume24h: 0,
+        timestamp: cached.timestamp, source: 'stale_cache',
+      };
+    }
+    throw new Error('SUIPOOL share price unavailable (pool state unreadable)');
   }
 
   private async _doFetchSinglePrice(symbol: string): Promise<MarketPrice> {

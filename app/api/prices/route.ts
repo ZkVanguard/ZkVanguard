@@ -68,13 +68,24 @@ export async function GET(request: NextRequest) {
           headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
         });
       } else {
-        // Use fallback system (auto)
+        // Use fallback system (auto). Use allSettled so one unresolvable symbol
+        // does not poison the whole batch — a common failure mode when the
+        // frontend requests a mix of real tickers (BTC/ETH/USDC) and derived
+        // symbols like SUIPOOL that may be temporarily unavailable.
         const marketData = getMarketDataService();
-        const pricePromises = symbols.map(sym => marketData.getTokenPrice(sym));
-        const prices = await Promise.all(pricePromises);
-        
-        // ═══ CIRCUIT BREAKER + WEBHOOK TRIGGER ═══
-        const validatedPrices = prices.filter(p => {
+        const settled = await Promise.allSettled(symbols.map(sym => marketData.getTokenPrice(sym)));
+        const prices = settled
+          .map((r, i) => r.status === 'fulfilled' ? r.value : { rejected: true, symbol: symbols[i], reason: r.reason }) as Array<import('@/lib/services/market-data/RealMarketDataService').MarketPrice | { rejected: true; symbol: string; reason: unknown }>;
+        for (const p of prices) {
+          if ('rejected' in p) {
+            logger.warn(`[Market Data API] batch: skipping ${p.symbol}`, {
+              error: p.reason instanceof Error ? p.reason.message : String(p.reason),
+            });
+          }
+        }
+        // Circuit breaker + webhook trigger, keeping only accepted prices
+        const validatedPrices = prices.filter((p): p is import('@/lib/services/market-data/RealMarketDataService').MarketPrice => {
+          if ('rejected' in p) return false;
           const result = validatePrice(p.symbol, p.price);
           if (result.accepted) {
             recordPriceUpdate(p.symbol, p.price);
