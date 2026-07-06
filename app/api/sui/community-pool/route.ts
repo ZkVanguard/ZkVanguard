@@ -1150,22 +1150,26 @@ export async function POST(request: NextRequest) {
           const applySafety = (v: number) => v * (10000 - SAFETY_MARGIN_BPS) / 10000;
 
           // Cap-check upfront. A payout above maxByCapUsdc WILL abort on-chain
-          // (E_MAX_WITHDRAWAL_EXCEEDED) even if the pool has enough balance,
-          // so reject early with the cap-bounded max so the frontend's
-          // auto-fill lands on a number the Move contract will accept.
+          // (E_MAX_WITHDRAWAL_EXCEEDED) even if the pool has enough balance.
+          // Bound the suggested max by BOTH the cap AND the current pool balance:
+          // reporting only the cap-based max would send the user back for a
+          // retry that then needs a top-up, and if the top-up fails (admin
+          // short, concurrent tx, etc.) the retry produces a second 503.
+          // Using the balance-based max means the retry needs no top-up and
+          // will succeed on-chain immediately.
           if (expectedPayoutUsdc > maxByCapUsdc + 0.001) {
-            const safeCapUsdc = applySafety(maxByCapUsdc);
-            const capShares = safeCapUsdc / sharePrice;
+            const safeMaxUsdc = applySafety(Math.min(maxByCapUsdc, liq.poolBalanceUsdc));
+            const capShares = safeMaxUsdc / sharePrice;
             const capPct = (liq.maxSingleWithdrawalBps / 100).toFixed(1);
             return NextResponse.json(
               {
                 success: false,
-                error: `Withdrawal exceeds per-transaction cap: pool allows up to ${capPct}% of NAV per tx (${capShares.toFixed(4)} shares ≈ $${safeCapUsdc.toFixed(2)}). Split into multiple withdrawals to fully unwind ${sharesNum.toFixed(4)} shares.`,
+                error: `Withdrawal exceeds per-transaction cap: pool allows up to ${capPct}% of NAV per tx (${capShares.toFixed(4)} shares ≈ $${safeMaxUsdc.toFixed(2)}). Split into multiple withdrawals to fully unwind ${sharesNum.toFixed(4)} shares.`,
                 data: {
                   code: 'POOL_LIQUIDITY_INSUFFICIENT',
                   poolBalanceUsdc: liq.poolBalanceUsdc,
                   expectedPayoutUsdc,
-                  maxWithdrawableUsdc: safeCapUsdc,
+                  maxWithdrawableUsdc: safeMaxUsdc,
                   maxWithdrawableShares: capShares,
                   maxSingleWithdrawalBps: liq.maxSingleWithdrawalBps,
                   sharePrice,
