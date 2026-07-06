@@ -1267,6 +1267,52 @@ export async function POST(request: NextRequest) {
               closeTx: topUp.closeTxDigest,
             });
           }
+
+          // Even on top-up "success", verify the pool balance is now sufficient
+          // for the exact payout the Move contract will compute. The top-up
+          // path allows partial bridging (bridge whatever admin can afford),
+          // which means top-up may report success without fully covering the
+          // shortfall. Move-side would then abort with E_INSUFFICIENT_BALANCE.
+          // Fail closed with the same guidance the top-up-failure branch uses.
+          const liqPost = await readPoolLiquidityState(network).catch(() => null);
+          const finalBalance = liqPost?.poolBalanceUsdc ?? liq.poolBalanceUsdc;
+          if (finalBalance + 0.001 < expectedPayoutUsdc) {
+            const rawMaxUsdc = Math.min(finalBalance, maxByCapUsdc);
+            const maxWithdrawableUsdc = applySafety(rawMaxUsdc);
+            const maxWithdrawableShares = sharePrice > 0 ? maxWithdrawableUsdc / sharePrice : 0;
+            let bluefinFreeUsdc: number | undefined;
+            try {
+              const healthRes = await fetch(`${new URL(request.url).origin}/api/health/production`, { cache: 'no-store' });
+              if (healthRes.ok) {
+                const health = await healthRes.json();
+                const free = health?.components?.bluefin?.freeCollateral;
+                if (typeof free === 'number' && free > 0) bluefinFreeUsdc = free;
+              }
+            } catch { /* non-critical */ }
+            const stuckHint = bluefinFreeUsdc && bluefinFreeUsdc > 1
+              ? ` Additional $${bluefinFreeUsdc.toFixed(2)} is on BlueFin as free collateral and needs a withdrawFromMarginBank call to reach the pool.`
+              : '';
+            return NextResponse.json(
+              {
+                success: false,
+                error: `Pool topped up to $${finalBalance.toFixed(2)} but full payout $${expectedPayoutUsdc.toFixed(2)} requires more. You can withdraw up to ${maxWithdrawableShares.toFixed(4)} shares (~$${maxWithdrawableUsdc.toFixed(2)}) right now.${stuckHint}`,
+                data: {
+                  code: 'POOL_LIQUIDITY_INSUFFICIENT',
+                  poolBalanceUsdc: finalBalance,
+                  expectedPayoutUsdc,
+                  maxWithdrawableUsdc,
+                  maxWithdrawableShares,
+                  maxSingleWithdrawalBps: liq.maxSingleWithdrawalBps,
+                  sharePrice,
+                  bluefinFreeUsdc,
+                  partialTopUp: topUp.toppedUpBy,
+                },
+                chain: 'sui',
+                network,
+              },
+              { status: 503 }
+            );
+          }
         }
       } catch (preflightErr) {
         logger.error('[SUI-API] Withdraw preflight threw', { error: preflightErr instanceof Error ? preflightErr.message : preflightErr });
