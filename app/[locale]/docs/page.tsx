@@ -610,7 +610,7 @@ function ZKProofsSection() {
       <h3 className="text-2xl font-semibold text-[#1D1D1F] mb-3">Usage Example (Live on Testnet!)</h3>
       <div className="mb-4 bg-[#34C759]/10 border border-[#34C759]/30 rounded-lg p-4">
         <p className="text-[#1D1D1F] text-sm">
-          <strong>✅ Production Ready:</strong> ZK-STARK proofs are generated via Python backend API and stored on-chain. Try it at /zk-proof!
+          <strong>✅ Production Ready:</strong> ZK-STARK proofs are generated via Python backend API and stored on-chain. Try it at /zk!
         </p>
       </div>
       <div className="bg-[#1D1D1F] rounded-lg p-4 mb-4">
