@@ -1211,16 +1211,34 @@ export async function POST(request: NextRequest) {
             const rawMaxUsdc = Math.min(postBalance, maxByCapUsdc);
             const maxWithdrawableUsdc = applySafety(rawMaxUsdc);
             const maxWithdrawableShares = sharePrice > 0 ? maxWithdrawableUsdc / sharePrice : 0;
+
+            // Best-effort read of BlueFin free collateral (the money we can't
+            // touch yet). Surface it so operators + users know exactly what
+            // slice of NAV is temporarily stranded on the exchange.
+            let bluefinFreeUsdc: number | undefined;
+            try {
+              const healthRes = await fetch(`${new URL(request.url).origin}/api/health/production`, { cache: 'no-store' });
+              if (healthRes.ok) {
+                const health = await healthRes.json();
+                const free = health?.components?.bluefin?.freeCollateral;
+                if (typeof free === 'number' && free > 0) bluefinFreeUsdc = free;
+              }
+            } catch { /* non-critical */ }
+
             logger.warn('[SUI-API] Withdraw preflight top-up failed', {
               expectedPayoutUsdc: expectedPayoutUsdc.toFixed(6),
               poolBalance: postBalance.toFixed(6),
               rawMaxUsdc: rawMaxUsdc.toFixed(6),
               maxWithdrawableUsdc: maxWithdrawableUsdc.toFixed(6),
+              bluefinFreeUsdc: bluefinFreeUsdc?.toFixed(6),
               error: topUp.error,
             });
+            const stuckHint = bluefinFreeUsdc && bluefinFreeUsdc > 1
+              ? ` Additional $${bluefinFreeUsdc.toFixed(2)} is currently held as free collateral on BlueFin and requires a manual withdrawFromMarginBank call to move back to the pool.`
+              : '';
             const suggestion = maxWithdrawableShares > 0.001
-              ? ` You can withdraw up to ${maxWithdrawableShares.toFixed(4)} shares (~$${maxWithdrawableUsdc.toFixed(2)}) right now without waiting.`
-              : ' Pool needs manual replenishment — please contact support.';
+              ? ` You can withdraw up to ${maxWithdrawableShares.toFixed(4)} shares (~$${maxWithdrawableUsdc.toFixed(2)}) right now without waiting.${stuckHint}`
+              : ' Pool needs manual replenishment — please contact support.' + stuckHint;
             return NextResponse.json(
               {
                 success: false,
@@ -1233,6 +1251,7 @@ export async function POST(request: NextRequest) {
                   maxWithdrawableShares,
                   maxSingleWithdrawalBps: liq.maxSingleWithdrawalBps,
                   sharePrice,
+                  bluefinFreeUsdc,
                 },
                 chain: 'sui',
                 network,

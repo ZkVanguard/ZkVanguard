@@ -928,7 +928,7 @@ export async function ensurePoolLiquidityForWithdraw(
     return { success: true, alreadyLiquid: true };
   }
 
-  const shortfall = target - state.poolBalanceUsdc;
+  let shortfall = target - state.poolBalanceUsdc;
   logger.info('[hedge-treasury] Pool short of withdrawal liquidity', {
     poolBalance: state.poolBalanceUsdc.toFixed(6),
     expectedPayout: expectedPayoutUsdc.toFixed(6),
@@ -1013,6 +1013,26 @@ export async function ensurePoolLiquidityForWithdraw(
     }
   }
 
+  // Last-resort partial mode: reuseTarget is null (admin can't cover
+  // collateral+shortfall) AND strategy B blocked. If admin has any USDC
+  // above the cheapest collateral, bridge whatever fits — better to inject
+  // $17 than to bail on a $30 shortfall. Full withdraws that need capital
+  // beyond admin+swap reach are inherently constrained by BlueFin free
+  // collateral which lives on the exchange (no direct withdraw path yet);
+  // partial bridging surfaces the most we can move today.
+  if (!reuseTarget && !canRunStrategyB && reusableHedges.length > 0) {
+    const cheapest = reusableHedges[0];
+    if (adminUsdc > cheapest.collateralUsdc + 0.01) {
+      reuseTarget = cheapest;
+      logger.info('[hedge-treasury] Partial-topup path selected — bridging what admin can cover', {
+        adminUsdc: adminUsdc.toFixed(4),
+        cheapestCollateral: cheapest.collateralUsdc.toFixed(4),
+        fullShortfall: shortfall.toFixed(4),
+        maxBridgeable: (adminUsdc - cheapest.collateralUsdc).toFixed(4),
+      });
+    }
+  }
+
   // Nothing viable — surface a clear error.
   if (!reuseTarget && !canRunStrategyB) {
     const cooldownRemainingS = Math.max(0, Math.ceil((state.lastHedgeTime + state.cooldownMs - Date.now()) / 1000));
@@ -1045,12 +1065,24 @@ export async function ensurePoolLiquidityForWithdraw(
         swapped: swap.swapped.toFixed(6),
       });
       adminUsdc = await getAdminUsdcBalance(network);
+      // If still short, DON'T bail — bridge whatever admin now has. Better
+      // to inject $18 than to reject the whole withdraw. Effective shortfall
+      // becomes what admin can actually cover after paying the collateral.
       if (adminUsdc < adminNeedsUsdc) {
-        return {
-          success: false,
-          error: `Admin has $${adminUsdc.toFixed(4)} USDC after swap attempt; needs $${adminNeedsUsdc.toFixed(4)} to top up pool.`,
-          swapDetails: swap.details,
-        };
+        const feasibleShortfall = Math.max(0, adminUsdc - chosenCollateral - 0.01);
+        if (feasibleShortfall < 0.01) {
+          return {
+            success: false,
+            error: `Admin has $${adminUsdc.toFixed(4)} USDC after swap attempt; needs $${adminNeedsUsdc.toFixed(4)} to top up pool.`,
+            swapDetails: swap.details,
+          };
+        }
+        logger.info('[hedge-treasury] Reducing to partial top-up', {
+          adminAfterSwap: adminUsdc.toFixed(4),
+          fullShortfall: shortfall.toFixed(4),
+          feasibleShortfall: feasibleShortfall.toFixed(4),
+        });
+        shortfall = feasibleShortfall;
       }
     } catch (err) {
       return {
