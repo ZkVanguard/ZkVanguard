@@ -1141,22 +1141,31 @@ export async function POST(request: NextRequest) {
             ? Number(liq.totalNavRaw) / Number(liq.totalSharesRaw)
             : 1;
 
+          // Safety margin for the value we hand back to the frontend. Pool NAV,
+          // share price, and admin balances all drift second-to-second (concurrent
+          // crons, live perp PnL, price ticks). If we return the EXACT max and
+          // the user retries 10s later, the state has moved and the retry fails
+          // again. 5% haircut absorbs that drift.
+          const SAFETY_MARGIN_BPS = 500; // 5%
+          const applySafety = (v: number) => v * (10000 - SAFETY_MARGIN_BPS) / 10000;
+
           // Cap-check upfront. A payout above maxByCapUsdc WILL abort on-chain
           // (E_MAX_WITHDRAWAL_EXCEEDED) even if the pool has enough balance,
           // so reject early with the cap-bounded max so the frontend's
           // auto-fill lands on a number the Move contract will accept.
           if (expectedPayoutUsdc > maxByCapUsdc + 0.001) {
-            const capShares = maxByCapUsdc / sharePrice;
+            const safeCapUsdc = applySafety(maxByCapUsdc);
+            const capShares = safeCapUsdc / sharePrice;
             const capPct = (liq.maxSingleWithdrawalBps / 100).toFixed(1);
             return NextResponse.json(
               {
                 success: false,
-                error: `Withdrawal exceeds per-transaction cap: pool allows up to ${capPct}% of NAV per tx (${capShares.toFixed(4)} shares ≈ $${maxByCapUsdc.toFixed(2)}). Split into multiple withdrawals to fully unwind ${sharesNum.toFixed(4)} shares.`,
+                error: `Withdrawal exceeds per-transaction cap: pool allows up to ${capPct}% of NAV per tx (${capShares.toFixed(4)} shares ≈ $${safeCapUsdc.toFixed(2)}). Split into multiple withdrawals to fully unwind ${sharesNum.toFixed(4)} shares.`,
                 data: {
                   code: 'POOL_LIQUIDITY_INSUFFICIENT',
                   poolBalanceUsdc: liq.poolBalanceUsdc,
                   expectedPayoutUsdc,
-                  maxWithdrawableUsdc: maxByCapUsdc,
+                  maxWithdrawableUsdc: safeCapUsdc,
                   maxWithdrawableShares: capShares,
                   maxSingleWithdrawalBps: liq.maxSingleWithdrawalBps,
                   sharePrice,
@@ -1177,11 +1186,13 @@ export async function POST(request: NextRequest) {
             // Re-read balance in case top-up made partial progress before failing.
             const liq2 = await readPoolLiquidityState(network).catch(() => null);
             const postBalance = liq2?.poolBalanceUsdc ?? liq.poolBalanceUsdc;
-            const maxWithdrawableUsdc = Math.min(postBalance, maxByCapUsdc);
+            const rawMaxUsdc = Math.min(postBalance, maxByCapUsdc);
+            const maxWithdrawableUsdc = applySafety(rawMaxUsdc);
             const maxWithdrawableShares = sharePrice > 0 ? maxWithdrawableUsdc / sharePrice : 0;
             logger.warn('[SUI-API] Withdraw preflight top-up failed', {
               expectedPayoutUsdc: expectedPayoutUsdc.toFixed(6),
               poolBalance: postBalance.toFixed(6),
+              rawMaxUsdc: rawMaxUsdc.toFixed(6),
               maxWithdrawableUsdc: maxWithdrawableUsdc.toFixed(6),
               error: topUp.error,
             });
