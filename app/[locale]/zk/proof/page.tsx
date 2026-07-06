@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Shield, Lock, Eye, EyeOff, CheckCircle, XCircle, Loader2, Download, Copy, Share2, ExternalLink } from 'lucide-react';
 import { logger } from '@/lib/utils/logger';
-import { ProofVerification } from '../../../components/dashboard/ProofVerification';
+import { ProofVerification } from '@/components/dashboard/ProofVerification';
 import { useAccount, useWalletClient, useSignMessage } from '@/lib/wdk/wdk-hooks';
 
 interface Proof {
@@ -315,7 +315,7 @@ function ZKProofPage() {
       const proofData = JSON.stringify(proofResult);
       const encoded = btoa(proofData); // Base64 encode
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const link = `${baseUrl}/zk-authenticity?proof=${encodeURIComponent(encoded)}`;
+      const link = `${baseUrl}/zk/authenticity?proof=${encodeURIComponent(encoded)}`;
       setShareableLink(link);
       
       // Copy to clipboard automatically
@@ -330,7 +330,7 @@ function ZKProofPage() {
     if (!proofResult) return;
     const proofData = JSON.stringify(proofResult);
     const encoded = btoa(proofData);
-    window.open(`/zk-authenticity?proof=${encodeURIComponent(encoded)}`, '_blank');
+    window.open(`/zk/authenticity?proof=${encodeURIComponent(encoded)}`, '_blank');
   };
 
   return (

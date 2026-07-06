@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-
-export default function ZkProofRedirect() {
-  redirect('/en/zk-proof');
+export default function Page() {
+  redirect('/en/zk/proof');
 }

@@ -4,7 +4,10 @@
     "dashboard": "Dashboard",
     "agents": "Agenti",
     "simulator": "Simulatore",
-    "docs": "Documentazione"
+    "docs": "Documentazione",
+    "vault": "Vault",
+    "zk": "ZK",
+    "whitepaper": "Whitepaper"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

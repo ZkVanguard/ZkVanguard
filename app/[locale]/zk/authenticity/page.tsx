@@ -262,7 +262,7 @@ export default function AuthenticityVerificationPage() {
             <h3 className="text-xl font-bold text-[#1D1D1F]">Verify Any ZK Proof Independently</h3>
           </div>
           <p className="text-sm text-[#424245] mb-4">
-            Paste any ZK-STARK proof JSON (from /zk-proof page or elsewhere) to cryptographically verify its authenticity.
+            Paste any ZK-STARK proof JSON (from the /zk/proof page or elsewhere) to cryptographically verify its authenticity.
           </p>
           
           <textarea
@@ -328,7 +328,7 @@ export default function AuthenticityVerificationPage() {
           )}
 
           <div className="mt-4 p-3 bg-[#007AFF]/10 border border-[#007AFF]/20 rounded text-sm text-[#007AFF]">
-            💡 <strong>Tip:</strong> Go to the <a href="/zk-proof" className="underline hover:text-[#007AFF]/80">/zk-proof</a> page, 
+            💡 <strong>Tip:</strong> Go to the <a href="/zk/proof" className="underline hover:text-[#007AFF]/80">/zk/proof</a> page,
             generate a proof, copy the JSON, and paste it here to verify it independently!
           </div>
         </div>

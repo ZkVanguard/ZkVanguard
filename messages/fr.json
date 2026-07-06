@@ -4,7 +4,10 @@
     "dashboard": "Tableau de bord",
     "agents": "Agents",
     "simulator": "Simulateur",
-    "docs": "Documentation"
+    "docs": "Documentation",
+    "vault": "Coffre",
+    "zk": "ZK",
+    "whitepaper": "Livre blanc"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

@@ -1,8 +1,11 @@
 {
   "nav": {
     "home": "Home",
-    "dashboard": "Dashboard",
+    "vault": "Vault",
     "agents": "Agents",
+    "zk": "ZK",
+    "whitepaper": "Whitepaper",
+    "dashboard": "Dashboard",
     "simulator": "Simulator",
     "docs": "Docs"
   },

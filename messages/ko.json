@@ -4,7 +4,10 @@
     "dashboard": "대시보드",
     "agents": "에이전트",
     "simulator": "시뮬레이터",
-    "docs": "문서"
+    "docs": "문서",
+    "vault": "볼트",
+    "zk": "ZK",
+    "whitepaper": "백서"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

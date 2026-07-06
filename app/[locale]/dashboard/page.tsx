@@ -526,14 +526,6 @@ export default function DashboardPage() {
               <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#4ca3ff]/10 text-[#4ca3ff]">New</span>
             </Link>
 
-            <Link
-              href="/developers"
-              className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            >
-              <Bot className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">API surface</span>
-            </Link>
-
             <div className="my-4 mx-4 border-t border-black/5" />
 
             <button

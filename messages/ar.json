@@ -4,7 +4,10 @@
     "dashboard": "لوحة التحكم",
     "agents": "الوكلاء",
     "simulator": "المحاكي",
-    "docs": "الوثائق"
+    "docs": "الوثائق",
+    "vault": "الخزنة",
+    "zk": "ZK",
+    "whitepaper": "الورقة البيضاء"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

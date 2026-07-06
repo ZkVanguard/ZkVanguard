@@ -83,12 +83,13 @@ function StatCard({ label, value, sub, icon: Icon }: {
 }
 
 function ProductCard({ p }: { p: ProductPosition }) {
+  // SUI-only UI: hide the chain badge (redundant when everything is SUI). The
+  // chain field is retained on the type for API completeness.
   return (
     <div className="bg-white border border-black/5 rounded-2xl p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
-          <div className="text-[13px] text-[#86868b] uppercase tracking-wide">{p.chain.toUpperCase()}</div>
-          <h3 className="text-[17px] font-semibold text-[#1d1d1f] mt-0.5">{p.productLabel}</h3>
+          <h3 className="text-[17px] font-semibold text-[#1d1d1f]">{p.productLabel}</h3>
         </div>
         <PnlBadge value={p.unrealizedPnlUsd} />
       </div>

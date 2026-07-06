@@ -4,7 +4,10 @@
     "dashboard": "仪表板",
     "agents": "智能代理",
     "simulator": "模拟器",
-    "docs": "文档"
+    "docs": "文档",
+    "vault": "金库",
+    "zk": "ZK",
+    "whitepaper": "白皮书"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

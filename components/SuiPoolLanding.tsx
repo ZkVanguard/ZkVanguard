@@ -377,66 +377,54 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
         <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-10 sm:mb-12">
             <div className="inline-block text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary mb-3">
-              Beyond the vault
+              How it works
             </div>
             <h2 className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-4">
-              Built like an asset manager, exposed as infrastructure.
+              An asset manager you can audit line by line.
             </h2>
             <p className="text-callout sm:text-[18px] text-label-secondary max-w-[640px] mx-auto leading-[1.5]">
-              The same risk engine + 7-agent autonomy + ZK attestation that runs
-              this pool is documented and reachable as a B2B API surface for any
-              Sui builder.
+              A 7-agent orchestration fuses prediction-market signals, executes
+              hedges on BlueFin, and ZK-attests every meaningful decision — all
+              live on Sui mainnet.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <SurfaceCard
               href="/dashboard/overview"
-              eyebrow="Unified portfolio"
-              title="Your positions, aggregated."
-              body="Single view of pool shares, private hedges, attributed risk — across every product surface."
+              eyebrow="Your position"
+              title="Pool shares + attributed hedges."
+              body="See what you own in the vault and which hedges are covering your risk."
             />
             <SurfaceCard
               href="/dashboard/risk"
               eyebrow="Platform risk"
-              title="Live Aladdin-style overview."
+              title="Live vault dashboard."
               body="Real-time TVL, drawdown, hedge coverage, cron health, ZK attestation feed. Auto-refresh 60s."
             />
             <SurfaceCard
               href="/dashboard/custody-proofs"
               eyebrow="Custody attestations"
-              title="Institutional proof-of-backing."
+              title="Proof-of-backing on-chain."
               body="Custodian-signed attestations bind portfolios to off-chain assets — without revealing the list."
-            />
-            <SurfaceCard
-              href="/dashboard?modal=portfolio-creator"
-              eyebrow="Private portfolio creator"
-              title="Custom portfolios, ZK-attested."
-              body="Wizard-built portfolios via rwa_manager.move + zk_verifier.move. Prove risk-below-threshold without disclosing positions."
-            />
-            <SurfaceCard
-              href="/zk-proof"
-              eyebrow="ZK-STARK system"
-              title="Post-quantum verifiable AI."
-              body="NIST P-521 STARK prover (Python · CUDA accelerated). Interactive demo: generate + verify a proof in one click."
-            />
-            <SurfaceCard
-              href="/developers"
-              eyebrow="API surface"
-              title="Aladdin-as-a-Service."
-              body="~50 endpoints across risk, signals, agents, hedging, ZK proofs. Free public reads · paid write tier."
             />
             <SurfaceCard
               href="/agents"
               eyebrow="7-agent system"
               title="Autonomous orchestration."
-              body="Lead, Risk, Hedging, Settlement, Reporting, PriceMonitor, SuiPool — running 24/7 on a cron."
+              body="Lead, Risk, Hedging, Settlement, Reporting, PriceMonitor, SuiPool — running 24/7 with 2-of-3 consensus on trades &gt; $100k."
             />
             <SurfaceCard
-              href="/pricing"
-              eyebrow="Three-stream model"
-              title="Pool fees + per-use + SaaS."
-              body="Every number maps to shipped code. Free deposit · $99 retail · $499 pro · $2,499 institutional."
+              href="/zk"
+              eyebrow="ZK-STARK system"
+              title="Post-quantum verifiable AI."
+              body="CUDA-accelerated STARK prover. ~180-bit soundness, no trusted setup, verifiable in the browser."
+            />
+            <SurfaceCard
+              href="/whitepaper"
+              eyebrow="Whitepaper"
+              title="Read the full thesis."
+              body="Prediction-market alpha, 7-agent architecture, STARK-attested execution, tokenomics, roadmap."
             />
           </div>
         </div>
