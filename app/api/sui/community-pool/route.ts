@@ -1143,10 +1143,13 @@ export async function POST(request: NextRequest) {
 
           // Safety margin for the value we hand back to the frontend. Pool NAV,
           // share price, and admin balances all drift second-to-second (concurrent
-          // crons, live perp PnL, price ticks). If we return the EXACT max and
-          // the user retries 10s later, the state has moved and the retry fails
-          // again. 5% haircut absorbs that drift.
-          const SAFETY_MARGIN_BPS = 500; // 5%
+          // crons, live perp PnL, price ticks, and — most importantly — the cron
+          // re-attesting external_nav_usdc, which can shift the on-chain share
+          // price 20-30% in a single tick when reality catches up with prior
+          // attestations. Between the user seeing the 503 auto-fill and clicking
+          // retry, that whole delta lands. A 5% margin isn't enough; 20% covers
+          // an attestation-timed NAV jump without producing a second 503.
+          const SAFETY_MARGIN_BPS = 2000; // 20%
           const applySafety = (v: number) => v * (10000 - SAFETY_MARGIN_BPS) / 10000;
 
           // Cap-check upfront. A payout above maxByCapUsdc WILL abort on-chain
