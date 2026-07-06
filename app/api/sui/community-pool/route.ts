@@ -1193,6 +1193,21 @@ export async function POST(request: NextRequest) {
             // Re-read balance in case top-up made partial progress before failing.
             const liq2 = await readPoolLiquidityState(network).catch(() => null);
             const postBalance = liq2?.poolBalanceUsdc ?? liq.poolBalanceUsdc;
+
+            // Race safety net: top-up reported failure but the pool balance now
+            // covers the payout (possibly a concurrent tx from the cron beat the
+            // top-up to the pool object). Let the withdraw through — the Move
+            // contract will re-validate balance at signing time anyway, so if
+            // this read is wrong we still fail closed on-chain instead of open.
+            if (postBalance >= expectedPayoutUsdc + 0.001) {
+              logger.info('[SUI-API] Top-up reported failure but pool balance already covers payout — proceeding', {
+                expectedPayoutUsdc: expectedPayoutUsdc.toFixed(6),
+                postBalance: postBalance.toFixed(6),
+                topUpError: topUp.error,
+              });
+              // Fall through to buildWithdrawParams below by breaking out of
+              // this branch's return.
+            } else {
             const rawMaxUsdc = Math.min(postBalance, maxByCapUsdc);
             const maxWithdrawableUsdc = applySafety(rawMaxUsdc);
             const maxWithdrawableShares = sharePrice > 0 ? maxWithdrawableUsdc / sharePrice : 0;
@@ -1224,6 +1239,7 @@ export async function POST(request: NextRequest) {
               },
               { status: 503 }
             );
+            }
           }
           if (topUp.toppedUpBy) {
             logger.info('[SUI-API] Withdraw preflight topped up pool', {
