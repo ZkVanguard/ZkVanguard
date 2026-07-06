@@ -88,11 +88,13 @@ interface NavItem {
 
 // SUI-only mode: Cronos/EVM-bound nav items (Swap, History, ZK Proofs)
 // are intentionally hidden until those chains are re-enabled.
+// Order: Vault first — it's the flagship product; users landing here should
+// see deposit/withdraw immediately, not a generic "Overview" tab.
 const navItems: NavItem[] = [
+  { id: 'community', label: 'Vault', icon: Users },
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'positions', label: 'Positions', icon: Briefcase },
   { id: 'hedges', label: 'Hedges', icon: Shield },
-  { id: 'community', label: 'Community Pool', icon: Users, badge: 'New' },
   { id: 'agents', label: 'AI Agents', icon: Bot, badge: 'Live' },
   { id: 'insights', label: 'Insights', icon: TrendingUp },
 ];
@@ -123,7 +125,9 @@ export default function DashboardPage() {
   const { requestCustomAction } = usePortfolioAction();
   // Portfolio count available via derived?.portfolioCount if needed
   
-  const [activeNav, setActiveNav] = useState<NavId>('overview');
+  // Default to the Vault tab — clicking "Vault" in the top nav should land the
+  // user on the actual deposit/withdraw surface, not a generic dashboard view.
+  const [activeNav, setActiveNav] = useState<NavId>('community');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [hedgeModalOpen, setHedgeModalOpen] = useState(false);
@@ -500,12 +504,11 @@ export default function DashboardPage() {
             </p>
 
             <Link
-              href="/dashboard/overview"
+              href="/dashboard/portfolio"
               className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
             >
               <Layers className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Unified portfolio</span>
-              <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#4ca3ff]/10 text-[#4ca3ff]">New</span>
+              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Portfolio</span>
             </Link>
 
             <Link
@@ -513,17 +516,15 @@ export default function DashboardPage() {
               className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
             >
               <Activity className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Risk overview</span>
-              <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#4ca3ff]/10 text-[#4ca3ff]">New</span>
+              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Risk</span>
             </Link>
 
             <Link
-              href="/dashboard/custody-proofs"
+              href="/dashboard/custody"
               className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
             >
               <ShieldCheck className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Custody proofs</span>
-              <span className="ml-auto px-2 py-0.5 text-[10px] font-semibold rounded-full bg-[#4ca3ff]/10 text-[#4ca3ff]">New</span>
+              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">Custody</span>
             </Link>
 
             <div className="my-4 mx-4 border-t border-black/5" />

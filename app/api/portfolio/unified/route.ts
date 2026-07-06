@@ -2,7 +2,7 @@
  * Unified Portfolio API
  *
  * Aggregates a single wallet's positions across every ZkVanguard product surface
- * into one read-only response. This is the back-end for /dashboard/overview —
+ * into one read-only response. This is the back-end for /dashboard/portfolio —
  * the "BlackRock for Web3" client portal that shows total platform exposure
  * (SUI USDC pool share + private hedges + EVM portfolios) in one view.
  *
@@ -234,7 +234,7 @@ async function getPrivatePortfolios(wallet: string): Promise<{
         count: objects.length,
         metadata: {
           backedBy: 'rwa_manager.move',
-          attestationsAvailable: 'See /dashboard/custody-proofs and /api/custody?action=list-attestations',
+          attestationsAvailable: 'See /dashboard/custody and /api/custody?action=list-attestations',
         },
       },
       warning: null,

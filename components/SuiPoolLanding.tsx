@@ -391,7 +391,7 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             <SurfaceCard
-              href="/dashboard/overview"
+              href="/dashboard/portfolio"
               eyebrow="Your position"
               title="Pool shares + attributed hedges."
               body="See what you own in the vault and which hedges are covering your risk."
@@ -403,7 +403,7 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
               body="Real-time TVL, drawdown, hedge coverage, cron health, ZK attestation feed. Auto-refresh 60s."
             />
             <SurfaceCard
-              href="/dashboard/custody-proofs"
+              href="/dashboard/custody"
               eyebrow="Custody attestations"
               title="Proof-of-backing on-chain."
               body="Custodian-signed attestations bind portfolios to off-chain assets — without revealing the list."
