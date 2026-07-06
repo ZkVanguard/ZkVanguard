@@ -327,9 +327,9 @@ external/wdk-wallet-evm/
 # -------------------------------------------
 # Empty / Orphaned Directories (cleanup artifacts)
 # -------------------------------------------
-zk-proof/
-zk-authenticity/
-zk-verification/
+# NOTE: zk-proof, zk-authenticity, zk-verification were legacy top-level
+# folders. They now serve as legacy-URL redirect stubs inside app/[locale]/
+# and MUST be tracked. Do not re-add them to this ignore list.
 privacy/
 terms/
 /simulator/
