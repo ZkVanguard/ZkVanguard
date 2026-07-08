@@ -1,15 +1,25 @@
 "use client";
 
+import { useCallback } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/Navbar';
 import { useTranslations } from 'next-intl';
 
 export default function WhitepaperPage() {
   const t = useTranslations('whitepaper');
-  
+
+  // Download uses the browser's built-in "print → save as PDF" path.
+  // This is cheap and works on every device (including mobile Safari's
+  // share-sheet PDF export) without shipping a heavy client-side PDF
+  // generator library. The `@media print` rules below hide the nav,
+  // buttons, and background colors so the printed output is clean.
+  const handleDownload = useCallback(() => {
+    if (typeof window !== 'undefined') window.print();
+  }, []);
+
   return (
     <div className="min-h-screen bg-white light-theme" style={{ colorScheme: 'light' }}>
-      {/* Force light theme styles */}
+      {/* Force light theme + print CSS */}
       <style jsx global>{`
         .light-theme, .light-theme * {
           --label-primary: #1D1D1F !important;
@@ -37,40 +47,61 @@ export default function WhitepaperPage() {
         .light-theme .text-purple-600 { color: #9333ea !important; }
         .light-theme .bg-\\[\\#007AFF\\] { color: white !important; }
         .light-theme .bg-\\[\\#007AFF\\] * { color: white !important; }
+
+        @media print {
+          nav, .no-print { display: none !important; }
+          main { padding: 0 !important; max-width: 100% !important; }
+          section { break-inside: avoid; page-break-inside: avoid; }
+          h2 { break-before: page; page-break-before: page; }
+          h2:first-of-type { break-before: auto; page-break-before: auto; }
+          .bg-\\[\\#f5f5f7\\], .bg-\\[\\#f0f0f2\\] { background: white !important; border: 1px solid #e5e5e7; }
+          a { color: #1D1D1F !important; text-decoration: none !important; }
+          @page { margin: 20mm; }
+        }
       `}</style>
       <Navbar />
-      
-      <main className="max-w-4xl mx-auto px-6 py-16">
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
           {/* Header */}
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#007AFF]/10 rounded-full text-sm font-medium mb-6 text-[#007AFF]">
+          <div className="text-center mb-10 sm:mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-[#007AFF]/10 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6 text-[#007AFF]">
             <span>{t('version')}</span>
             <span>•</span>
             <span>{t('date')}</span>
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold text-[#1d1d1f] mb-6 tracking-tight">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 tracking-tight leading-[1.1]">
             {t('title')}
           </h1>
-          <p className="text-xl text-[#86868b] max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl text-[#86868b] max-w-2xl mx-auto leading-relaxed">
             {t('subtitle')}
           </p>
         </div>
 
-        {/* Download Button */}
-        <div className="flex justify-center mb-16">
-          <a 
-            href="#abstract" 
-            className="inline-flex items-center gap-2 px-8 py-4 bg-[#007AFF] text-white rounded-full font-medium hover:bg-[#0056b3] transition-colors"
+        {/* Action buttons — read or download */}
+        <div className="no-print flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-3 mb-10 sm:mb-16">
+          <a
+            href="#abstract"
+            className="inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 bg-[#007AFF] text-white rounded-full font-medium hover:bg-[#0056b3] active:scale-[0.98] transition-all text-sm sm:text-base"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
             {t('readButton')}
           </a>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="inline-flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 bg-white border border-[#d2d2d7] text-[#1d1d1f] rounded-full font-medium hover:bg-[#f5f5f7] active:scale-[0.98] transition-all text-sm sm:text-base"
+          >
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 12V4m0 8l-4-4m4 4l4-4" />
+            </svg>
+            Download PDF
+          </button>
         </div>
 
         {/* Table of Contents */}
-        <div className="bg-[#f5f5f7] rounded-2xl p-8 mb-16">
+        <div className="bg-[#f5f5f7] rounded-2xl p-5 sm:p-8 mb-10 sm:mb-16">
           <h2 className="text-lg font-semibold text-[#1d1d1f] mb-6">{t('toc')}</h2>
           <nav className="space-y-3">
             {[
@@ -108,12 +139,12 @@ export default function WhitepaperPage() {
         <article className="max-w-none">
           
           {/* Abstract */}
-          <section id="abstract" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">1</span>
+          <section id="abstract" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">1</span>
               {t('sections.abstract')}
             </h2>
-            <div className="bg-gradient-to-r from-[#007AFF]/5 to-transparent p-6 rounded-xl border-l-4 border-[#007AFF] mb-6">
+            <div className="bg-gradient-to-r from-[#007AFF]/5 to-transparent p-4 sm:p-6 rounded-xl border-l-4 border-[#007AFF] mb-4 sm:mb-6">
               <p className="leading-relaxed m-0" style={{ color: '#1d1d1f' }}>
                 {t('abstract.highlight')}
               </p>
@@ -127,9 +158,9 @@ export default function WhitepaperPage() {
           </section>
 
           {/* Introduction */}
-          <section id="introduction" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">2</span>
+          <section id="introduction" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">2</span>
               {t('sections.introduction')}
             </h2>
             
@@ -156,9 +187,9 @@ export default function WhitepaperPage() {
           </section>
 
           {/* Problem */}
-          <section id="problem" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">3</span>
+          <section id="problem" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">3</span>
               {t('sections.problem')}
             </h2>
             
@@ -166,7 +197,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               {t('problem.paradigmText')}
             </p>
-            <div className="bg-red-50 p-6 rounded-xl my-6 font-mono text-sm">
+            <div className="bg-red-50 p-4 sm:p-6 rounded-xl my-4 sm:my-6 font-mono text-xs sm:text-sm overflow-x-auto">
               <div className="text-red-600">
                 1. Market Event Occurs → BTC drops 15% in 4 hours<br/>
                 2. Alert Triggered → Risk system detects volatility spike<br/>
@@ -184,7 +215,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               {t('problem.costText')}
             </p>
-            <div className="overflow-x-auto my-6">
+            <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
@@ -236,9 +267,9 @@ export default function WhitepaperPage() {
           </section>
 
           {/* Solution */}
-          <section id="solution" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">4</span>
+          <section id="solution" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">4</span>
               {t('solution.title')}
             </h2>
             
@@ -246,7 +277,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed">
               {t('solution.paradigmText')}
             </p>
-            <div className="bg-green-50 p-6 rounded-xl my-6 font-mono text-sm">
+            <div className="bg-green-50 p-4 sm:p-6 rounded-xl my-4 sm:my-6 font-mono text-xs sm:text-sm overflow-x-auto">
               <div className="text-green-600">
                 1. Prediction Markets Signal → Delphi: 73% probability BTC volatility spike<br/>
                 2. AI Analysis → Risk Agent correlates with portfolio exposure<br/>
@@ -262,19 +293,19 @@ export default function WhitepaperPage() {
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">4.2 {t('solution.coreStack')}</h3>
             <div className="grid md:grid-cols-2 gap-6 my-6">
-              <div className="bg-[#f5f5f7] p-6 rounded-xl">
+              <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl">
                 <h4 className="font-semibold text-[#1d1d1f] mb-2">🤖 {t('solution.multiAgent')}</h4>
                 <p className="text-[#424245] text-sm">{t('solution.multiAgentDesc')}</p>
               </div>
-              <div className="bg-[#f5f5f7] p-6 rounded-xl">
+              <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl">
                 <h4 className="font-semibold text-[#1d1d1f] mb-2">🔮 {t('solution.prediction')}</h4>
                 <p className="text-[#424245] text-sm">{t('solution.predictionDesc')}</p>
               </div>
-              <div className="bg-[#f5f5f7] p-6 rounded-xl">
+              <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl">
                 <h4 className="font-semibold text-[#1d1d1f] mb-2">🔐 {t('solution.zkStark')}</h4>
                 <p className="text-[#424245] text-sm">{t('solution.zkStarkDesc')}</p>
               </div>
-              <div className="bg-[#f5f5f7] p-6 rounded-xl">
+              <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl">
                 <h4 className="font-semibold text-[#1d1d1f] mb-2">⚡ {t('solution.gasless')}</h4>
                 <p className="text-[#424245] text-sm">{t('solution.gaslessDesc')}</p>
               </div>
@@ -293,9 +324,9 @@ export default function WhitepaperPage() {
           </section>
 
           {/* Architecture */}
-          <section id="architecture" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">5</span>
+          <section id="architecture" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">5</span>
               {t('architecture.title')}
             </h2>
             
@@ -347,7 +378,7 @@ export default function WhitepaperPage() {
             </div>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">5.2 {t('architecture.techStack')}</h3>
-            <div className="overflow-x-auto my-6">
+            <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
@@ -395,7 +426,7 @@ export default function WhitepaperPage() {
             <p className="text-[#424245] leading-relaxed mb-4">
               {t('architecture.contractsText')}
             </p>
-            <div className="bg-[#f5f5f7] p-6 rounded-xl font-mono text-sm">
+            <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl font-mono text-sm">
               <div className="space-y-2">
                 <p><strong>RWAManager:</strong> 0x1Fe3105E6F3878752F5383db87Ea9A7247Db9189</p>
                 <p><strong>ZKVerifier:</strong> 0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8</p>
@@ -406,9 +437,9 @@ export default function WhitepaperPage() {
           </section>
 
           {/* Agents */}
-          <section id="agents" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">6</span>
+          <section id="agents" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">6</span>
               {t('agents.title')}
             </h2>
             
@@ -480,9 +511,9 @@ export default function WhitepaperPage() {
           </section>
 
           {/* ZK Privacy */}
-          <section id="zkp" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">7</span>
+          <section id="zkp" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">7</span>
               {t('zkp.title')}
             </h2>
             
@@ -522,7 +553,7 @@ Security Comparison:
   Our Implementation:         180-bit
   Safety Margin:              +52 bits`}</pre>
             </div>
-            <div className="bg-[#f5f5f7] p-6 rounded-xl my-6 font-mono text-sm">
+            <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl my-6 font-mono text-sm">
               <div className="space-y-2">
                 <p><strong>Target Security:</strong> 512 bits (configuration parameter)</p>
                 <p><strong>Effective Soundness:</strong> 2⁻¹⁸⁰ = (1/4)⁸⁰ × 2⁻²⁰</p>
@@ -554,7 +585,7 @@ Security Comparison:
             <p className="text-[#424245] leading-relaxed mb-4">
               Our ZK system satisfies all required properties (47/47 tests + 6/6 theorems):
             </p>
-            <div className="overflow-x-auto my-6">
+            <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
@@ -624,9 +655,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Gasless */}
-          <section id="gasless" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">8</span>
+          <section id="gasless" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">8</span>
               {t('gasless.title')}
             </h2>
             
@@ -642,7 +673,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             </ul>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">8.2 {t('gasless.implementation')}</h3>
-            <div className="bg-[#f5f5f7] p-6 rounded-xl my-6 font-mono text-sm">
+            <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl my-6 font-mono text-sm">
               <p className="mb-2"><strong>Contract:</strong> 0x44098d0dE36e157b4C1700B48d615285C76fdE47</p>
               <p className="mb-2"><strong>Protocol:</strong> EIP-3009 (transferWithAuthorization)</p>
               <p><strong>TCRO Balance:</strong> 12.27 (sufficient for 1,200+ gasless transactions)</p>
@@ -667,9 +698,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Predictions */}
-          <section id="predictions" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">9</span>
+          <section id="predictions" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">9</span>
               {t('predictions.title')}
             </h2>
             
@@ -687,7 +718,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             <p className="text-[#424245] leading-relaxed">
               {t('predictions.hedgeRatioText')}
             </p>
-            <div className="bg-[#f5f5f7] p-6 rounded-xl my-6 font-mono text-sm">
+            <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl my-6 font-mono text-sm">
               <p className="mb-2">Base Hedge Ratio = 50% of exposure</p>
               <p className="mb-2">Delphi Multiplier = 1 + (probability - 0.5) * 0.5</p>
               <p className="mb-2">Example: 73% probability → 1.23x multiplier</p>
@@ -695,7 +726,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             </div>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">9.3 {t('predictions.scenarios')}</h3>
-            <div className="overflow-x-auto my-6">
+            <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
@@ -736,14 +767,14 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Multi-Chain */}
-          <section id="multichain" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">10</span>
+          <section id="multichain" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">10</span>
               {t('multichain.title')}
             </h2>
             
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">10.1 {t('multichain.networks')}</h3>
-            <div className="overflow-x-auto my-6">
+            <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
@@ -792,9 +823,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Security */}
-          <section id="security" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">11</span>
+          <section id="security" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">11</span>
               {t('security.title')}
             </h2>
             
@@ -828,9 +859,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Tokenomics */}
-          <section id="tokenomics" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">12</span>
+          <section id="tokenomics" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">12</span>
               {t('tokenomics.title')}
             </h2>
             
@@ -855,7 +886,7 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
             </div>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">12.2 {t('tokenomics.projections')}</h3>
-            <div className="overflow-x-auto my-6">
+            <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5] text-sm">
                 <thead className="bg-[#f0f0f2]">
                   <tr>
@@ -906,9 +937,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Roadmap */}
-          <section id="roadmap" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">13</span>
+          <section id="roadmap" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">13</span>
               {t('roadmap.title')}
             </h2>
             
@@ -937,9 +968,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* Conclusion */}
-          <section id="conclusion" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">14</span>
+          <section id="conclusion" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">14</span>
               {t('sections.conclusion')}
             </h2>
             
@@ -955,9 +986,9 @@ Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}<
           </section>
 
           {/* References */}
-          <section id="references" className="mb-16 scroll-mt-24">
-            <h2 className="text-3xl font-bold text-[#1d1d1f] mb-6 flex items-center gap-4">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-xl text-lg font-bold">15</span>
+          <section id="references" className="mb-10 sm:mb-16 scroll-mt-24">
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#1d1d1f] mb-4 sm:mb-6 flex items-center gap-3 sm:gap-4">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-[#007AFF] text-white rounded-lg sm:rounded-xl text-sm sm:text-lg font-bold flex-shrink-0">15</span>
               {t('references.title')}
             </h2>
             

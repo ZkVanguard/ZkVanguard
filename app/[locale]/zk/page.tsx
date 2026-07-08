@@ -12,6 +12,9 @@ import { Shield, Cpu, Lock, CheckCircle2, ArrowRight, ExternalLink } from 'lucid
 //   3. Explainer — how the STARK works, honest about field choice and soundness.
 //   4. Verify widget — paste a proof hash, we tell you if it's on-chain.
 //   5. Deep-dive links — the old pages moved to sub-routes for anyone who wants detail.
+//
+// Mobile-first: base padding/typography assume ≤ 375px viewport. `sm:` (640px+)
+// and `md:` (768px+) breakpoints scale up to desktop.
 
 interface ProverHealth {
   status: 'healthy' | 'unhealthy' | 'unavailable';
@@ -57,49 +60,49 @@ export default function ZkPage() {
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
-      <main className="max-w-5xl mx-auto px-6 pt-32 pb-24">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32 pb-16 sm:pb-24">
         {/* Hero */}
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#007AFF]/10 rounded-full text-sm font-medium mb-6 text-[#007AFF]">
-            <Shield className="w-4 h-4" />
+        <div className="text-center mb-12 sm:mb-20">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-[#007AFF]/10 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6 text-[#007AFF]">
+            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>ZK-STARK · Post-Quantum · No Trusted Setup</span>
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold text-[#1D1D1F] mb-6 tracking-tight">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-[#1D1D1F] mb-4 sm:mb-6 tracking-tight leading-[1.1]">
             Every vault decision, <br className="hidden md:block" />
             <span className="text-[#007AFF]">cryptographically attested.</span>
           </h1>
-          <p className="text-xl text-[#424245] max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl text-[#424245] max-w-2xl mx-auto leading-relaxed">
             When our AI agents commit to a hedge, allocation, or rebalance, the decision is proven correct with a
             zero-knowledge STARK — no trusted setup, post-quantum secure by construction, verifiable by anyone.
           </p>
         </div>
 
         {/* Prover health card */}
-        <div className="rounded-2xl border border-[#E5E5E7] bg-gradient-to-br from-white to-[#F5F5F7] p-8 mb-16">
+        <div className="rounded-2xl border border-[#E5E5E7] bg-gradient-to-br from-white to-[#F5F5F7] p-5 sm:p-8 mb-12 sm:mb-16">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-sm text-[#86868B] mb-1">Prover backend</div>
-              <div className="text-2xl font-semibold text-[#1D1D1F]">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs sm:text-sm text-[#86868B] mb-1">Prover backend</div>
+              <div className="text-xl sm:text-2xl font-semibold text-[#1D1D1F]">
                 {health ? (
                   health.status === 'healthy' ? 'Online' :
                   health.status === 'unhealthy' ? 'Degraded' : 'Offline'
                 ) : 'Checking…'}
               </div>
             </div>
-            <div className={`w-3 h-3 rounded-full ${
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 ml-3 ${
               health?.status === 'healthy' ? 'bg-green-500' :
               health?.status === 'unhealthy' ? 'bg-orange-500' :
               health?.status === 'unavailable' ? 'bg-red-500' : 'bg-gray-300'
             }`} />
           </div>
           {health && (
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 text-sm">
               <div>
-                <div className="text-[#86868B]">CUDA</div>
-                <div className="text-[#1D1D1F] font-medium flex items-center gap-2">
+                <div className="text-[#86868B] text-xs sm:text-sm">CUDA</div>
+                <div className="text-[#1D1D1F] font-medium flex items-center gap-2 text-sm">
                   {health.cuda_enabled ? (
                     <>
-                      <Cpu className="w-4 h-4 text-green-600" /> Accelerated
+                      <Cpu className="w-4 h-4 text-green-600 flex-shrink-0" /> Accelerated
                     </>
                   ) : health.cuda_available ? (
                     'Available'
@@ -108,20 +111,20 @@ export default function ZkPage() {
                   )}
                 </div>
               </div>
-              <div>
-                <div className="text-[#86868B]">Endpoint</div>
-                <div className="text-[#1D1D1F] font-medium truncate">{health.backend || '—'}</div>
+              <div className="min-w-0">
+                <div className="text-[#86868B] text-xs sm:text-sm">Endpoint</div>
+                <div className="text-[#1D1D1F] font-medium truncate text-sm">{health.backend || '—'}</div>
               </div>
             </div>
           )}
         </div>
 
         {/* Explainer */}
-        <section className="mb-20">
-          <h2 className="text-3xl font-bold text-[#1D1D1F] mb-8">How it works</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white rounded-2xl border border-[#E5E5E7] p-6">
-              <div className="w-10 h-10 rounded-lg bg-[#007AFF]/10 flex items-center justify-center mb-4">
+        <section className="mb-12 sm:mb-20">
+          <h2 className="text-2xl sm:text-3xl font-bold text-[#1D1D1F] mb-5 sm:mb-8">How it works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+            <div className="bg-white rounded-2xl border border-[#E5E5E7] p-5 sm:p-6">
+              <div className="w-10 h-10 rounded-lg bg-[#007AFF]/10 flex items-center justify-center mb-3 sm:mb-4">
                 <Lock className="w-5 h-5 text-[#007AFF]" />
               </div>
               <h3 className="font-semibold text-[#1D1D1F] mb-2">Trace the computation</h3>
@@ -130,8 +133,8 @@ export default function ZkPage() {
                 trace — a matrix of intermediate states the prover walks through.
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-[#E5E5E7] p-6">
-              <div className="w-10 h-10 rounded-lg bg-[#007AFF]/10 flex items-center justify-center mb-4">
+            <div className="bg-white rounded-2xl border border-[#E5E5E7] p-5 sm:p-6">
+              <div className="w-10 h-10 rounded-lg bg-[#007AFF]/10 flex items-center justify-center mb-3 sm:mb-4">
                 <Shield className="w-5 h-5 text-[#007AFF]" />
               </div>
               <h3 className="font-semibold text-[#1D1D1F] mb-2">Commit + prove</h3>
@@ -140,8 +143,8 @@ export default function ZkPage() {
                 Merkle-committed with SHA-256. Fiat-Shamir non-interactivity.
               </p>
             </div>
-            <div className="bg-white rounded-2xl border border-[#E5E5E7] p-6">
-              <div className="w-10 h-10 rounded-lg bg-[#007AFF]/10 flex items-center justify-center mb-4">
+            <div className="bg-white rounded-2xl border border-[#E5E5E7] p-5 sm:p-6">
+              <div className="w-10 h-10 rounded-lg bg-[#007AFF]/10 flex items-center justify-center mb-3 sm:mb-4">
                 <CheckCircle2 className="w-5 h-5 text-[#007AFF]" />
               </div>
               <h3 className="font-semibold text-[#1D1D1F] mb-2">Verify anywhere</h3>
@@ -154,36 +157,36 @@ export default function ZkPage() {
         </section>
 
         {/* Honest security block */}
-        <section className="mb-20">
-          <div className="rounded-2xl bg-[#F5F5F7] p-8">
-            <h2 className="text-2xl font-bold text-[#1D1D1F] mb-6">Security parameters</h2>
-            <dl className="grid md:grid-cols-2 gap-x-8 gap-y-4 text-[15px]">
+        <section className="mb-12 sm:mb-20">
+          <div className="rounded-2xl bg-[#F5F5F7] p-5 sm:p-8">
+            <h2 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] mb-4 sm:mb-6">Security parameters</h2>
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 sm:gap-y-4 text-[14px] sm:text-[15px]">
               <div>
-                <dt className="text-[#86868B]">Field</dt>
-                <dd className="text-[#1D1D1F] font-medium">Goldilocks-64 (default) · NIST P-521 prime available</dd>
+                <dt className="text-[#86868B] text-xs sm:text-sm">Field</dt>
+                <dd className="text-[#1D1D1F] font-medium mt-0.5">Goldilocks-64 (default) · NIST P-521 prime available</dd>
               </div>
               <div>
-                <dt className="text-[#86868B]">Commitments</dt>
-                <dd className="text-[#1D1D1F] font-medium">SHA-256 Merkle trees · Fiat-Shamir non-interactive</dd>
+                <dt className="text-[#86868B] text-xs sm:text-sm">Commitments</dt>
+                <dd className="text-[#1D1D1F] font-medium mt-0.5">SHA-256 Merkle trees · Fiat-Shamir non-interactive</dd>
               </div>
               <div>
-                <dt className="text-[#86868B]">Soundness</dt>
-                <dd className="text-[#1D1D1F] font-medium">~180 bits effective (FRI queries + grinding)</dd>
+                <dt className="text-[#86868B] text-xs sm:text-sm">Soundness</dt>
+                <dd className="text-[#1D1D1F] font-medium mt-0.5">~180 bits effective (FRI queries + grinding)</dd>
               </div>
               <div>
-                <dt className="text-[#86868B]">Trusted setup</dt>
-                <dd className="text-[#1D1D1F] font-medium">None — hash-based commitments only</dd>
+                <dt className="text-[#86868B] text-xs sm:text-sm">Trusted setup</dt>
+                <dd className="text-[#1D1D1F] font-medium mt-0.5">None — hash-based commitments only</dd>
               </div>
               <div>
-                <dt className="text-[#86868B]">Post-quantum</dt>
-                <dd className="text-[#1D1D1F] font-medium">Yes — no discrete-log or factoring assumption</dd>
+                <dt className="text-[#86868B] text-xs sm:text-sm">Post-quantum</dt>
+                <dd className="text-[#1D1D1F] font-medium mt-0.5">Yes — no discrete-log or factoring assumption</dd>
               </div>
               <div>
-                <dt className="text-[#86868B]">Acceleration</dt>
-                <dd className="text-[#1D1D1F] font-medium">CUDA (CuPy / Numba) with CPU fallback</dd>
+                <dt className="text-[#86868B] text-xs sm:text-sm">Acceleration</dt>
+                <dd className="text-[#1D1D1F] font-medium mt-0.5">CUDA (CuPy / Numba) with CPU fallback</dd>
               </div>
             </dl>
-            <p className="text-sm text-[#86868B] mt-6 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#86868B] mt-4 sm:mt-6 leading-relaxed">
               Post-quantum security comes from the hash-based commitment structure, not field size. Effective
               soundness of ~180 bits from FRI queries + grinding is well above post-quantum requirements.
             </p>
@@ -191,25 +194,29 @@ export default function ZkPage() {
         </section>
 
         {/* Verify widget */}
-        <section className="mb-20">
-          <h2 className="text-3xl font-bold text-[#1D1D1F] mb-6">Verify a proof</h2>
-          <p className="text-[#424245] mb-6">
-            Paste a proof hash (0x…) or transaction digest from the vault's activity log. We&apos;ll check whether it&apos;s
+        <section className="mb-12 sm:mb-20">
+          <h2 className="text-2xl sm:text-3xl font-bold text-[#1D1D1F] mb-4 sm:mb-6">Verify a proof</h2>
+          <p className="text-sm sm:text-base text-[#424245] mb-4 sm:mb-6">
+            Paste a proof hash (0x…) or transaction digest from the vault&apos;s activity log. We&apos;ll check whether it&apos;s
             recorded on-chain and return its details.
           </p>
-          <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
+              inputMode="text"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={verifyInput}
               onChange={(e) => setVerifyInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && verify()}
               placeholder="0x…"
-              className="flex-1 h-12 px-4 rounded-xl border border-[#E5E5E7] focus:border-[#007AFF] focus:outline-none text-[#1D1D1F] font-mono text-sm"
+              className="flex-1 h-12 px-4 rounded-xl border border-[#E5E5E7] focus:border-[#007AFF] focus:outline-none text-[#1D1D1F] font-mono text-sm w-full min-w-0"
             />
             <button
               onClick={verify}
               disabled={verifyLoading || !verifyInput.trim()}
-              className="h-12 px-6 rounded-xl bg-[#007AFF] text-white font-medium hover:bg-[#0056B3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-12 px-6 rounded-xl bg-[#007AFF] text-white font-medium hover:bg-[#0056B3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto flex-shrink-0"
             >
               {verifyLoading ? 'Checking…' : 'Verify'}
             </button>
@@ -222,23 +229,23 @@ export default function ZkPage() {
                 ) : (
                   <ExternalLink className="w-5 h-5 mt-0.5 flex-shrink-0 opacity-70" />
                 )}
-                <div className="text-sm leading-relaxed">{verifyResult.detail}</div>
+                <div className="text-sm leading-relaxed break-words min-w-0">{verifyResult.detail}</div>
               </div>
             </div>
           )}
         </section>
 
         {/* Deep dive */}
-        <section className="border-t border-[#E5E5E7] pt-12">
-          <h2 className="text-2xl font-bold text-[#1D1D1F] mb-6">Go deeper</h2>
-          <div className="grid md:grid-cols-3 gap-4">
+        <section className="border-t border-[#E5E5E7] pt-8 sm:pt-12">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] mb-4 sm:mb-6">Go deeper</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             <Link
               href="/zk/authenticity"
-              className="group p-6 rounded-xl border border-[#E5E5E7] hover:border-[#007AFF] transition-colors"
+              className="group p-5 sm:p-6 rounded-xl border border-[#E5E5E7] hover:border-[#007AFF] active:scale-[0.98] transition-all"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-[#1D1D1F]">Implementation authenticity</span>
-                <ArrowRight className="w-4 h-4 text-[#86868B] group-hover:text-[#007AFF]" />
+                <ArrowRight className="w-4 h-4 text-[#86868B] group-hover:text-[#007AFF] flex-shrink-0 ml-2" />
               </div>
               <p className="text-sm text-[#424245]">
                 Prove the STARK isn&apos;t simulated — CUDA specs, field parameters, source-verifiable.
@@ -246,11 +253,11 @@ export default function ZkPage() {
             </Link>
             <Link
               href="/zk/proof"
-              className="group p-6 rounded-xl border border-[#E5E5E7] hover:border-[#007AFF] transition-colors"
+              className="group p-5 sm:p-6 rounded-xl border border-[#E5E5E7] hover:border-[#007AFF] active:scale-[0.98] transition-all"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-[#1D1D1F]">Generate your own</span>
-                <ArrowRight className="w-4 h-4 text-[#86868B] group-hover:text-[#007AFF]" />
+                <ArrowRight className="w-4 h-4 text-[#86868B] group-hover:text-[#007AFF] flex-shrink-0 ml-2" />
               </div>
               <p className="text-sm text-[#424245]">
                 Interactive prover UI — trace, commit, prove, verify. Wallet-signed statements.
@@ -258,11 +265,11 @@ export default function ZkPage() {
             </Link>
             <Link
               href="/zk/verification"
-              className="group p-6 rounded-xl border border-[#E5E5E7] hover:border-[#007AFF] transition-colors"
+              className="group p-5 sm:p-6 rounded-xl border border-[#E5E5E7] hover:border-[#007AFF] active:scale-[0.98] transition-all"
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-[#1D1D1F]">Hedge attestations</span>
-                <ArrowRight className="w-4 h-4 text-[#86868B] group-hover:text-[#007AFF]" />
+                <ArrowRight className="w-4 h-4 text-[#86868B] group-hover:text-[#007AFF] flex-shrink-0 ml-2" />
               </div>
               <p className="text-sm text-[#424245]">
                 Look up ZK-attested hedges by hedge ID or wallet address.
