@@ -7,7 +7,8 @@
     "docs": "Документация",
     "vault": "Хранилище",
     "zk": "ZK",
-    "whitepaper": "Whitepaper"
+    "whitepaper": "Whitepaper",
+    "rwa": "RWA"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Mobile safe-area utilities ────────────────────────────────────
+   iPhone home indicator + notch land in env(safe-area-inset-*).
+   These utilities let JSX opt into safe-area padding without ejecting
+   from Tailwind. Use pb-safe on any fixed bottom bar. */
+@layer utilities {
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
+  .pt-safe { padding-top: env(safe-area-inset-top, 0); }
+  .pl-safe { padding-left: env(safe-area-inset-left, 0); }
+  .pr-safe { padding-right: env(safe-area-inset-right, 0); }
+  .mb-safe { margin-bottom: env(safe-area-inset-bottom, 0); }
+  .pb-safe-4  { padding-bottom: calc(env(safe-area-inset-bottom, 0) + 1rem); }
+  .pb-safe-6  { padding-bottom: calc(env(safe-area-inset-bottom, 0) + 1.5rem); }
+  .bottom-safe { bottom: env(safe-area-inset-bottom, 0); }
+}
+
+/* Prevent iOS Safari's automatic zoom on focused inputs. Any input
+   whose font-size is < 16px triggers zoom; setting 16px minimum here
+   keeps the whole app usable on mobile without disabling zoom entirely
+   (which would be an accessibility violation). */
+@media (max-width: 640px) {
+  input[type="text"], input[type="number"], input[type="email"],
+  input[type="password"], input[type="search"], input[type="tel"],
+  input[type="url"], textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 /* Apple iOS Design System - Enhanced Contrast */
 :root {
   /* Background Colors */

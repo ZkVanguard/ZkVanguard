@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Copy, AlertTriangle, FileText, Eye, ExternalLink, Mail } from 'lucide-react';
+import { ShieldCheck, Copy, AlertTriangle, FileText, ExternalLink, Mail, Download } from 'lucide-react';
 import { useSui } from '@/app/sui-providers';
 import { logger } from '@/lib/utils/logger';
 
@@ -36,6 +36,43 @@ function truncate(hex: string, head = 10, tail = 6): string {
 
 function AttestationCard({ a }: { a: AttestationView }) {
   const expired = !a.isValid;
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyValue = (val: string, label: string) => {
+    navigator.clipboard.writeText(val);
+    setCopiedField(label);
+    setTimeout(() => setCopiedField(null), 1500);
+  };
+
+  // Download a canonical JSON artifact that a counterparty can verify off-chain.
+  // Includes everything an auditor needs: object id, custodian pubkey, asset-list
+  // hash, timestamps, on-chain link. This is the "here's my proof of backing"
+  // artifact institutions can pass around out-of-band.
+  const downloadJson = () => {
+    const artifact = {
+      $schema: 'https://zkvanguard.xyz/schemas/custody-attestation/v1',
+      objectId: a.objectId,
+      portfolioId: a.portfolioId,
+      custodianPubkey: a.custodianPubkey,
+      assetListHash: a.assetListHash,
+      nonce: a.nonce,
+      attestedAt: a.attestedAt,
+      validUntil: a.validUntil,
+      isValid: a.isValid,
+      network: 'sui-mainnet',
+      onChainExplorer: `https://suiscan.xyz/mainnet/object/${a.objectId}`,
+      verificationEndpoint: `${typeof window !== 'undefined' ? window.location.origin : ''}/api/custody?action=verify`,
+      generatedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(artifact, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `custody-attestation-portfolio-${a.portfolioId}-${a.objectId.slice(2, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={`border ${expired ? 'border-amber-200 bg-amber-50/30' : 'border-black/5 bg-white'} rounded-2xl p-5`}>
       <div className="flex items-start justify-between mb-3">
@@ -98,17 +135,23 @@ function AttestationCard({ a }: { a: AttestationView }) {
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-black/5 flex items-center justify-between">
-        <button
-          onClick={() => {
-            const url = `${window.location.origin}/custody/verify?object=${a.objectId}`;
-            navigator.clipboard.writeText(url);
-          }}
-          className="text-[12px] text-[#4ca3ff] hover:underline inline-flex items-center gap-1"
-        >
-          <Copy className="w-3 h-3" /> Copy share link for counterparty
-        </button>
-        <span className="text-[11px] text-[#86868b]">
+      <div className="mt-3 pt-3 border-t border-black/5 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={downloadJson}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-medium hover:bg-[#0A0E1A] active:scale-[0.98] transition-all"
+          >
+            <Download className="w-3.5 h-3.5" /> Download JSON
+          </button>
+          <button
+            onClick={() => copyValue(`${window.location.origin}/custody/verify?object=${a.objectId}`, 'share')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-black/10 text-[#1d1d1f] text-[12px] font-medium hover:bg-[#f5f5f7] active:scale-[0.98] transition-all"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copiedField === 'share' ? 'Copied ✓' : 'Copy share link'}
+          </button>
+        </div>
+        <span className="text-[11px] text-[#86868b] sm:text-right">
           Asset list stays off-chain; only the hash is on chain.
         </span>
       </div>

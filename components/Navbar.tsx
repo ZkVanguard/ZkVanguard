@@ -27,13 +27,14 @@ export const Navbar = memo(function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Focused nav — one product (SUI vault), one narrative (agents + ZK), one document (whitepaper).
+  // Focused nav — one product (SUI vault), one narrative (agents + ZK + RWA), one document (whitepaper).
   // Pricing/Developers/Simulator/Docs are still reachable by direct URL but not linked from the top nav.
   const navLinks = [
     { href: '/', label: t('home') },
     { href: '/dashboard', label: t('vault') },
     { href: '/agents', label: t('agents') },
     { href: '/zk', label: t('zk') },
+    { href: '/rwa', label: t('rwa') },
     { href: '/whitepaper', label: t('whitepaper') },
   ];
 

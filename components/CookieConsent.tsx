@@ -75,7 +75,7 @@ export function CookieConsent() {
   if (!showBanner) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[100] p-4 bg-white/95 backdrop-blur-xl border-t border-black/10 shadow-2xl animate-slide-up">
+    <div className="fixed bottom-0 left-0 right-0 z-[100] p-4 pb-safe-4 bg-white/95 backdrop-blur-xl border-t border-black/10 shadow-2xl animate-slide-up">
       <div className="max-w-6xl mx-auto">
         {!showDetails ? (
           // Simple Banner

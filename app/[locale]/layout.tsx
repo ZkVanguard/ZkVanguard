@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import '../../styles/globals.css';
 import { Providers } from '../providers';
 import { Navbar } from '../../components/Navbar';
@@ -12,6 +12,17 @@ import { IntlProvider } from '../../components/IntlProvider';
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
+
+// Mobile-first viewport: viewportFit 'cover' enables env(safe-area-inset-*)
+// so we can pad around the iPhone home indicator and notch. themeColor
+// matches the app background so the iOS status bar blends in.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
+};
 
 export async function generateMetadata({
   params: { locale }
@@ -30,6 +41,12 @@ export async function generateMetadata({
       icon: '/logo-official.svg',
       shortcut: '/logo-official.svg',
       apple: '/logo-official.svg',
+    },
+    manifest: '/manifest.json',
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'default',
+      title: 'ZkVanguard',
     },
     openGraph: {
       title: 'ZkVanguard',

@@ -403,10 +403,10 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
               body="Real-time TVL, drawdown, hedge coverage, cron health, ZK attestation feed. Auto-refresh 60s."
             />
             <SurfaceCard
-              href="/dashboard/custody"
-              eyebrow="Custody attestations"
-              title="Proof-of-backing on-chain."
-              body="Custodian-signed attestations bind portfolios to off-chain assets — without revealing the list."
+              href="/rwa"
+              eyebrow="RWA custody"
+              title="Real-world assets, provably backed."
+              body="Custodian-signed attestations bind portfolios to off-chain assets — without revealing the list. For issuers, custodians, institutions."
             />
             <SurfaceCard
               href="/agents"

@@ -1,0 +1,14 @@
+{
+  "name": "ZkVanguard — AI-managed vault on Sui",
+  "short_name": "ZkVanguard",
+  "description": "Autonomous AI vault trading prediction-market alpha on Sui, ZK-STARK-attested on-chain.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/logo-official.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "categories": ["finance", "productivity"]
+}

@@ -7,7 +7,8 @@
     "docs": "Documentation",
     "vault": "Coffre",
     "zk": "ZK",
-    "whitepaper": "Livre blanc"
+    "whitepaper": "Livre blanc",
+    "rwa": "RWA"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",

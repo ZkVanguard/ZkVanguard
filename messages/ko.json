@@ -7,7 +7,8 @@
     "docs": "문서",
     "vault": "볼트",
     "zk": "ZK",
-    "whitepaper": "백서"
+    "whitepaper": "백서",
+    "rwa": "RWA"
   },
   "hero": {
     "eyebrow": "SUI Mainnet",
