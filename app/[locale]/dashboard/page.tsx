@@ -548,7 +548,7 @@ export default function DashboardPage() {
         </aside>
         
         {/* Main Content */}
-        <main className="flex-1 min-h-[calc(100vh-52px)] pt-12 lg:pt-0 pb-[calc(56px+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="flex-1 min-h-[calc(100vh-52px)] pt-12 lg:pt-0 pb-[calc(52px+env(safe-area-inset-bottom))] lg:pb-0">
           <div className="max-w-[1280px] mx-auto px-4 sm:px-5 py-5 sm:py-6 lg:px-8 lg:py-10">
             {/* Page Header - Desktop only */}
             <div className="hidden lg:block mb-8">
@@ -557,9 +557,14 @@ export default function DashboardPage() {
               </h1>
             </div>
 
-            {/* Content Area */}
+            {/* Content Area. Keyed on activeNav so React tears down + remounts
+                the tab's subtree, giving each tab-switch a natural fade-in
+                (paired with the animate-fade-in class). Feels closer to
+                UINavigationController on iOS than a raw conditional swap. */}
             <Suspense fallback={<LoadingSkeleton height="h-96" />}>
-              {renderContent()}
+              <div key={activeNav} className="animate-fade-in">
+                {renderContent()}
+              </div>
             </Suspense>
           </div>
         </main>
@@ -597,7 +602,7 @@ export default function DashboardPage() {
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none lg:pointer-events-none"
             onClick={() => setShowChat(false)}
           />
-          <div className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-6 left-0 right-0 lg:right-6 lg:left-auto z-50 lg:w-[440px] lg:pointer-events-auto">
+          <div className="fixed bottom-[calc(52px+env(safe-area-inset-bottom))] lg:bottom-6 left-0 right-0 lg:right-6 lg:left-auto z-50 lg:w-[440px] lg:pointer-events-auto">
             <div className="bg-white lg:rounded-[24px] shadow-2xl border-t lg:border border-black/5 overflow-hidden">
               <div className="flex items-center justify-between p-3 sm:p-4 border-b border-black/5">
                 <div className="flex items-center gap-3">
