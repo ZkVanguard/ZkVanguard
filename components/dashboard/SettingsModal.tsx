@@ -93,49 +93,59 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   ] as const;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      
-      {/* Modal */}
-      <div className="relative bg-white rounded-[24px] w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-2xl mx-4">
+
+      {/* Modal — iOS bottom-sheet on mobile (slides up from bottom, rounded
+          top only, full-width, safe-area padded); centered card on tablet+. */}
+      <div className="relative bg-white w-full max-w-2xl overflow-hidden shadow-2xl
+                      rounded-t-[24px] sm:rounded-[24px] sm:mx-4
+                      max-h-[92vh] sm:max-h-[85vh]
+                      pb-safe sm:pb-0">
+        {/* Sheet-handle indicator on mobile */}
+        <div className="sm:hidden flex justify-center pt-2 pb-1">
+          <div className="w-9 h-1 rounded-full bg-black/15" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[14px] flex items-center justify-center">
-              <Settings className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-[#007AFF] to-[#5856D6] rounded-[12px] sm:rounded-[14px] flex items-center justify-center flex-shrink-0">
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-[20px] font-semibold text-[#1d1d1f]">Settings</h2>
-              <p className="text-[13px] text-[#86868b]">Configure your dashboard preferences</p>
+            <div className="min-w-0">
+              <h2 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] leading-tight">Settings</h2>
+              <p className="text-[11px] sm:text-[13px] text-[#86868b] truncate">Configure your dashboard preferences</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-full transition-all"
+            className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-full transition-all active:scale-[0.94] flex-shrink-0"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-black/5 px-6">
+        {/* Tabs — horizontal scroll on mobile so 4+ tabs don't wrap; no scrollbar for iOS feel */}
+        <div className="flex border-b border-black/5 px-2 sm:px-6 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map(tab => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 font-medium transition-all relative ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base font-medium transition-all relative flex-shrink-0 ${
                   activeTab === tab.id
                     ? 'text-[#007AFF]'
                     : 'text-[#86868b] hover:text-[#1d1d1f]'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-4 h-4 flex-shrink-0" />
                 {tab.label}
                 {activeTab === tab.id && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#007AFF]" />
@@ -146,7 +156,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(85vh-200px)]">
+        <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(92vh-160px)] sm:max-h-[calc(85vh-200px)]">
           {/* General Tab */}
           {activeTab === 'general' && (
             <div className="space-y-6">
@@ -383,18 +393,19 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-black/5 bg-[#f5f5f7]/50">
+        {/* Footer — buttons full-width and stacked on mobile (primary above
+            cancel for thumb reach), inline right-aligned on tablet+. */}
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-black/5 bg-[#f5f5f7]/50">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-[14px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-xl transition-colors"
+            className="h-11 sm:h-auto px-5 py-2.5 text-[15px] sm:text-[14px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-[0.98] rounded-xl transition-all"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2.5 text-[14px] font-medium text-white bg-[#007AFF] hover:bg-[#0051D5] rounded-xl transition-colors disabled:opacity-50"
+            className="h-11 sm:h-auto px-5 py-2.5 text-[15px] sm:text-[14px] font-semibold text-white bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.98] rounded-xl transition-all disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>

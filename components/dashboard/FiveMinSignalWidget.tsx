@@ -363,22 +363,22 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
   return (
     <div className={`bg-white/90 backdrop-blur-xl rounded-[20px] border ${containerBorder} shadow-sm transition-all duration-300`}>
       {/* Header */}
-      <div className="p-4 pb-2">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-amber-500" />
-            <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+      <div className="p-3 sm:p-4 pb-2">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+            <Zap className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            <span className="text-[11px] sm:text-xs font-semibold text-gray-700 uppercase tracking-wide truncate">
               5-Min BTC Signal
             </span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${strengthBadge}`}>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium flex-shrink-0 ${strengthBadge}`}>
               {signal.signalStrength}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-gray-500 flex-shrink-0 tabular-nums">
             {updatedAgo > 0 && (
-              <span className="text-[9px] text-gray-400 mr-1">{updatedAgo}s ago</span>
+              <span className="text-[9px] text-gray-400 mr-0.5 sm:mr-1 hidden sm:inline">{updatedAgo}s ago</span>
             )}
-            <Clock className="w-3 h-3" />
+            <Clock className="w-3 h-3 flex-shrink-0" />
             <span className={countdown < 60 ? 'text-red-500 font-semibold animate-pulse' : ''}>
               {formatTime(countdown)}
             </span>
@@ -386,20 +386,20 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
         </div>
 
         {/* Main signal */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${dirBg}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${dirBg}`}>
               {isUp ? (
-                <TrendingUp className={`w-5 h-5 ${dirColor}`} />
+                <TrendingUp className={`w-4 h-4 sm:w-5 sm:h-5 ${dirColor}`} />
               ) : (
-                <TrendingDown className={`w-5 h-5 ${dirColor}`} />
+                <TrendingDown className={`w-4 h-4 sm:w-5 sm:h-5 ${dirColor}`} />
               )}
             </div>
-            <div>
-              <div className={`text-lg font-bold ${dirColor}`}>
+            <div className="min-w-0">
+              <div className={`text-base sm:text-lg font-bold ${dirColor} tabular-nums`}>
                 BTC {signal.direction}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-[11px] sm:text-xs text-gray-500 tabular-nums">
                 {signal.probability.toFixed(2)}% probability
               </div>
             </div>
@@ -411,27 +411,27 @@ function FiveMinSignalWidgetInner({ onQuickHedge }: FiveMinSignalWidgetProps) {
         <ProbabilityBar displayUp={displayUp} displayDown={displayDown} deltaUp={deltaUp} />
       </div>
 
-      {/* Quick Hedge Action */}
+      {/* Quick Hedge Action — iOS-compliant 44px tap target on mobile */}
       {isStrong && onQuickHedge && (
-        <div className="px-4 pb-2">
+        <div className="px-3 sm:px-4 pb-2">
           <button
             onClick={() => onQuickHedge(isUp ? 'LONG' : 'SHORT')}
-            className={`w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+            className={`w-full h-11 sm:h-auto sm:py-2 rounded-xl text-xs sm:text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all ${
               isUp
                 ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
                 : 'bg-red-500 hover:bg-red-600 text-white'
             }`}
           >
-            <Shield className="w-3 h-3" />
+            <Shield className="w-3.5 h-3.5" />
             Quick {isUp ? 'Long' : 'Short'} Hedge
           </button>
         </div>
       )}
 
-      {/* Expandable toggle */}
+      {/* Expandable toggle — enlarged tap area on mobile */}
       <button
         onClick={() => setExpanded(prev => !prev)}
-        className="w-full px-4 py-2 flex items-center justify-center text-xs text-gray-400 hover:text-gray-600 transition-colors border-t border-gray-100"
+        className="w-full h-11 sm:h-auto px-4 py-2 flex items-center justify-center text-[11px] sm:text-xs text-gray-400 hover:text-gray-600 active:bg-gray-50 transition-colors border-t border-gray-100"
       >
         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         <span className="ml-1">{expanded ? 'Less' : 'Details'}</span>

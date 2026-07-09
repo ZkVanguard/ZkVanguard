@@ -95,7 +95,7 @@ export function ActionApprovalModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4"
         onClick={(e) => {
           if (e.target === e.currentTarget && !isSigning && !isExecuting) {
             onReject();
@@ -103,31 +103,40 @@ export function ActionApprovalModal({
         }}
       >
         <motion.div
-          initial={{ scale: 0.9, y: 20 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.9, y: 20 }}
-          className="bg-[#f5f5f7] rounded-2xl border border-purple-500/30 max-w-2xl w-full shadow-2xl shadow-purple-500/20"
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 40, opacity: 0 }}
+          transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+          className="bg-[#f5f5f7] border border-purple-500/30 shadow-2xl shadow-purple-500/20 w-full max-w-2xl
+                     rounded-t-[24px] sm:rounded-2xl
+                     max-h-[92vh] sm:max-h-[90vh] overflow-auto
+                     pb-safe sm:pb-0"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Sheet-handle indicator on mobile */}
+          <div className="sm:hidden flex justify-center pt-2 pb-1">
+            <div className="w-9 h-1 rounded-full bg-black/15" />
+          </div>
+
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-900/50 to-cyan-900/50 p-6 rounded-t-2xl border-b border-purple-500/30">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="text-4xl">{getIconForType()}</div>
-                <div>
-                  <h2 className="text-2xl font-bold text-[#1d1d1f] flex items-center gap-2">
-                    Manager Approval Required
-                    <Shield className="w-6 h-6 text-[#AF52DE]" />
+          <div className="bg-gradient-to-r from-purple-900/50 to-cyan-900/50 p-4 sm:p-6 sm:rounded-t-2xl border-b border-purple-500/30">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div className="text-3xl sm:text-4xl flex-shrink-0">{getIconForType()}</div>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-2xl font-bold text-[#1d1d1f] flex items-center gap-2">
+                    <span className="truncate">Manager Approval</span>
+                    <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-[#AF52DE] flex-shrink-0" />
                   </h2>
-                  <p className="text-sm text-[#1d1d1f] mt-1">
-                    Review and sign to authorize this action
+                  <p className="text-xs sm:text-sm text-[#1d1d1f] mt-0.5 sm:mt-1">
+                    Review and sign to authorize
                   </p>
                 </div>
               </div>
               {!isSigning && !isExecuting && (
                 <button
                   onClick={onReject}
-                  className="text-[#86868b] hover:text-[#1d1d1f] transition-colors"
+                  className="text-[#86868b] hover:text-[#1d1d1f] transition-colors flex-shrink-0"
                   title="Reject"
                 >
                   <XCircle className="w-6 h-6" />
@@ -137,16 +146,16 @@ export function ActionApprovalModal({
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* Action Overview */}
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-[#1d1d1f] flex items-center gap-2">
-                <FileSignature className="w-5 h-5 text-[#007AFF]" />
+            <div className="space-y-2 sm:space-y-3">
+              <h3 className="text-base sm:text-lg font-semibold text-[#1d1d1f] flex items-center gap-2">
+                <FileSignature className="w-4 h-4 sm:w-5 sm:h-5 text-[#007AFF] flex-shrink-0" />
                 Action Details
               </h3>
-              <div className="bg-white/50 rounded-lg p-4 border border-[#e8e8ed]">
-                <p className="text-xl font-semibold text-[#1d1d1f] mb-2">{action.title}</p>
-                <p className="text-[#1d1d1f] text-sm">{action.description}</p>
+              <div className="bg-white/50 rounded-lg p-3 sm:p-4 border border-[#e8e8ed]">
+                <p className="text-base sm:text-xl font-semibold text-[#1d1d1f] mb-1 sm:mb-2 break-words">{action.title}</p>
+                <p className="text-[#1d1d1f] text-xs sm:text-sm break-words">{action.description}</p>
               </div>
             </div>
 
@@ -155,15 +164,15 @@ export function ActionApprovalModal({
               {action.details.map((detail, index) => (
                 <div
                   key={index}
-                  className={`flex items-center justify-between p-3 rounded-lg ${
+                  className={`flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-lg ${
                     detail.highlight
                       ? 'bg-purple-500/10 border border-purple-500/30'
                       : 'bg-white/30'
                   }`}
                 >
-                  <span className="text-[#86868b] text-sm">{detail.label}</span>
+                  <span className="text-[#86868b] text-xs sm:text-sm flex-shrink-0">{detail.label}</span>
                   <span
-                    className={`font-semibold ${
+                    className={`font-semibold text-xs sm:text-sm tabular-nums text-right break-all min-w-0 ${
                       detail.highlight ? 'text-[#AF52DE]' : 'text-[#1d1d1f]'
                     }`}
                   >
@@ -175,14 +184,14 @@ export function ActionApprovalModal({
 
             {/* Risks */}
             {action.risks && action.risks.length > 0 && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="text-yellow-500 font-semibold text-sm">Risk Considerations:</p>
-                    <ul className="text-[#1d1d1f] text-sm space-y-1">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-yellow-500 font-semibold text-xs sm:text-sm">Risk Considerations:</p>
+                    <ul className="text-[#1d1d1f] text-xs sm:text-sm space-y-1">
                       {action.risks.map((risk, index) => (
-                        <li key={index}>• {risk}</li>
+                        <li key={index} className="leading-relaxed">• {risk}</li>
                       ))}
                     </ul>
                   </div>
@@ -191,63 +200,63 @@ export function ActionApprovalModal({
             )}
 
             {/* Expected Outcome */}
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 sm:p-4">
               <div className="flex items-start gap-2">
-                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-green-500 font-semibold text-sm mb-1">Expected Outcome:</p>
-                  <p className="text-[#1d1d1f] text-sm">{action.expectedOutcome}</p>
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-green-500 font-semibold text-xs sm:text-sm mb-1">Expected Outcome:</p>
+                  <p className="text-[#1d1d1f] text-xs sm:text-sm break-words">{action.expectedOutcome}</p>
                 </div>
               </div>
             </div>
 
             {/* Error Display */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 sm:p-4">
                 <div className="flex items-start gap-2">
-                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[#FF3B30] text-sm">{error}</p>
+                  <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-[#FF3B30] text-xs sm:text-sm break-words">{error}</p>
                 </div>
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-4">
+            {/* Action Buttons — primary sits on top on mobile for thumb reach */}
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 pt-2 sm:pt-4">
               <button
                 onClick={onReject}
                 disabled={isSigning || isExecuting}
-                className="flex-1 px-6 py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] disabled:opacity-50 rounded-lg font-semibold text-[#1d1d1f] transition-colors flex items-center justify-center gap-2"
+                className="h-11 sm:h-auto flex-1 px-6 py-3 bg-[#F5F5F7] border border-[#E5E5EA] hover:bg-[#E5E5EA] active:scale-[0.98] disabled:opacity-50 rounded-xl sm:rounded-lg font-semibold text-sm sm:text-base text-[#1d1d1f] transition-all flex items-center justify-center gap-2"
               >
-                <XCircle className="w-5 h-5" />
+                <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 Reject
               </button>
               <button
                 onClick={handleApprove}
                 disabled={isSigning || isExecuting}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-[#5856D6] to-[#007AFF] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-all shadow-lg shadow-[#5856D6]/20 flex items-center justify-center gap-2"
+                className="h-11 sm:h-auto flex-1 px-6 py-3 bg-gradient-to-r from-[#5856D6] to-[#007AFF] hover:opacity-90 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl sm:rounded-lg font-semibold text-sm sm:text-base text-white transition-all shadow-lg shadow-[#5856D6]/20 flex items-center justify-center gap-2"
               >
                 {isSigning ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Waiting for Signature...
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                    <span className="truncate">Waiting for Signature...</span>
                   </>
                 ) : isExecuting ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Executing...
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                    <span>Executing...</span>
                   </>
                 ) : (
                   <>
-                    <Shield className="w-5 h-5" />
-                    Approve & Sign
+                    <Shield className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span>Approve & Sign</span>
                   </>
                 )}
               </button>
             </div>
 
             {/* Info Footer */}
-            <div className="bg-white/30 rounded-lg p-3 border border-[#e8e8ed]/50">
-              <p className="text-xs text-[#86868b] text-center">
+            <div className="bg-white/30 rounded-lg p-2.5 sm:p-3 border border-[#e8e8ed]/50">
+              <p className="text-[11px] sm:text-xs text-[#86868b] text-center leading-relaxed">
                 🔐 Your signature proves authorization. No action will be executed without your approval.
                 {action.type === 'settlement' && ' This transaction will be gasless via x402 protocol.'}
               </p>
