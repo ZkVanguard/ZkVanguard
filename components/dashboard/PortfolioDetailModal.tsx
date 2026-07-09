@@ -124,23 +124,23 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Key Metrics */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-[#f5f5f7] rounded-xl p-4">
-                  <p className="text-[#86868b] text-sm mb-1">Total Value</p>
-                  <p className="text-2xl font-bold text-[#1d1d1f]">{formatCurrency(portfolio.totalValue)}</p>
+              {/* Key Metrics — 2-col on mobile, 4-col on tablet+ */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 min-w-0">
+                <div className="bg-[#f5f5f7] rounded-xl p-3 sm:p-4 min-w-0">
+                  <p className="text-[#86868b] text-xs sm:text-sm mb-1 truncate">Total Value</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#1d1d1f] tabular-nums break-all">{formatCurrency(portfolio.totalValue)}</p>
                 </div>
-                <div className="bg-[#f5f5f7] rounded-xl p-4">
-                  <p className="text-[#86868b] text-sm mb-1">Current Yield</p>
-                  <p className="text-2xl font-bold text-[#34C759]">{portfolio.currentYield}%</p>
+                <div className="bg-[#f5f5f7] rounded-xl p-3 sm:p-4 min-w-0">
+                  <p className="text-[#86868b] text-xs sm:text-sm mb-1 truncate">Current Yield</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#34C759] tabular-nums break-all">{portfolio.currentYield}%</p>
                 </div>
-                <div className="bg-[#f5f5f7] rounded-xl p-4">
-                  <p className="text-[#86868b] text-sm mb-1">Target APY</p>
-                  <p className="text-2xl font-bold text-[#1d1d1f]">{portfolio.targetAPY}%</p>
+                <div className="bg-[#f5f5f7] rounded-xl p-3 sm:p-4 min-w-0">
+                  <p className="text-[#86868b] text-xs sm:text-sm mb-1 truncate">Target APY</p>
+                  <p className="text-lg sm:text-2xl font-bold text-[#1d1d1f] tabular-nums break-all">{portfolio.targetAPY}%</p>
                 </div>
-                <div className="bg-[#f5f5f7] rounded-xl p-4">
-                  <p className="text-[#86868b] text-sm mb-1">Risk Level</p>
-                  <p className={`text-2xl font-bold ${
+                <div className="bg-[#f5f5f7] rounded-xl p-3 sm:p-4 min-w-0">
+                  <p className="text-[#86868b] text-xs sm:text-sm mb-1 truncate">Risk Level</p>
+                  <p className={`text-lg sm:text-2xl font-bold break-words ${
                     portfolio.riskLevel === 'High' ? 'text-[#FF3B30]' :
                     portfolio.riskLevel === 'Medium' ? 'text-[#FF9500]' :
                     'text-[#34C759]'

@@ -88,8 +88,8 @@ export const PoolHeader = memo(function PoolHeader({
                   aria-label="AI Insights"
                 >
                   <Brain className="w-4 h-4 text-white" />
-                  <span className="text-xs sm:text-sm text-white hidden xs:inline">AI Insights</span>
-                  <span className="text-xs sm:text-sm text-white xs:hidden">AI</span>
+                  <span className="text-xs sm:text-sm text-white hidden sm:inline">AI Insights</span>
+                  <span className="text-xs sm:text-sm text-white sm:hidden">AI</span>
                 </button>
               )}
             </>

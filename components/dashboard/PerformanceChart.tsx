@@ -423,9 +423,9 @@ export default function PerformanceChart({
         <Line data={chartDataset} options={chartOptions} />
       </div>
 
-      {/* Metrics summary */}
+      {/* Metrics summary — 2-col on mobile so PnL values don't crush */}
       {metrics && (
-        <div className="grid grid-cols-4 gap-3 pt-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 pt-2 min-w-0">
           <MetricCard 
             label="Daily" 
             value={metrics.dailyPnL}

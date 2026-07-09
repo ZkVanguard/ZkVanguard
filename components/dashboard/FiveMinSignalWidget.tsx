@@ -147,20 +147,20 @@ const SignalDetails = memo(function SignalDetails({
             <Activity className="w-3 h-3 text-gray-400" />
             <span className="text-xs font-medium text-gray-600">Signal History (30 min)</span>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <div>
-              <div className="text-gray-400">Streak</div>
-              <div className={`font-semibold ${history.streak.direction === 'UP' ? 'text-emerald-600' : 'text-red-500'}`}>
+          <div className="grid grid-cols-3 gap-2 text-[11px] sm:text-xs min-w-0">
+            <div className="min-w-0">
+              <div className="text-gray-400 truncate">Streak</div>
+              <div className={`font-semibold truncate tabular-nums ${history.streak.direction === 'UP' ? 'text-emerald-600' : 'text-red-500'}`}>
                 {history.streak.count}x {history.streak.direction}
               </div>
             </div>
-            <div>
-              <div className="text-gray-400">Avg Conf.</div>
-              <div className="font-semibold text-gray-700">{history.avgConfidence}%</div>
+            <div className="min-w-0">
+              <div className="text-gray-400 truncate">Avg Conf.</div>
+              <div className="font-semibold text-gray-700 tabular-nums truncate">{history.avgConfidence}%</div>
             </div>
-            <div>
-              <div className="text-gray-400">Signals</div>
-              <div className="font-semibold text-gray-700">{history.signals.length}</div>
+            <div className="min-w-0">
+              <div className="text-gray-400 truncate">Signals</div>
+              <div className="font-semibold text-gray-700 tabular-nums truncate">{history.signals.length}</div>
             </div>
           </div>
           {historyBars.length > 0 && (

@@ -7,6 +7,12 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      // xs breakpoint (475px) for content that needs to change slightly above
+      // the smallest phones (320-374px iPhone SE) but below the standard 640px
+      // sm: breakpoint. Used sparingly — mostly for label/full-label swaps.
+      screens: {
+        xs: '475px',
+      },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'SF Pro Text', 'system-ui', 'sans-serif'],
         // Warm editorial serif for Claude-style display headings (system stack, no web font)
