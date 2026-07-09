@@ -236,7 +236,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden"
+        className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden min-w-0 max-w-full"
       >
         <PoolHeader
           selectedChain={pool.selectedChain}
@@ -260,7 +260,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden"
+      className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden min-w-0 max-w-full"
     >
       <PoolHeader
         selectedChain={pool.selectedChain}

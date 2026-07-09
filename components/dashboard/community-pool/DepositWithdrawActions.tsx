@@ -109,21 +109,21 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
 
   if (isSui) {
     return (
-      <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-        <div className="space-y-4">
-          {/* SUI Pool Header */}
-          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">💵</span>
-                <h4 className="font-semibold text-gray-900 dark:text-white">SUI USDC Pool</h4>
-                <span className="px-2 py-0.5 text-xs bg-cyan-500 text-white rounded-full">USDC → 3-Asset AI</span>
+      <div className="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700 min-w-0">
+        <div className="space-y-3 sm:space-y-4">
+          {/* SUI Pool Header — stacks on mobile so long badges/link don't burst */}
+          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 rounded-xl sm:rounded-lg p-3 sm:p-4 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="text-xl sm:text-2xl flex-shrink-0">💵</span>
+                <h4 className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base truncate">SUI USDC Pool</h4>
+                <span className="px-2 py-0.5 text-[10px] sm:text-xs bg-cyan-500 text-white rounded-full flex-shrink-0 whitespace-nowrap">USDC → 3-Asset AI</span>
               </div>
               <a
                 href={`${chainConfig?.blockExplorer?.[network] || `https://suiscan.xyz/${network}`}/object/${suiPoolStateId || communityPoolAddress}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+                className="inline-flex items-center gap-1 px-2 py-1 text-[11px] sm:text-xs text-cyan-600 dark:text-cyan-400 hover:underline self-start sm:self-auto flex-shrink-0"
               >
                 <ExternalLink className="w-3 h-3" />
                 View Pool
@@ -131,14 +131,20 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             </div>
 
             {suiIsConnected ? (
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <Wallet className="w-4 h-4 text-green-500" />
-                <span>Connected: {suiAddress?.slice(0, 8)}...{suiAddress?.slice(-6)}</span>
-                <span className="text-gray-400">|</span>
-                <span>1 share = ${(Number(poolData?.sharePrice) || 1).toFixed(4)} USDC</span>
+              // Wrap once past mobile width; long address + share-price string
+              // used to bust the row after data loaded.
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] sm:text-sm text-gray-600 dark:text-gray-300 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Wallet className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <span className="truncate tabular-nums">Connected: {suiAddress?.slice(0, 6)}...{suiAddress?.slice(-4)}</span>
+                </div>
+                <span className="text-gray-400 hidden sm:inline">|</span>
+                <span className="tabular-nums text-[12px] sm:text-sm w-full sm:w-auto text-gray-500 sm:text-inherit">
+                  1 share = ${(Number(poolData?.sharePrice) || 1).toFixed(4)} USDC
+                </span>
               </div>
             ) : (
-              <p className="text-sm text-amber-600 dark:text-amber-400">
+              <p className="text-[13px] sm:text-sm text-amber-600 dark:text-amber-400 leading-relaxed">
                 Connect a SUI wallet to deposit USDC and earn from AI-managed 3-asset allocation.
               </p>
             )}
@@ -146,42 +152,42 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
 
           {/* Wrong Network Warning */}
           {suiIsConnected && suiIsWrongNetwork && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            <div className="p-3 sm:p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl sm:rounded-lg border border-amber-200 dark:border-amber-700 min-w-0">
+              <div className="flex items-start sm:items-center gap-2 mb-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5 sm:mt-0" />
+                <span className="text-[13px] sm:text-sm font-medium text-amber-700 dark:text-amber-400 break-words min-w-0">
                   Wrong Network: Your wallet is on {suiNetwork}
                 </span>
               </div>
-              <p className="text-xs text-amber-600 dark:text-amber-500 mb-2">
-                SUI wallets require manual network switching. Please open your wallet extension 
+              <p className="text-[11px] sm:text-xs text-amber-600 dark:text-amber-500 mb-2 leading-relaxed">
+                SUI wallets require manual network switching. Please open your wallet extension
                 and switch to <strong>{network === 'mainnet' ? 'Mainnet' : 'Testnet'}</strong> in Settings → Network.
               </p>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
                 <span>Supported wallets: Sui Wallet, Suiet, Ethos</span>
-                <span className="text-amber-500">•</span>
+                <span className="text-amber-500 hidden sm:inline">•</span>
                 <span>The app will detect when you switch</span>
               </div>
             </div>
           )}
 
-          {/* SUI Deposit/Withdraw Buttons */}
-          <div className="flex gap-3">
+          {/* SUI Deposit/Withdraw Buttons — 44px tap targets on mobile */}
+          <div className="flex gap-2 sm:gap-3">
             <button
               onClick={() => { onShowDeposit(!showDeposit); }}
               disabled={!suiIsConnected || actionLoading || suiIsWrongNetwork}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              className="flex-1 min-w-0 flex items-center justify-center gap-2 h-11 sm:h-auto px-3 sm:px-4 py-2 text-sm sm:text-base bg-green-600 hover:bg-green-700 active:scale-[0.98] disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl sm:rounded-lg transition-all"
             >
-              <Plus className="w-4 h-4" />
-              Deposit USDC
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Deposit USDC</span>
             </button>
             <button
               onClick={() => { onShowWithdraw(!showWithdraw); }}
               disabled={!suiIsConnected || !userPosition?.isMember || actionLoading || suiIsWrongNetwork}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              className="flex-1 min-w-0 flex items-center justify-center gap-2 h-11 sm:h-auto px-3 sm:px-4 py-2 text-sm sm:text-base bg-red-600 hover:bg-red-700 active:scale-[0.98] disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl sm:rounded-lg transition-all"
             >
-              <Minus className="w-4 h-4" />
-              Withdraw USDC
+              <Minus className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Withdraw USDC</span>
             </button>
           </div>
 
@@ -302,13 +308,13 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
           </div>
         </div>
       ) : (
-        <div className="mb-3 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
-          <div className="flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-green-500" />
-            <span>Connected: {effectiveAddress?.slice(0, 6)}...{effectiveAddress?.slice(-4)}</span>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[13px] sm:text-sm text-gray-600 dark:text-gray-300 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Wallet className="w-4 h-4 text-green-500 flex-shrink-0" />
+            <span className="truncate tabular-nums">Connected: {effectiveAddress?.slice(0, 6)}...{effectiveAddress?.slice(-4)}</span>
           </div>
           {!isChainMismatch && userUsdtBalance >= 0 && (
-            <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded">
+            <span className="text-[11px] sm:text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded tabular-nums flex-shrink-0">
               Balance: ${userUsdtBalance.toFixed(2)} {tokenInfo.symbol}
             </span>
           )}

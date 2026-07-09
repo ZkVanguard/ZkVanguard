@@ -114,23 +114,23 @@ const MetricCard = memo(function MetricCard({
   const [showTooltip, setShowTooltip] = useState(false);
   
   return (
-    <div 
-      className="relative p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+    <div
+      className="relative p-2.5 sm:p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-w-0"
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-gray-400" />}
-          <span className="text-xs text-gray-500 dark:text-gray-400">{label}</span>
+      <div className="flex items-center justify-between gap-1 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {Icon && <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />}
+          <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 truncate">{label}</span>
           {tooltip && (
-            <Info className="w-3 h-3 text-gray-400 cursor-help" />
+            <Info className="w-3 h-3 text-gray-400 cursor-help flex-shrink-0" />
           )}
         </div>
       </div>
-      <p className={`text-lg font-bold mt-1 ${color}`}>{value}</p>
+      <p className={`text-base sm:text-lg font-bold mt-1 tabular-nums break-all ${color}`}>{value}</p>
       {subValue && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subValue}</p>
+        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{subValue}</p>
       )}
       
       {/* Tooltip */}
@@ -195,9 +195,9 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
   
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 animate-pulse">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg p-3 sm:p-4 animate-pulse overflow-hidden min-w-0 max-w-full">
         <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           {[1, 2, 3, 4].map(i => (
             <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
           ))}
@@ -205,39 +205,39 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
       </div>
     );
   }
-  
+
   if (error || !metrics) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg p-3 sm:p-4 overflow-hidden min-w-0 max-w-full">
         <p className="text-red-500 text-sm">Failed to load risk metrics</p>
       </div>
     );
   }
-  
+
   // Show message when insufficient data
   if (metrics.insufficientData) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-700 to-slate-900 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-6 h-6 text-white" />
-              <div>
-                <h3 className="text-white font-semibold">Risk Analytics</h3>
-                <p className="text-slate-300 text-xs">Institutional-grade risk metrics</p>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden min-w-0 max-w-full">
+        <div className="bg-gradient-to-r from-slate-700 to-slate-900 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white flex-shrink-0" />
+              <div className="min-w-0">
+                <h3 className="text-white font-semibold text-sm sm:text-base truncate">Risk Analytics</h3>
+                <p className="text-slate-300 text-[11px] sm:text-xs truncate">Institutional-grade risk metrics</p>
               </div>
             </div>
           </div>
         </div>
-        <div className="p-6 text-center">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-          <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">
+        <div className="p-4 sm:p-6 text-center">
+          <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-yellow-500 mx-auto mb-3" />
+          <h4 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-white mb-2">
             Insufficient Performance Data
           </h4>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+          <p className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm mb-4 leading-relaxed">
             {metrics.insufficientDataReason || 'Risk metrics require historical share price data to calculate.'}
           </p>
-          <div className="text-xs text-gray-500 dark:text-gray-500">
+          <div className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-500 leading-relaxed">
             Risk metrics will become available as the pool accumulates performance history with actual share price changes.
           </div>
         </div>
@@ -250,40 +250,42 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
     : 'text-red-500';
   
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-      {/* Header */}
-      <div 
-        className="bg-gradient-to-r from-slate-700 to-slate-900 p-4 cursor-pointer"
+    <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden min-w-0 max-w-full">
+      {/* Header — controls wrap onto a second line on narrow screens */}
+      <div
+        className="bg-gradient-to-r from-slate-700 to-slate-900 p-3 sm:p-4 cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-lg">
-              <Shield className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-white/10 rounded-lg flex-shrink-0">
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">Risk Analytics</h2>
-              <p className="text-xs text-gray-300">Institutional-grade risk metrics</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-white truncate">Risk Analytics</h2>
+              <p className="text-[11px] sm:text-xs text-gray-300 truncate">Institutional-grade risk metrics</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Risk Rating Badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg">
-              <AlertTriangle className={`w-4 h-4 ${riskColorClass}`} />
-              <span className={`font-semibold ${riskColorClass}`}>
-                {riskRating?.rating} Risk
+
+          <div className="flex items-center gap-1.5 sm:gap-4 flex-shrink-0">
+            {/* Risk Rating Badge — compact on mobile */}
+            <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-white/10 rounded-lg">
+              <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${riskColorClass}`} />
+              <span className={`font-semibold text-xs sm:text-sm ${riskColorClass}`}>
+                <span className="hidden sm:inline">{riskRating?.rating} Risk</span>
+                <span className="sm:hidden">{riskRating?.rating}</span>
               </span>
             </div>
-            
+
             <button
               onClick={(e) => { e.stopPropagation(); fetchMetrics(); }}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg transition-colors active:scale-[0.96]"
               title="Refresh metrics"
+              aria-label="Refresh metrics"
             >
               <RefreshCw className="w-4 h-4 text-white" />
             </button>
-            
+
             {expanded ? (
               <ChevronUp className="w-5 h-5 text-white" />
             ) : (
@@ -312,63 +314,63 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            {/* Key Metrics Row */}
+            {/* Key Metrics Row — text scales down on mobile */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-0.5 p-0.5 bg-gray-100 dark:bg-gray-900">
-              <div className="bg-white dark:bg-gray-800 p-4 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Sharpe Ratio</p>
-                <p className={`text-2xl font-bold ${getMetricColor(metrics.sharpeRatio, { good: 1.0, warning: 0.5 })}`}>
+              <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 text-center min-w-0">
+                <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">Sharpe Ratio</p>
+                <p className={`text-lg sm:text-2xl font-bold tabular-nums break-all ${getMetricColor(metrics.sharpeRatio, { good: 1.0, warning: 0.5 })}`}>
                   {metrics.sharpeRatio.toFixed(2)}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Risk-adjusted</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 truncate">Risk-adjusted</p>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-4 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Max Drawdown</p>
-                <p className={`text-2xl font-bold ${getMetricColor(metrics.maxDrawdown, { good: 10, warning: 25 }, true)}`}>
+              <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 text-center min-w-0">
+                <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">Max Drawdown</p>
+                <p className={`text-lg sm:text-2xl font-bold tabular-nums break-all ${getMetricColor(metrics.maxDrawdown, { good: 10, warning: 25 }, true)}`}>
                   -{metrics.maxDrawdown.toFixed(1)}%
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Peak to trough</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 truncate">Peak to trough</p>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-4 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">VaR (95%)</p>
-                <p className={`text-2xl font-bold ${getMetricColor(metrics.var95Daily, { good: 3, warning: 5 }, true)}`}>
+              <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 text-center min-w-0">
+                <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">VaR (95%)</p>
+                <p className={`text-lg sm:text-2xl font-bold tabular-nums break-all ${getMetricColor(metrics.var95Daily, { good: 3, warning: 5 }, true)}`}>
                   -{metrics.var95Daily.toFixed(1)}%
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Daily max loss</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 truncate">Daily max loss</p>
               </div>
-              <div className="bg-white dark:bg-gray-800 p-4 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Win Rate</p>
-                <p className={`text-2xl font-bold ${getMetricColor(metrics.winRate, { good: 55, warning: 45 })}`}>
+              <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 text-center min-w-0">
+                <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">Win Rate</p>
+                <p className={`text-lg sm:text-2xl font-bold tabular-nums break-all ${getMetricColor(metrics.winRate, { good: 55, warning: 45 })}`}>
                   {metrics.winRate.toFixed(1)}%
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Daily returns</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 truncate">Daily returns</p>
               </div>
             </div>
-            
-            {/* Performance Returns */}
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
+
+            {/* Performance Returns — 5-col grid busts mobile; use 3-col on <sm */}
+            <div className="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700 min-w-0">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 flex-shrink-0" />
                 Performance Returns
               </h3>
-              <div className="grid grid-cols-5 gap-2">
-                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">7D</p>
-                  <p>{renderPeriodReturn(metrics.returns7d)}</p>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg min-w-0">
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">7D</p>
+                  <p className="text-xs sm:text-sm tabular-nums break-all">{renderPeriodReturn(metrics.returns7d)}</p>
                 </div>
-                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">30D</p>
-                  <p>{renderPeriodReturn(metrics.returns30d)}</p>
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg min-w-0">
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">30D</p>
+                  <p className="text-xs sm:text-sm tabular-nums break-all">{renderPeriodReturn(metrics.returns30d)}</p>
                 </div>
-                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">90D</p>
-                  <p>{renderPeriodReturn(metrics.returns90d)}</p>
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg min-w-0">
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">90D</p>
+                  <p className="text-xs sm:text-sm tabular-nums break-all">{renderPeriodReturn(metrics.returns90d)}</p>
                 </div>
-                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">YTD</p>
-                  <p>{renderPeriodReturn(metrics.returnsYTD)}</p>
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg min-w-0">
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">YTD</p>
+                  <p className="text-xs sm:text-sm tabular-nums break-all">{renderPeriodReturn(metrics.returnsYTD)}</p>
                 </div>
-                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg min-w-0 col-span-3 sm:col-span-1">
+                  <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
                     {metrics.periodStart ? (
                       (() => {
                         const start = new Date(metrics.periodStart);
@@ -380,7 +382,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
                       })()
                     ) : 'Since Start'}
                   </p>
-                  <p className={`font-bold ${metrics.returnsSinceInception >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`text-xs sm:text-sm font-bold tabular-nums break-all ${metrics.returnsSinceInception >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatPct(metrics.returnsSinceInception)}
                   </p>
                 </div>
@@ -388,12 +390,12 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
             </div>
             
             {/* Risk Metrics Grid */}
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <Activity className="w-4 h-4" />
+            <div className="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700 min-w-0">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4 flex-shrink-0" />
                 Risk Metrics
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
                 <MetricCard 
                   label="Sortino Ratio"
                   value={metrics.sortinoRatio.toFixed(2)}
@@ -426,12 +428,12 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
             </div>
             
             {/* Market Exposure */}
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <BarChart2 className="w-4 h-4" />
-                Market Exposure (vs BTC Benchmark)
+            <div className="p-3 sm:p-4 border-b border-gray-100 dark:border-gray-700 min-w-0">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">Market Exposure (vs BTC Benchmark)</span>
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
                 <MetricCard 
                   label="Beta"
                   value={metrics.beta.toFixed(2)}
@@ -464,12 +466,12 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
             </div>
             
             {/* Trading Statistics */}
-            <div className="p-4">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
+            <div className="p-3 sm:p-4 min-w-0">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 flex-shrink-0" />
                 Trading Statistics
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
                 <MetricCard 
                   label="Calmar Ratio"
                   value={metrics.calmarRatio.toFixed(2)}
@@ -501,12 +503,12 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
               </div>
             </div>
             
-            {/* Footer */}
-            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-              <span>
+            {/* Footer — stacks on mobile so text lines don't get clipped */}
+            <div className="px-3 sm:px-4 py-3 bg-gray-50 dark:bg-gray-800/50 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 min-w-0">
+              <span className="break-words leading-relaxed">
                 Based on {metrics.dataPoints} data points • Risk-free rate: 5.0% • Benchmark: BTC
               </span>
-              <span>
+              <span className="break-words tabular-nums flex-shrink-0">
                 Updated: {new Date(metrics.lastCalculated).toLocaleString()}
               </span>
             </div>
