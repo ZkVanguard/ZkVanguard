@@ -236,15 +236,15 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
+        className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden"
       >
         <PoolHeader
           selectedChain={pool.selectedChain}
           onChainSelect={pool.handleChainSelect}
           onRefresh={() => pool.fetchPoolData(true)}
         />
-        <div className="p-6">
-          <p className="text-gray-500 dark:text-gray-400 text-center">
+        <div className="p-4 sm:p-6">
+          <p className="text-gray-500 dark:text-gray-400 text-center text-sm">
             {pool.error || `Unable to load ${chainName} pool data. Try refreshing or selecting a different chain.`}
           </p>
         </div>
@@ -260,7 +260,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden"
+      className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg overflow-hidden"
     >
       <PoolHeader
         selectedChain={pool.selectedChain}
@@ -346,7 +346,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
       {/* Risk Metrics Panel - Lazy loaded when in viewport */}
       {!compact && (
-        <div ref={riskMetricsRef} className="p-4 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+        <div ref={riskMetricsRef} className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
           {riskMetricsVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
               <RiskMetricsPanel compact={false} chain={pool.selectedChain} />
@@ -359,7 +359,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
       {/* Auto Hedge Panel - Lazy loaded when in viewport */}
       {!compact && (
-        <div ref={autoHedgeRef} className="p-4 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+        <div ref={autoHedgeRef} className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
           {autoHedgeVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
               <AutoHedgePanel chain={pool.selectedChain} />

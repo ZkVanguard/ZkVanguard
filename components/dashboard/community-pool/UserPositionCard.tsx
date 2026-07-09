@@ -38,41 +38,41 @@ export const UserPositionCard = memo(function UserPositionCard({
   const txCount = (userPosition.depositCount || 0) + (userPosition.withdrawalCount || 0);
 
   return (
-    <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
-      <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
-        <Wallet className="w-4 h-4" />
-        Your Position
-        <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-2">
+    <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20">
+      <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3 flex-wrap text-sm sm:text-base">
+        <Wallet className="w-4 h-4 flex-shrink-0" />
+        <span>Your Position</span>
+        <span className="text-[11px] sm:text-xs font-normal text-gray-500 dark:text-gray-400 sm:ml-2">
           on {chainName}
         </span>
       </h3>
 
       {userPosition.isMember ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <p className="text-base sm:text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400 tabular-nums break-all">
               {(Number(userPosition.shares) || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Your Shares</p>
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">Your Shares</p>
           </div>
-          <div>
-            <p className="text-xl font-bold text-green-600 dark:text-green-400">{valueDisplay}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{valueSubtext}</p>
+          <div className="min-w-0">
+            <p className="text-base sm:text-lg md:text-xl font-bold text-green-600 dark:text-green-400 tabular-nums break-all">{valueDisplay}</p>
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{valueSubtext}</p>
           </div>
-          <div>
-            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+          <div className="min-w-0">
+            <p className="text-base sm:text-lg md:text-xl font-bold text-purple-600 dark:text-purple-400 tabular-nums">
               {formatPercent(userPosition.percentage)}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Pool Ownership</p>
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">Pool Ownership</p>
           </div>
-          <div>
-            <p className="text-xl font-bold text-gray-900 dark:text-white">{txCount}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Transactions</p>
+          <div className="min-w-0">
+            <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 dark:text-white tabular-nums">{txCount}</p>
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">Transactions</p>
           </div>
         </div>
       ) : (
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
-          You haven't joined the {chainName} pool yet. Deposit to receive shares.
+        <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm">
+          You haven&apos;t joined the {chainName} pool yet. Deposit to receive shares.
         </p>
       )}
     </div>
