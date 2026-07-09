@@ -105,9 +105,15 @@ interface AutoHedgePanelProps {
 
 export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
   const [data, setData] = useState<AutoHedgeData | null>(null);
+  // Expanded by default on desktop, collapsed on mobile — reduces the pool
+  // page's vertical noise. Set client-side after mount to avoid SSR jump.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setExpanded(!window.matchMedia('(max-width: 639px)').matches);
+  }, []);
   const [updating, setUpdating] = useState(false);
   const [gasStatus, setGasStatus] = useState<{
     configured: boolean;

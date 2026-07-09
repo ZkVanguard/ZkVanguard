@@ -56,53 +56,101 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
     return { returnPct, profitUsd, offAthPct };
   }, [isSui, poolData.sharePrice, poolData.totalValueUSD, poolData.totalDeposited, poolData.totalWithdrawn, poolData.allTimeHighNav]);
 
-  // Mobile-first: always 2 cols on smallest screens, more on wider.
-  // SUI USDC pool has 5 metrics — 2×3 on mobile (last cell empty is fine),
-  // 3-col at md+ (fits comfortably at 768px+).
-  const gridCols = isSui ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4';
   const signedPct = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
   const signedUsd = (v: number) => `${v >= 0 ? '+' : '-'}${formatUSD(Math.abs(v))}`;
   const pnlColor = (v: number) =>
     v >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 
+  // Mobile: 2 hero cards + compact 3-metric strip below.
+  // Desktop: full grid (3 or 5 cols depending on chain).
   return (
-    <div className={`grid ${gridCols} gap-3 sm:gap-4 p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700`}>
-      <div className="text-center min-w-0">
-        <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
-        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
+    <div className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-w-0">
+      {/* Mobile hero row */}
+      <div className="grid grid-cols-2 gap-2 sm:hidden">
+        <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
+          <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
+        </div>
+        {isSui && profit ? (
+          <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
+            <p className={`text-lg font-bold tabular-nums break-all ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Return</p>
+          </div>
+        ) : (
+          <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
+            <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">Share Price</p>
+          </div>
+        )}
       </div>
-      {isSui && profit && (
+
+      {/* Mobile compact secondary strip */}
+      <div className="grid grid-cols-3 gap-2 mt-2 sm:hidden">
+        {isSui && profit && profit.profitUsd !== null && (
+          <div className="text-center min-w-0">
+            <p className={`text-xs font-semibold tabular-nums break-all ${pnlColor(profit.profitUsd)}`}>{signedUsd(profit.profitUsd)}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Profit</p>
+          </div>
+        )}
+        {isSui && profit && (
+          <div className="text-center min-w-0">
+            <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Share Price</p>
+          </div>
+        )}
         <div className="text-center min-w-0">
-          <p className={`text-lg sm:text-xl md:text-2xl font-bold tabular-nums ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
-          <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-            Total Return
-            {profit.offAthPct !== null && profit.offAthPct < -0.01 && (
-              <span className="block text-[9px] sm:text-[10px] text-gray-400 dark:text-gray-500">
-                {profit.offAthPct.toFixed(1)}% off ATH
-              </span>
-            )}
+          <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums">{poolData.memberCount}</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Members</p>
+        </div>
+        {(!isSui || !profit) && (
+          <div className="text-center min-w-0">
+            <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums break-all">
+              {(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Shares</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop grid — full detail from sm+ */}
+      <div className={`hidden sm:grid gap-3 sm:gap-4 ${isSui ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'}`}>
+        <div className="text-center min-w-0">
+          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
+        </div>
+        {isSui && profit && (
+          <div className="text-center min-w-0">
+            <p className={`text-xl md:text-2xl font-bold tabular-nums ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
+              Total Return
+              {profit.offAthPct !== null && profit.offAthPct < -0.01 && (
+                <span className="block text-[10px] text-gray-400 dark:text-gray-500">
+                  {profit.offAthPct.toFixed(1)}% off ATH
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+        {isSui && profit && profit.profitUsd !== null && (
+          <div className="text-center min-w-0">
+            <p className={`text-xl md:text-2xl font-bold tabular-nums break-all ${pnlColor(profit.profitUsd)}`}>{signedUsd(profit.profitUsd)}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Profit (USDC)</p>
+          </div>
+        )}
+        <div className="text-center min-w-0">
+          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{poolData.memberCount}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Pool Members</p>
+        </div>
+        <div className="text-center min-w-0">
+          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{sharePriceSubtext}</p>
+        </div>
+        <div className="text-center min-w-0">
+          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">
+            {(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
           </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Shares</p>
         </div>
-      )}
-      {isSui && profit && profit.profitUsd !== null && (
-        <div className="text-center min-w-0">
-          <p className={`text-lg sm:text-xl md:text-2xl font-bold tabular-nums break-all ${pnlColor(profit.profitUsd)}`}>{signedUsd(profit.profitUsd)}</p>
-          <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Profit (USDC)</p>
-        </div>
-      )}
-      <div className="text-center min-w-0">
-        <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{poolData.memberCount}</p>
-        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Pool Members</p>
-      </div>
-      <div className="text-center min-w-0">
-        <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
-        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{sharePriceSubtext}</p>
-      </div>
-      <div className="text-center min-w-0">
-        <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">
-          {(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-        </p>
-        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Shares</p>
       </div>
     </div>
   );

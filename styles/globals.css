@@ -15,6 +15,38 @@
   .pb-safe-4  { padding-bottom: calc(env(safe-area-inset-bottom, 0) + 1rem); }
   .pb-safe-6  { padding-bottom: calc(env(safe-area-inset-bottom, 0) + 1.5rem); }
   .bottom-safe { bottom: env(safe-area-inset-bottom, 0); }
+
+  /* No-burst cage — apply to any panel/card root that shouldn't overflow
+     its parent on mobile. Combines the three properties that together
+     stop runaway children from pushing the container wider than its
+     grid/flex track. */
+  .no-burst { min-width: 0; max-width: 100%; overflow: hidden; }
+}
+
+/* ── Platform-wide overflow safety ─────────────────────────────────
+   Defensive globals so any child that forgot responsive treatment
+   cannot horizontally scroll the page. html/body already have
+   overflow-x: hidden; these rules stop the offenders themselves. */
+@media (max-width: 640px) {
+  /* Media never wider than its container */
+  img, svg, video, canvas, iframe {
+    max-width: 100%;
+    height: auto;
+  }
+  /* Long unbroken strings (wallet addresses, tx hashes, tokens) wrap
+     instead of pushing the container. Individual components can still
+     opt out with whitespace-nowrap where wrapping would look wrong. */
+  h1, h2, h3, h4, h5, h6, p, span, li, td, th, dd, dt, blockquote {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  /* Code and pre-formatted content scrolls within its own box */
+  pre, code {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  /* Tables get a horizontal scroll container by default */
+  table { max-width: 100%; }
 }
 
 /* Prevent iOS Safari's automatic zoom on focused inputs. Any input

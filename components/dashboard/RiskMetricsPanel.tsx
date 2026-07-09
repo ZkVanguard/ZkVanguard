@@ -154,7 +154,14 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
   const [metrics, setMetrics] = useState<RiskMetrics | null>(null);
   const [riskRating, setRiskRating] = useState<RiskRating | null>(null);
   const [loading, setLoading] = useState(true);
+  // Expanded by default on desktop, collapsed on mobile so the pool page
+  // isn't a wall of stat cards. useEffect updates once the media query
+  // resolves client-side; SSR gets desktop-default to avoid layout shift.
   const [expanded, setExpanded] = useState(!compact);
+  useEffect(() => {
+    if (typeof window === 'undefined' || compact) return;
+    setExpanded(!window.matchMedia('(max-width: 639px)').matches);
+  }, [compact]);
   const [error, setError] = useState<string | null>(null);
   const lastFetchRef = useRef<number>(0);
   

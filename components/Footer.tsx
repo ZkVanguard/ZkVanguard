@@ -10,11 +10,11 @@ export const Footer = memo(function Footer() {
   const t = useTranslations('footer');
 
   return (
-    <footer className="bg-[#f5f5f7]">
-      <div className="max-w-[980px] mx-auto px-6 lg:px-8">
+    <footer className="bg-[#f5f5f7] pb-safe">
+      <div className="max-w-[980px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Top section - Navigation */}
-        <div className="pt-12 lg:pt-16 pb-8 lg:pb-10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-10 lg:gap-20">
+        <div className="pt-10 sm:pt-12 lg:pt-16 pb-6 sm:pb-8 lg:pb-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 sm:gap-10 lg:gap-20 min-w-0">
             <div>
               <h3 className="text-[12px] font-semibold text-[#1d1d1f] mb-4 tracking-wide">{t('product')}</h3>
               <ul className="space-y-3">

@@ -31,8 +31,10 @@ import {
   StatusMessages,
   Leaderboard,
   AIInsightsModal,
+  CollapsibleSection,
   useCommunityPool,
 } from './community-pool';
+import { PieChart, Shield, Users } from 'lucide-react';
 import {
   CommunityPoolSkeleton,
   PoolStatsSkeleton,
@@ -274,24 +276,38 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
       <PoolStats poolData={pool.poolData} selectedChain={pool.selectedChain} />
 
-      <AllocationChart
-        allocations={pool.poolData.allocations}
-        assets={pool.chainConfig?.assets}
-      />
-
-      {/* Active BlueFin perp hedges (SUI pool only). Renders nothing when
-          no real hedges are open or when the chain doesn't have any. */}
-      {pool.selectedChain === 'sui' && (
-        <HedgesPanel hedges={pool.poolData.hedges} />
-      )}
-
-      {/* Show user position if wallet is connected for the selected chain */}
+      {/* Show user position if wallet is connected — kept above allocation
+          on mobile so members see their stake before the pool-wide charts. */}
       {(pool.activeAddress && pool.userPosition) && (
         <UserPositionCard
           userPosition={pool.userPosition}
           selectedChain={pool.selectedChain}
           chainName={chainName}
         />
+      )}
+
+      {/* Allocation chart — collapsed on mobile, expanded on desktop */}
+      <CollapsibleSection
+        title="Allocation"
+        icon={<PieChart className="w-4 h-4 text-indigo-500" />}
+        summary={pool.chainConfig?.assets?.join(' · ') ?? 'Multi-asset'}
+      >
+        <AllocationChart
+          allocations={pool.poolData.allocations}
+          assets={pool.chainConfig?.assets}
+        />
+      </CollapsibleSection>
+
+      {/* Active BlueFin perp hedges (SUI pool only). Renders nothing when
+          no real hedges are open or when the chain doesn't have any. */}
+      {pool.selectedChain === 'sui' && pool.poolData.hedges && pool.poolData.hedges.length > 0 && (
+        <CollapsibleSection
+          title="Active Hedges"
+          icon={<Shield className="w-4 h-4 text-purple-500" />}
+          summary={`${pool.poolData.hedges.length} pos.`}
+        >
+          <HedgesPanel hedges={pool.poolData.hedges} />
+        </CollapsibleSection>
       )}
 
       <DepositWithdrawActions
@@ -344,9 +360,9 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         network={pool.network}
       />
 
-      {/* Risk Metrics Panel - Lazy loaded when in viewport */}
+      {/* Risk Metrics — panel has its own collapse header; defaults closed on mobile */}
       {!compact && (
-        <div ref={riskMetricsRef} className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+        <div ref={riskMetricsRef} className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
           {riskMetricsVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
               <RiskMetricsPanel compact={false} chain={pool.selectedChain} />
@@ -357,9 +373,9 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         </div>
       )}
 
-      {/* Auto Hedge Panel - Lazy loaded when in viewport */}
+      {/* Auto Hedge Panel — panel has its own collapse header; defaults closed on mobile */}
       {!compact && (
-        <div ref={autoHedgeRef} className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+        <div ref={autoHedgeRef} className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
           {autoHedgeVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
               <AutoHedgePanel chain={pool.selectedChain} />
@@ -371,13 +387,19 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       )}
 
       {!compact && (
-        <Leaderboard 
-          entries={pool.leaderboard} 
-          poolTVL={pool.poolData?.totalValueUSD}
-          chainId={typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111}
-          selectedChain={pool.selectedChain}
-          chainConfig={pool.chainConfig}
-        />
+        <CollapsibleSection
+          title="Members & Pool Info"
+          icon={<Users className="w-4 h-4 text-yellow-500" />}
+          summary={`${pool.leaderboard?.length ?? 0} holders`}
+        >
+          <Leaderboard
+            entries={pool.leaderboard}
+            poolTVL={pool.poolData?.totalValueUSD}
+            chainId={typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111}
+            selectedChain={pool.selectedChain}
+            chainConfig={pool.chainConfig}
+          />
+        </CollapsibleSection>
       )}
 
       <AIInsightsModal

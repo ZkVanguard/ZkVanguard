@@ -39,15 +39,15 @@ export const Navbar = memo(function Navbar() {
   ];
 
   return (
-    <nav 
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 pt-safe pl-safe pr-safe transition-all duration-[250ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
         scrolled
           ? 'bg-system-bg-primary/85 backdrop-blur-xl shadow-ios-1 border-b border-separator-opaque/40'
           : 'bg-system-bg-primary/90 backdrop-blur-lg'
       }`}
     >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-[52px]">
+        <div className="flex items-center justify-between h-[52px] min-w-0">
           {/* Logo - Always visible */}
           <Link href="/" className="flex items-center gap-2 -ml-2">
             <Logo />
@@ -89,13 +89,13 @@ export const Navbar = memo(function Navbar() {
 
         {/* Mobile Navigation - Clean iOS-style list */}
         {isOpen && (
-          <div className="lg:hidden pb-4 border-t border-black/10 animate-fade-in">
+          <div className="lg:hidden pb-safe-4 border-t border-black/10 animate-fade-in max-h-[calc(100vh-52px-env(safe-area-inset-top))] overflow-y-auto">
             <div className="py-2 space-y-0.5">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="block px-3 h-11 flex items-center text-[17px] text-label-primary hover:bg-system-bg-grouped active:scale-[0.98] rounded-ios transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+                  className="block px-3 h-11 flex items-center text-[17px] text-label-primary hover:bg-system-bg-grouped active:scale-[0.98] active:bg-black/[0.04] rounded-ios transition-all duration-[200ms] ease-[cubic-bezier(0.4,0,0.2,1)] truncate"
                   onClick={() => setIsOpen(false)}
                 >
                   {link.label}
