@@ -7,8 +7,9 @@ import { useAccount, useBalance } from '@/lib/wdk/wdk-hooks';
 import {
   Bot, Shield, Briefcase, TrendingUp,
   BarChart3, MessageSquare, ChevronRight,
-  Menu, X, Settings, Users, Activity, ShieldCheck, Layers
+  Menu, X, Settings, Users, Activity, ShieldCheck, Layers, MoreHorizontal
 } from 'lucide-react';
+import { MobileTabBar } from '@/components/dashboard/MobileTabBar';
 import { PortfolioOverview } from '@/components/dashboard/PortfolioOverview';
 import { useContractAddresses } from '@/lib/contracts/hooks';
 import { usePositions } from '@/contexts/PositionsContext';
@@ -319,27 +320,23 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
-      {/* Mobile Header - Only visible on mobile */}
-      <header className="lg:hidden fixed top-[52px] left-0 right-0 z-40 bg-white border-b border-black/5">
-        <div className="flex items-center justify-between px-4 h-14">
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="p-2 -ml-2 text-[#86868b] hover:text-[#1d1d1f] transition-colors"
-            aria-label="Open menu"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-          
-          <h1 className="text-lg font-semibold text-[#1d1d1f]">
+      {/* Mobile Header - Slim page-title bar. Primary navigation now lives in
+          the bottom tab bar (see <MobileTabBar/> below). We keep only the
+          current page title and the chat action here. Access to the drawer
+          (secondary items: portfolio/risk/custody/settings) is via the 'More'
+          tab in the bottom bar. */}
+      <header className="lg:hidden fixed top-[52px] left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-b border-black/5">
+        <div className="flex items-center justify-between px-4 h-12">
+          <h1 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight truncate">
             {navItems.find(n => n.id === activeNav)?.label}
           </h1>
-          
+
           <button
             onClick={() => setShowChat(true)}
-            className="p-2 -mr-2 text-blue-600 hover:text-blue-700 transition-colors"
+            className="p-2 -mr-2 text-[#007AFF] active:scale-[0.96] transition-transform"
             aria-label="Open chat"
           >
-            <MessageSquare className="w-6 h-6" />
+            <MessageSquare className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -551,15 +548,15 @@ export default function DashboardPage() {
         </aside>
         
         {/* Main Content */}
-        <main className="flex-1 min-h-[calc(100vh-52px)] pt-14 lg:pt-0">
-          <div className="max-w-[1280px] mx-auto px-5 py-6 lg:px-8 lg:py-10">
+        <main className="flex-1 min-h-[calc(100vh-52px)] pt-12 lg:pt-0 pb-[calc(56px+env(safe-area-inset-bottom))] lg:pb-0">
+          <div className="max-w-[1280px] mx-auto px-4 sm:px-5 py-5 sm:py-6 lg:px-8 lg:py-10">
             {/* Page Header - Desktop only */}
             <div className="hidden lg:block mb-8">
               <h1 className="text-[34px] font-bold text-[#1d1d1f] tracking-[-0.02em] leading-[1.1]">
                 {navItems.find(n => n.id === activeNav)?.label}
               </h1>
             </div>
-            
+
             {/* Content Area */}
             <Suspense fallback={<LoadingSkeleton height="h-96" />}>
               {renderContent()}
@@ -567,6 +564,19 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
+
+      {/* iOS-style bottom tab bar — primary nav on mobile. 4 tabs + More.
+          The "More" button opens the drawer where the wallet controls,
+          portfolio/risk/custody sub-pages, and settings live. Reduces the
+          old 4-tap "menu → drawer → tab → close" flow to 1 tap. */}
+      <MobileTabBar
+        items={navItems.slice(0, 4)}
+        activeId={activeNav}
+        onSelect={(id) => handleNavChange(id as NavId)}
+        onOpenMore={() => setMobileMenuOpen(true)}
+        moreLabel="More"
+        moreIcon={MoreHorizontal}
+      />
       
       {/* Notification Toast */}
       {notification && (
@@ -587,7 +597,7 @@ export default function DashboardPage() {
             className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm lg:bg-transparent lg:backdrop-blur-none lg:pointer-events-none"
             onClick={() => setShowChat(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 lg:bottom-6 lg:right-6 lg:left-auto z-50 lg:w-[440px] lg:pointer-events-auto pb-safe lg:pb-0">
+          <div className="fixed bottom-[calc(56px+env(safe-area-inset-bottom))] lg:bottom-6 left-0 right-0 lg:right-6 lg:left-auto z-50 lg:w-[440px] lg:pointer-events-auto">
             <div className="bg-white lg:rounded-[24px] shadow-2xl border-t lg:border border-black/5 overflow-hidden">
               <div className="flex items-center justify-between p-3 sm:p-4 border-b border-black/5">
                 <div className="flex items-center gap-3">
