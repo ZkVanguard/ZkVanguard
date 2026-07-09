@@ -3,12 +3,52 @@
   "short_name": "ZkVanguard",
   "description": "Autonomous AI vault trading prediction-market alpha on Sui, ZK-STARK-attested on-chain.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
+  "id": "/",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["finance", "productivity"],
   "icons": [
-    { "src": "/logo-official.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "/logo-official.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-official.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
   ],
-  "categories": ["finance", "productivity"]
+  "shortcuts": [
+    {
+      "name": "Vault",
+      "short_name": "Vault",
+      "description": "Deposit or withdraw from the SUI USDC vault",
+      "url": "/dashboard",
+      "icons": [{ "src": "/logo-official.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Agents",
+      "short_name": "Agents",
+      "description": "Live 7-agent status",
+      "url": "/agents",
+      "icons": [{ "src": "/logo-official.svg", "sizes": "any" }]
+    },
+    {
+      "name": "ZK proofs",
+      "short_name": "ZK",
+      "description": "Verify a proof or read the STARK explainer",
+      "url": "/zk",
+      "icons": [{ "src": "/logo-official.svg", "sizes": "any" }]
+    }
+  ],
+  "prefer_related_applications": false
 }

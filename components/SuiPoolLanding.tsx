@@ -6,6 +6,7 @@ import {
   ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon,
   SparklesIcon, CubeTransparentIcon, LockClosedIcon,
 } from '@heroicons/react/24/outline';
+import { InstallAppButton } from './InstallAppButton';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Live SUI Community Pool landing page — Apple-themed, single focus.
@@ -152,7 +153,7 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
           </p>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14 sm:mb-16">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6 sm:mb-8">
             <Link
               href="/dashboard"
               className="group inline-flex items-center justify-center gap-2 px-8 h-[52px] sm:h-[56px] bg-ios-blue text-white text-headline font-semibold rounded-ios-xl hover:bg-[#0062CC] active:scale-[0.97] transition-all duration-200 shadow-ios-2 w-full sm:w-auto"
@@ -167,6 +168,13 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
               How it works
               <ArrowRightIcon className="w-4 h-4" strokeWidth={2.25} />
             </a>
+          </div>
+
+          {/* Install-as-app row — renders nothing when already installed or the
+              browser hasn't emitted beforeinstallprompt yet. Sits below the
+              primary CTA so it doesn't compete with "Deposit USDC". */}
+          <div className="flex justify-center mb-14 sm:mb-16">
+            <InstallAppButton className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-white/80 backdrop-blur border border-separator-opaque/40 text-label-secondary text-sm font-medium hover:text-ios-blue hover:border-ios-blue/40 active:scale-[0.98] transition-all" />
           </div>
 
           {/* ─── LIVE STATS BAR ─── */}

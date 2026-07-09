@@ -6,6 +6,7 @@ import { Providers } from '../providers';
 import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
 import { CookieConsent } from '../../components/CookieConsent';
+import { PwaProvider } from '../../components/PwaProvider';
 import { locales } from '../../i18n/request';
 import { IntlProvider } from '../../components/IntlProvider';
 
@@ -110,6 +111,7 @@ export default async function LocaleLayout({
               </main>
               <Footer />
               <CookieConsent />
+              <PwaProvider />
             </div>
           </Providers>
         </IntlProvider>

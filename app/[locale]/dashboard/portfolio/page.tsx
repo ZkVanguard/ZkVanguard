@@ -72,12 +72,12 @@ function StatCard({ label, value, sub, icon: Icon }: {
   label: string; value: string; sub?: string; icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="bg-white border border-black/5 rounded-2xl p-5">
-      <div className="flex items-center gap-2 text-[#86868b] text-[12px] font-medium mb-2">
-        <Icon className="w-3.5 h-3.5" /> {label}
+    <div className="bg-white border border-black/5 rounded-2xl p-4 sm:p-5">
+      <div className="flex items-center gap-2 text-[#86868b] text-[11px] sm:text-[12px] font-medium mb-1.5 sm:mb-2">
+        <Icon className="w-3.5 h-3.5 flex-shrink-0" /> <span className="truncate">{label}</span>
       </div>
-      <div className="text-[28px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">{value}</div>
-      {sub && <div className="text-[13px] text-[#86868b] mt-1">{sub}</div>}
+      <div className="text-[20px] sm:text-[28px] font-semibold text-[#1d1d1f] tracking-[-0.02em] break-all">{value}</div>
+      {sub && <div className="text-[12px] sm:text-[13px] text-[#86868b] mt-1 truncate">{sub}</div>}
     </div>
   );
 }
@@ -235,15 +235,15 @@ export default function DashboardOverviewPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 sm:space-y-6">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="min-w-0">
           <div className="text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">Platform overview</div>
-          <h1 className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">Your ZkVanguard portfolio</h1>
-          <p className="text-[13px] text-[#86868b] mt-1 font-mono">{wallet.slice(0, 10)}…{wallet.slice(-6)}</p>
+          <h1 className="text-[24px] sm:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] leading-tight">Your ZkVanguard portfolio</h1>
+          <p className="text-[13px] text-[#86868b] mt-1 font-mono truncate">{wallet.slice(0, 10)}…{wallet.slice(-6)}</p>
         </div>
         {data?.asOf && (
-          <div className="text-[12px] text-[#86868b]">
+          <div className="text-[12px] text-[#86868b] flex-shrink-0">
             as of {new Date(data.asOf).toLocaleTimeString()}
           </div>
         )}
