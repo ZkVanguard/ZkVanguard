@@ -82,7 +82,14 @@ export const CollapsibleSection = memo(function CollapsibleSection({
           />
         </div>
       </button>
-      {open && <div className="pb-1">{children}</div>}
+      {/* data-inside-collapsible lets the child's own h3 header hide on mobile
+          via a CSS rule in globals.css — avoids duplicate "Allocation" +
+          "Current Holdings" chrome when a section is opened. */}
+      {open && (
+        <div className="pb-1" data-inside-collapsible="true">
+          {children}
+        </div>
+      )}
     </div>
   );
 });

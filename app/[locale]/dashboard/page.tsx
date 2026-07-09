@@ -349,10 +349,10 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Mobile Sidebar */}
+      {/* Mobile Sidebar — capped at 84vw so it can't bleed on 320px viewports */}
       <aside className={`
-        lg:hidden fixed top-0 left-0 bottom-0 w-[280px] z-50 bg-white
-        transform transition-transform duration-300 ease-out
+        lg:hidden fixed top-0 left-0 bottom-0 w-[min(84vw,300px)] z-50 bg-white pt-safe pb-safe
+        transform transition-transform duration-300 ease-out shadow-2xl
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full">

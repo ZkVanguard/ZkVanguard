@@ -204,7 +204,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
     return (
       <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-xl shadow-lg p-3 sm:p-4 animate-pulse overflow-hidden min-w-0 max-w-full">
         <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
           {[1, 2, 3, 4].map(i => (
             <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
           ))}
@@ -322,7 +322,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
             transition={{ duration: 0.2 }}
           >
             {/* Key Metrics Row — text scales down on mobile */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-0.5 p-0.5 bg-gray-100 dark:bg-gray-900">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-0.5 p-0.5 bg-gray-100 dark:bg-gray-900">
               <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 text-center min-w-0">
                 <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">Sharpe Ratio</p>
                 <p className={`text-lg sm:text-2xl font-bold tabular-nums break-all ${getMetricColor(metrics.sharpeRatio, { good: 1.0, warning: 0.5 })}`}>
@@ -402,7 +402,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
                 <Activity className="w-4 h-4 flex-shrink-0" />
                 Risk Metrics
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 min-w-0">
                 <MetricCard 
                   label="Sortino Ratio"
                   value={metrics.sortinoRatio.toFixed(2)}
@@ -440,7 +440,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
                 <BarChart2 className="w-4 h-4 flex-shrink-0" />
                 <span className="truncate">Market Exposure (vs BTC Benchmark)</span>
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 min-w-0">
                 <MetricCard 
                   label="Beta"
                   value={metrics.beta.toFixed(2)}
@@ -478,7 +478,7 @@ export const RiskMetricsPanel = memo(function RiskMetricsPanel({ compact = false
                 <TrendingUp className="w-4 h-4 flex-shrink-0" />
                 Trading Statistics
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 min-w-0">
                 <MetricCard 
                   label="Calmar Ratio"
                   value={metrics.calmarRatio.toFixed(2)}

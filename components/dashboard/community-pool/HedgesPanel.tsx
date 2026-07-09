@@ -32,7 +32,7 @@ export const HedgesPanel = memo(function HedgesPanel({ hedges }: HedgesPanelProp
     <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700">
       {/* Header — stacks on mobile so the total notional doesn't collide with
           the title on narrow screens. */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+      <div className="pool-inner-heading flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
         <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap text-sm sm:text-base">
           <Shield className="w-4 h-4 text-purple-500 flex-shrink-0" />
           <span>Active Hedges (BlueFin)</span>

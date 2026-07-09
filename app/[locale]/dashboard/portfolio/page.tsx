@@ -222,11 +222,11 @@ export default function DashboardOverviewPage() {
 
   if (!wallet) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-        <div className="bg-white border border-black/5 rounded-3xl p-10 text-center">
-          <Briefcase className="w-10 h-10 text-[#86868b] mx-auto mb-3" />
-          <h1 className="text-[28px] font-semibold text-[#1d1d1f] mb-2">Connect a wallet to view your platform overview</h1>
-          <p className="text-[#86868b] text-[15px]">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 min-w-0">
+        <div className="bg-white border border-black/5 rounded-3xl p-6 sm:p-10 text-center min-w-0">
+          <Briefcase className="w-8 h-8 sm:w-10 sm:h-10 text-[#86868b] mx-auto mb-3" />
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-[#1d1d1f] mb-2 break-words">Connect a wallet to view your platform overview</h1>
+          <p className="text-[#86868b] text-sm sm:text-[15px] leading-relaxed">
             Aggregates your positions across the SUI USDC pool, private hedges, and any custom portfolios into one view.
           </p>
         </div>
@@ -235,15 +235,15 @@ export default function DashboardOverviewPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 sm:space-y-6">
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-10 space-y-4 sm:space-y-6 min-w-0">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
         <div className="min-w-0">
-          <div className="text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">Platform overview</div>
-          <h1 className="text-[24px] sm:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] leading-tight">Your ZkVanguard portfolio</h1>
-          <p className="text-[13px] text-[#86868b] mt-1 font-mono truncate">{wallet.slice(0, 10)}…{wallet.slice(-6)}</p>
+          <div className="text-[11px] sm:text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">Platform overview</div>
+          <h1 className="text-2xl sm:text-3xl md:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] leading-tight break-words">Your ZkVanguard portfolio</h1>
+          <p className="text-xs sm:text-[13px] text-[#86868b] mt-1 font-mono truncate tabular-nums">{wallet.slice(0, 10)}…{wallet.slice(-6)}</p>
         </div>
         {data?.asOf && (
-          <div className="text-[12px] text-[#86868b] flex-shrink-0">
+          <div className="text-[11px] sm:text-[12px] text-[#86868b] flex-shrink-0 tabular-nums">
             as of {new Date(data.asOf).toLocaleTimeString()}
           </div>
         )}
@@ -259,7 +259,7 @@ export default function DashboardOverviewPage() {
       {data && (
         <>
           {/* Hero stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
               label="Total NAV"
               value={fmtUsd(data.totals.nav)}

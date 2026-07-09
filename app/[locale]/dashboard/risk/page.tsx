@@ -95,12 +95,12 @@ function StatCard({ label, value, sub, icon: Icon, tone = 'neutral' }: {
     : tone === 'warn' ? 'text-amber-700'
     : 'text-[#1d1d1f]';
   return (
-    <div className="bg-white border border-black/5 rounded-2xl p-5">
-      <div className="flex items-center gap-2 text-[#86868b] text-[12px] font-medium mb-2">
-        <Icon className="w-3.5 h-3.5" /> {label}
+    <div className="bg-white border border-black/5 rounded-2xl p-3 sm:p-4 md:p-5 min-w-0">
+      <div className="flex items-center gap-2 text-[#86868b] text-[11px] sm:text-[12px] font-medium mb-1.5 sm:mb-2 min-w-0">
+        <Icon className="w-3.5 h-3.5 flex-shrink-0" /> <span className="truncate">{label}</span>
       </div>
-      <div className={`text-[28px] font-semibold tracking-[-0.02em] ${toneClass}`}>{value}</div>
-      {sub && <div className="text-[13px] text-[#86868b] mt-1">{sub}</div>}
+      <div className={`text-lg sm:text-2xl md:text-[28px] font-semibold tracking-[-0.02em] tabular-nums break-all ${toneClass}`}>{value}</div>
+      {sub && <div className="text-[11px] sm:text-[13px] text-[#86868b] mt-1 truncate">{sub}</div>}
     </div>
   );
 }
@@ -152,20 +152,20 @@ export default function PlatformRiskPage() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <div className="text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">Platform risk overview</div>
-          <h1 className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-8 md:py-10 space-y-4 sm:space-y-6 min-w-0">
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
+        <div className="min-w-0">
+          <div className="text-[11px] sm:text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">Platform risk overview</div>
+          <h1 className="text-2xl sm:text-3xl md:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] break-words">
             ZkVanguard — live institutional view
           </h1>
-          <p className="text-[13px] text-[#86868b] mt-1">
+          <p className="text-xs sm:text-[13px] text-[#86868b] mt-1 leading-relaxed">
             Real-time aggregate metrics for every shipped fund and the operational layer behind them.
             Updates every 60 seconds.
           </p>
         </div>
         {data?.asOf && (
-          <div className="text-[12px] text-[#86868b] font-mono">
+          <div className="text-[11px] sm:text-[12px] text-[#86868b] font-mono tabular-nums flex-shrink-0">
             as of {new Date(data.asOf).toLocaleTimeString()}
           </div>
         )}
@@ -183,7 +183,7 @@ export default function PlatformRiskPage() {
           {/* Platform TVL + return */}
           <section>
             <h2 className="text-[13px] font-medium text-[#86868b] uppercase tracking-wide mb-3">Platform AUM</h2>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard
                 label="Total NAV"
                 value={fmtUsd(data.platform.tvlUsd)}
@@ -215,14 +215,14 @@ export default function PlatformRiskPage() {
           </section>
 
           {/* Hedge engine */}
-          <section className="bg-white border border-black/5 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-[#1d1d1f]" />
-                <h2 className="text-[17px] font-semibold text-[#1d1d1f]">Hedge engine</h2>
+          <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 sm:mb-4 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Shield className="w-4 h-4 text-[#1d1d1f] flex-shrink-0" />
+                <h2 className="text-base sm:text-[17px] font-semibold text-[#1d1d1f] truncate">Hedge engine</h2>
               </div>
-              <div className="flex items-center gap-4 text-[12px] text-[#86868b]">
-                <span>Coverage: <strong className="text-[#1d1d1f]">{(data.hedge.coverageRatio * 100).toFixed(0)}%</strong> of NAV</span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:gap-4 text-[11px] sm:text-[12px] text-[#86868b] tabular-nums">
+                <span>Coverage: <strong className="text-[#1d1d1f]">{(data.hedge.coverageRatio * 100).toFixed(0)}%</strong></span>
                 <span>Active: <strong className="text-[#1d1d1f]">{data.hedge.activeCount}</strong></span>
                 <span className={`font-medium ${data.hedge.totalUnrealizedPnlUsd >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                   uPnL {fmtUsd(data.hedge.totalUnrealizedPnlUsd)}
@@ -230,20 +230,22 @@ export default function PlatformRiskPage() {
               </div>
             </div>
             {data.hedge.positions.length === 0 ? (
-              <div className="text-[#86868b] text-[13px] py-4 text-center">No active hedges.</div>
+              <div className="text-[#86868b] text-xs sm:text-[13px] py-4 text-center">No active hedges.</div>
             ) : (
-              <>
-                <div className="grid grid-cols-12 gap-2 pb-2 mb-1 border-b border-black/5 text-[11px] text-[#86868b] uppercase tracking-wide font-medium">
-                  <div className="col-span-3">Market</div>
-                  <div className="col-span-2 text-right">Notional</div>
-                  <div className="col-span-2 text-right">Leverage</div>
-                  <div className="col-span-2 text-right">uPnL</div>
-                  <div className="col-span-3 text-right">Age</div>
+              <div className="-mx-3 sm:mx-0 overflow-x-auto">
+                <div className="min-w-[520px] sm:min-w-0 px-3 sm:px-0">
+                  <div className="grid grid-cols-12 gap-2 pb-2 mb-1 border-b border-black/5 text-[10px] sm:text-[11px] text-[#86868b] uppercase tracking-wide font-medium">
+                    <div className="col-span-3">Market</div>
+                    <div className="col-span-2 text-right">Notional</div>
+                    <div className="col-span-2 text-right">Leverage</div>
+                    <div className="col-span-2 text-right">uPnL</div>
+                    <div className="col-span-3 text-right">Age</div>
+                  </div>
+                  <div>
+                    {data.hedge.positions.map((h, i) => <HedgePositionRow key={`${h.market}-${i}`} h={h} />)}
+                  </div>
                 </div>
-                <div>
-                  {data.hedge.positions.map((h, i) => <HedgePositionRow key={`${h.market}-${i}`} h={h} />)}
-                </div>
-              </>
+              </div>
             )}
           </section>
 

@@ -22,8 +22,8 @@ export const AllocationChart = memo(function AllocationChart({ allocations, asse
   }, [allocations]);
 
   return (
-    <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-gray-700">
-      <div className="flex items-start sm:items-center justify-between gap-3 mb-2">
+    <div className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-w-0">
+      <div className="pool-inner-heading flex items-start sm:items-center justify-between gap-3 mb-2">
         <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-sm sm:text-base flex-shrink-0">
           <PieChart className="w-4 h-4" />
           Current Holdings
@@ -32,7 +32,7 @@ export const AllocationChart = memo(function AllocationChart({ allocations, asse
           {assets?.join(' • ') || 'Multi-Asset'}
         </span>
       </div>
-      <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
+      <p className="pool-inner-subheading text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
         Live on-chain composition. AI target allocation may differ — see AI Insights.
       </p>
 

@@ -1097,7 +1097,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                     </div>
 
                     {/* Position Details */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-[#e8e8ed]">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-4 border-t border-[#e8e8ed]">
                       <div>
                         <div className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider">Size</div>
                         <div className="text-[15px] font-bold text-[#1d1d1f]">{hedge.size} {hedge.asset.replace('-PERP', '')}</div>
@@ -1133,7 +1133,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
                           </div>
                           <span className="text-[12px] font-semibold text-[#5856D6] uppercase tracking-wider">ZK Privacy Shield</span>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                           <div className="p-2.5 bg-[#5856D6]/5 rounded-lg border border-[#5856D6]/10">
                             <div className="text-[9px] font-bold text-[#5856D6] uppercase tracking-wider mb-1">ZK Privacy Address</div>
                             {hedge.proxyWallet ? (

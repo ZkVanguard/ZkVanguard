@@ -169,11 +169,11 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
       {/* Shareholders Leaderboard */}
       {entries.length > 0 && (
         <>
-          <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2 text-sm sm:text-base">
+          <h3 className="pool-inner-heading font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2 text-sm sm:text-base">
             <Award className="w-4 h-4 text-yellow-500 flex-shrink-0" />
             Top Shareholders
           </h3>
-          <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
+          <p className="pool-inner-subheading text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
             All deposits are routed through the single treasury proxy. Real addresses are never disclosed.
           </p>
           <div className="space-y-2">

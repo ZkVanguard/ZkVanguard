@@ -188,13 +188,13 @@ export default function CustodyProofsPage() {
 
   if (!wallet) {
     return (
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-        <div className="bg-white border border-black/5 rounded-3xl p-10 text-center">
-          <ShieldCheck className="w-10 h-10 text-[#86868b] mx-auto mb-3" />
-          <h1 className="text-[28px] font-semibold text-[#1d1d1f] mb-2">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-8 sm:py-12 min-w-0">
+        <div className="bg-white border border-black/5 rounded-3xl p-6 sm:p-10 text-center min-w-0">
+          <ShieldCheck className="w-8 h-8 sm:w-10 sm:h-10 text-[#86868b] mx-auto mb-3" />
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-[#1d1d1f] mb-2 break-words">
             Connect a SUI wallet to view your custody attestations
           </h1>
-          <p className="text-[#86868b] text-[15px] max-w-2xl mx-auto">
+          <p className="text-[#86868b] text-sm sm:text-[15px] max-w-2xl mx-auto leading-relaxed">
             Institutional custodians sign attestations that bind your portfolio to
             off-chain assets. The asset list stays private to you + the custodian;
             only the cryptographic hash hits chain.
@@ -205,15 +205,15 @@ export default function CustodyProofsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 sm:space-y-6">
-      <header>
-        <div className="text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">
+    <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-6 sm:py-10 space-y-4 sm:space-y-6 min-w-0">
+      <header className="min-w-0">
+        <div className="text-[11px] sm:text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">
           Custody attestations
         </div>
-        <h1 className="text-[24px] sm:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] leading-tight">
+        <h1 className="text-2xl sm:text-3xl md:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] leading-tight break-words">
           Your custody-backed portfolios
         </h1>
-        <p className="text-[13px] text-[#86868b] mt-1 font-mono truncate">
+        <p className="text-xs sm:text-[13px] text-[#86868b] mt-1 font-mono truncate tabular-nums">
           {wallet.slice(0, 10)}…{wallet.slice(-6)}
         </p>
       </header>

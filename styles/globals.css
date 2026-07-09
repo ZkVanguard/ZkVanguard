@@ -23,6 +23,17 @@
   .no-burst { min-width: 0; max-width: 100%; overflow: hidden; }
 }
 
+/* Hide inner section headings (`.pool-inner-heading`) when the component
+   is rendered inside a mobile CollapsibleSection — otherwise the user
+   sees the outer collapsible title AND the child's own title stacked,
+   which is redundant chrome. Desktop is unaffected because
+   CollapsibleSection renders children without the data attribute above
+   the ≥sm breakpoint. */
+@media (max-width: 639px) {
+  [data-inside-collapsible="true"] .pool-inner-heading { display: none; }
+  [data-inside-collapsible="true"] .pool-inner-subheading { display: none; }
+}
+
 /* ── Platform-wide overflow safety ─────────────────────────────────
    Defensive globals so any child that forgot responsive treatment
    cannot horizontally scroll the page. html/body already have
