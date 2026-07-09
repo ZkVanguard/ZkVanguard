@@ -367,7 +367,10 @@ async function hashString(str: string): Promise<string> {
 // Configure which paths the middleware runs on
 export const config = {
   matcher: [
-    // Match all paths except static files and images
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.svg$).*)',
+    // Match all paths except static files, images, and PWA assets.
+    // manifest.json and sw.js MUST pass through unchanged — the i18n middleware
+    // otherwise rewrites them to /en/manifest.json / /en/sw.js and Chrome
+    // fails PWA install eligibility.
+    '/((?!_next/static|_next/image|favicon.ico|manifest\\.json|sw\\.js|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|json|js|woff|woff2|ttf|txt|xml)$).*)',
   ],
 };
