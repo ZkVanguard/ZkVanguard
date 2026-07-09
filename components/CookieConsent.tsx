@@ -75,34 +75,49 @@ export function CookieConsent() {
   if (!showBanner) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[100] p-4 pb-safe-4 bg-white/95 backdrop-blur-xl border-t border-black/10 shadow-2xl animate-slide-up">
+    <div
+      className="fixed bottom-0 left-0 right-0 z-[100]
+                 px-3 pt-3 pb-safe sm:p-4 sm:pb-safe-4
+                 bg-white/95 backdrop-blur-xl border-t border-black/10 shadow-2xl
+                 rounded-t-[24px] sm:rounded-none
+                 max-h-[92vh] overflow-y-auto
+                 animate-slide-up"
+    >
+      {/* Sheet-handle indicator on mobile — signals dismiss/interact affordance */}
+      <div className="sm:hidden flex justify-center pb-2 -mt-1">
+        <div className="w-9 h-1 rounded-full bg-black/15" />
+      </div>
+
       <div className="max-w-6xl mx-auto">
         {!showDetails ? (
           // Simple Banner
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex-1">
-              <h3 className="font-semibold text-[#1d1d1f] text-lg mb-1">🍪 {t('title')}</h3>
-              <p className="text-[#86868b] text-sm">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 md:gap-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-[#1d1d1f] text-base sm:text-lg mb-0.5 sm:mb-1">
+                🍪 {t('title')}
+              </h3>
+              <p className="text-[#86868b] text-[13px] sm:text-sm leading-relaxed">
                 {t('description')}{' '}
                 <Link href="/privacy" className="text-[#007AFF] hover:underline">{t('privacyPolicy')}</Link>
               </p>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Primary CTA on top on mobile for thumb reach */}
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 flex-shrink-0">
               <button
                 onClick={() => setShowDetails(true)}
-                className="px-4 py-2 text-sm font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-lg transition-colors"
+                className="h-11 sm:h-auto px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-transparent sm:bg-transparent hover:bg-[#f5f5f7] active:scale-[0.98] rounded-xl sm:rounded-lg transition-all"
               >
                 {t('customize')}
               </button>
               <button
                 onClick={acceptNecessary}
-                className="px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg transition-colors"
+                className="h-11 sm:h-auto px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-[#e8e8ed] active:scale-[0.98] rounded-xl sm:rounded-lg transition-all"
               >
                 {t('necessaryOnly')}
               </button>
               <button
                 onClick={acceptAll}
-                className="px-5 py-2 text-sm font-medium text-white bg-[#007AFF] hover:bg-[#0056b3] rounded-lg transition-colors"
+                className="h-11 sm:h-auto px-5 py-2 text-sm font-medium text-white bg-[#007AFF] hover:bg-[#0056b3] active:scale-[0.98] rounded-xl sm:rounded-lg transition-all shadow-sm"
               >
                 {t('acceptAll')}
               </button>
@@ -110,34 +125,35 @@ export function CookieConsent() {
           </div>
         ) : (
           // Detailed Settings
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-[#1d1d1f] text-lg">{t('settings')}</h3>
+              <h3 className="font-semibold text-[#1d1d1f] text-base sm:text-lg">{t('settings')}</h3>
               <button
                 onClick={() => setShowDetails(false)}
-                className="text-[#86868b] hover:text-[#1d1d1f]"
+                className="w-9 h-9 flex items-center justify-center rounded-full text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-[0.9] transition-all"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
               {/* Necessary Cookies */}
-              <div className="p-4 bg-[#f5f5f7] rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-[#1d1d1f]">{t('necessary')}</span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">{t('alwaysOn')}</span>
+              <div className="p-3 sm:p-4 bg-[#f5f5f7] rounded-xl">
+                <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                  <span className="font-medium text-[#1d1d1f] text-sm sm:text-base">{t('necessary')}</span>
+                  <span className="text-[10px] sm:text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex-shrink-0">{t('alwaysOn')}</span>
                 </div>
-                <p className="text-xs text-[#86868b]">
+                <p className="text-[11px] sm:text-xs text-[#86868b] leading-relaxed">
                   {t('necessaryDescription')}
                 </p>
               </div>
 
               {/* Analytics Cookies */}
-              <div className="p-4 bg-[#f5f5f7] rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-[#1d1d1f]">{t('analytics')}</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
+              <div className="p-3 sm:p-4 bg-[#f5f5f7] rounded-xl">
+                <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                  <span className="font-medium text-[#1d1d1f] text-sm sm:text-base">{t('analytics')}</span>
+                  <label className="relative inline-flex items-center cursor-pointer h-11 w-11 sm:h-auto sm:w-auto justify-end pr-0.5 sm:pr-0">
                     <input
                       type="checkbox"
                       checked={settings.analytics}
@@ -147,16 +163,16 @@ export function CookieConsent() {
                     <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#007AFF] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                   </label>
                 </div>
-                <p className="text-xs text-[#86868b]">
+                <p className="text-[11px] sm:text-xs text-[#86868b] leading-relaxed">
                   {t('analyticsDescription')}
                 </p>
               </div>
 
               {/* Preferences Cookies */}
-              <div className="p-4 bg-[#f5f5f7] rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-[#1d1d1f]">{t('preferences')}</span>
-                  <label className="relative inline-flex items-center cursor-pointer">
+              <div className="p-3 sm:p-4 bg-[#f5f5f7] rounded-xl">
+                <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                  <span className="font-medium text-[#1d1d1f] text-sm sm:text-base">{t('preferences')}</span>
+                  <label className="relative inline-flex items-center cursor-pointer h-11 w-11 sm:h-auto sm:w-auto justify-end pr-0.5 sm:pr-0">
                     <input
                       type="checkbox"
                       checked={settings.preferences}
@@ -166,22 +182,22 @@ export function CookieConsent() {
                     <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#007AFF] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
                   </label>
                 </div>
-                <p className="text-xs text-[#86868b]">
+                <p className="text-[11px] sm:text-xs text-[#86868b] leading-relaxed">
                   {t('preferencesDescription')}
                 </p>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-1 sm:pt-2">
               <button
                 onClick={acceptNecessary}
-                className="px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg transition-colors"
+                className="h-11 sm:h-auto px-4 py-2 text-sm font-medium text-[#1d1d1f] bg-[#f5f5f7] hover:bg-[#e8e8ed] active:scale-[0.98] rounded-xl sm:rounded-lg transition-all"
               >
                 {t('rejectOptional')}
               </button>
               <button
                 onClick={saveCustom}
-                className="px-5 py-2 text-sm font-medium text-white bg-[#007AFF] hover:bg-[#0056b3] rounded-lg transition-colors"
+                className="h-11 sm:h-auto px-5 py-2 text-sm font-medium text-white bg-[#007AFF] hover:bg-[#0056b3] active:scale-[0.98] rounded-xl sm:rounded-lg transition-all shadow-sm"
               >
                 {t('savePreferences')}
               </button>
@@ -196,7 +212,7 @@ export function CookieConsent() {
           to { transform: translateY(0); opacity: 1; }
         }
         .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
+          animation: slide-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
         }
       `}</style>
     </div>
