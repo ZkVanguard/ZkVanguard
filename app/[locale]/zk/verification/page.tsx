@@ -141,7 +141,7 @@ export default function ZKVerificationPage() {
   };
   return (
     <div className="min-h-screen bg-white" style={{ colorScheme: 'light' }}>
-      <main className="max-w-4xl mx-auto px-6 py-16">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/10 rounded-full text-sm font-medium mb-6 text-green-600">
@@ -158,7 +158,7 @@ export default function ZKVerificationPage() {
         </div>
 
         {/* Quick Summary for Auditors */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-8 mb-12">
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5 sm:p-8 mb-12">
           <h2 className="text-xl font-bold text-green-800 mb-4">📋 Auditor Quick Summary</h2>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
@@ -215,7 +215,7 @@ export default function ZKVerificationPage() {
 
           {/* Proof Hash Verification */}
           {activeTab === 'proof' && (
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-2xl p-8 mb-8">
+            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-2xl p-5 sm:p-8 mb-8">
               <h3 className="text-lg font-semibold text-blue-800 mb-4">Verify by ZK Proof Hash</h3>
               <p className="text-sm text-blue-600 mb-6">
                 Enter the ZK-STARK proof hash from your hedge creation to verify it exists and view details.
@@ -404,7 +404,7 @@ export default function ZKVerificationPage() {
 
           {/* Wallet Verification */}
           {activeTab === 'wallet' && (
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-8">
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-5 sm:p-8">
             <div className="grid md:grid-cols-2 gap-6 mb-6">
               <div>
                 <label className="block text-sm font-medium text-purple-700 mb-2">
@@ -943,7 +943,7 @@ python zkp/tests/formal_verification.py`}</pre>
 
         {/* Final Verdict */}
         <section className="mb-16">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-8 text-white">
+          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-5 sm:p-8 text-white">
             <h2 className="text-2xl font-bold mb-4">✓ Mathematical Conclusion</h2>
             <p className="text-lg mb-6">
               This implementation IS a TRUE ZK-STARK. It satisfies all 6 cryptographic theorems from the 

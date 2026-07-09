@@ -335,8 +335,8 @@ function ZKProofPage() {
 
   return (
     <div className="min-h-screen transition-colors duration-300 bg-[#F5F5F7]">
-      <div className="container mx-auto px-6 py-16">
-        <div className="max-w-4xl mx-auto text-center mb-16 space-y-6">
+      <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-16">
+        <div className="max-w-4xl mx-auto text-center mb-10 sm:mb-16 space-y-4 sm:space-y-6">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#34C759] to-[#007AFF] rounded-2xl shadow-lg shadow-[#34C759]/20">
             <Shield className="w-10 h-10 text-white" />
           </div>
@@ -403,7 +403,7 @@ function ZKProofPage() {
         </div>
 
         {/* Scenario Details */}
-        <div className="bg-white rounded-2xl p-8 mb-8 border border-[#E5E5EA] shadow-sm">
+        <div className="bg-white rounded-2xl p-5 sm:p-8 mb-8 border border-[#E5E5EA] shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Public Statement */}
             <div>
@@ -511,7 +511,7 @@ function ZKProofPage() {
         {proofResult && (
           <div className="space-y-8">
             {/* Privacy Verification */}
-            <div className="bg-white rounded-2xl p-8 border border-[#E5E5EA] shadow-sm">
+            <div className="bg-white rounded-2xl p-5 sm:p-8 border border-[#E5E5EA] shadow-sm">
               <h2 className="text-2xl font-bold text-[#1D1D1F] mb-6 flex items-center gap-3">
                 <div className="w-10 h-10 bg-[#34C759]/10 rounded-xl flex items-center justify-center">
                   <Lock className="w-5 h-5 text-[#34C759]" />
@@ -650,7 +650,7 @@ function ZKProofPage() {
             )}
 
             {/* Proof Details */}
-            <div className="bg-white rounded-2xl p-8 border border-[#E5E5EA] shadow-sm">
+            <div className="bg-white rounded-2xl p-5 sm:p-8 border border-[#E5E5EA] shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <h2 className="text-2xl font-bold text-[#1D1D1F] flex items-center gap-3">
                   <div className="w-10 h-10 bg-[#007AFF]/10 rounded-xl flex items-center justify-center">

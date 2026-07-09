@@ -193,19 +193,22 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
               >
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="number"
+                    inputMode="decimal"
+                    step="any"
+                    autoComplete="off"
                     value={suiDepositAmount}
                     onChange={(e) => onSuiDepositAmountChange(e.target.value)}
                     placeholder="USDC amount (min $10)"
                     disabled={actionLoading}
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                    className="flex-1 min-w-0 h-11 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
                   <button
                     onClick={onSuiDeposit}
                     disabled={actionLoading || !suiDepositAmount}
-                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                    className="h-11 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-400 active:scale-[0.98] text-white rounded-lg transition-all flex items-center justify-center gap-2 w-full sm:w-auto flex-shrink-0"
                   >
                     {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     {txStatus === 'depositing' ? 'Depositing...' : txStatus === 'complete' ? 'Complete!' : 'Deposit'}
@@ -233,26 +236,29 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
               >
-                <div className="flex gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap gap-2">
                   <input
                     type="number"
+                    inputMode="decimal"
+                    step="any"
+                    autoComplete="off"
                     value={suiWithdrawShares}
                     onChange={(e) => onSuiWithdrawSharesChange(e.target.value)}
                     placeholder={`Shares (max: ${(Number(userPosition?.shares) || 0).toFixed(4)})`}
                     disabled={actionLoading}
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                    className="flex-1 basis-full sm:basis-auto min-w-0 h-11 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
                   <button
                     onClick={() => onSuiWithdrawSharesChange(String(Number(userPosition?.shares) || 0))}
                     disabled={actionLoading}
-                    className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 rounded-lg text-sm"
+                    className="h-11 px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 active:scale-[0.98] rounded-lg text-sm transition-all flex-shrink-0"
                   >
                     Max
                   </button>
                   <button
                     onClick={onSuiWithdraw}
                     disabled={actionLoading || !suiWithdrawShares}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                    className="h-11 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 active:scale-[0.98] text-white rounded-lg transition-all flex items-center justify-center gap-2 flex-1 sm:flex-none"
                   >
                     {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Minus className="w-4 h-4" />}
                     {txStatus === 'withdrawing' ? 'Withdrawing...' : txStatus === 'complete' ? 'Complete!' : 'Withdraw'}
@@ -357,19 +363,22 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             exit={{ opacity: 0, height: 0 }}
             className="mt-4"
           >
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="number"
+                inputMode="decimal"
+                step="any"
+                autoComplete="off"
                 value={depositAmount}
                 onChange={(e) => onDepositAmountChange(e.target.value)}
                 placeholder={`Amount in USD (min $${minDeposit}${isFirstDeposit ? ' first deposit' : ''})`}
                 disabled={actionLoading}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                className="flex-1 min-w-0 h-11 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               />
               <button
                 onClick={onDeposit}
                 disabled={actionLoading || !depositAmount || !address || isPending || isConfirming}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                className="h-11 px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 active:scale-[0.98] text-white rounded-lg transition-all flex items-center justify-center gap-2 w-full sm:w-auto flex-shrink-0"
               >
                 {(actionLoading || isPending || isConfirming) && <Loader2 className="w-4 h-4 animate-spin" />}
                 {txStatus === 'resetting_approval' ? 'Resetting allowance...' :
@@ -403,26 +412,29 @@ export const DepositWithdrawActions = memo(function DepositWithdrawActions({
             exit={{ opacity: 0, height: 0 }}
             className="mt-4"
           >
-            <div className="flex gap-2">
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
               <input
                 type="number"
+                inputMode="decimal"
+                step="any"
+                autoComplete="off"
                 value={withdrawShares}
                 onChange={(e) => onWithdrawSharesChange(e.target.value)}
                 placeholder={`Shares to burn (max ${(Number(userPosition.shares) || 0).toFixed(4)})`}
                 disabled={actionLoading || txStatus === 'withdrawing'}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                className="flex-1 basis-full sm:basis-auto min-w-0 h-11 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
               />
               <button
                 onClick={() => onWithdrawSharesChange(String(Number(userPosition.shares) || 0))}
                 disabled={actionLoading || txStatus === 'withdrawing'}
-                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 rounded-lg text-sm"
+                className="h-11 px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 disabled:opacity-50 active:scale-[0.98] rounded-lg text-sm transition-all flex-shrink-0"
               >
                 Max
               </button>
               <button
                 onClick={onWithdraw}
                 disabled={actionLoading || !withdrawShares || !address || txStatus === 'withdrawing' || isPending || isConfirming}
-                className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+                className="h-11 px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 active:scale-[0.98] text-white rounded-lg transition-all flex items-center justify-center gap-2 flex-1 sm:flex-none"
               >
                 {(actionLoading || isPending || isConfirming || txStatus === 'withdrawing') && <Loader2 className="w-4 h-4 animate-spin" />}
                 {txStatus === 'withdrawing' ? 'Withdrawing...' : 

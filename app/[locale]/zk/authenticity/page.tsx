@@ -200,8 +200,8 @@ export default function AuthenticityVerificationPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-6">
-        <div className="max-w-2xl bg-[#FF3B30]/10 border border-[#FF3B30]/30 rounded-xl p-8">
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4 sm:p-6">
+        <div className="max-w-2xl bg-[#FF3B30]/10 border border-[#FF3B30]/30 rounded-xl p-5 sm:p-8">
           <h1 className="text-2xl font-bold text-[#FF3B30] mb-4">Verification Error</h1>
           <p className="text-[#424245]">{error}</p>
           <button
@@ -217,8 +217,8 @@ export default function AuthenticityVerificationPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-6">
-        <div className="max-w-2xl bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-xl p-8">
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4 sm:p-6">
+        <div className="max-w-2xl bg-[#FF9500]/10 border border-[#FF9500]/30 rounded-xl p-5 sm:p-8">
           <h1 className="text-2xl font-bold text-[#FF9500] mb-4">⚠️ Configuration Required</h1>
           <p className="text-[#424245] mb-4">ZK backend is not configured. Set ZK_API_URL environment variable to enable authenticity verification.</p>
           <button
@@ -233,8 +233,8 @@ export default function AuthenticityVerificationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#F5F5F7] p-4 sm:p-6">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#34C759] to-[#5856D6] text-white rounded-full font-bold text-2xl mb-4">

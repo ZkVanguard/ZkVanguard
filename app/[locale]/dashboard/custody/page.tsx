@@ -87,9 +87,9 @@ function AttestationCard({ a }: { a: AttestationView }) {
             Portfolio #{a.portfolioId}
           </h3>
         </div>
-        <div className="text-[11px] text-[#86868b] text-right">
-          <div>nonce {a.nonce}</div>
-          <div>attested {fmtDate(a.attestedAt)}</div>
+        <div className="text-[11px] text-[#86868b] text-right flex-shrink-0 ml-2">
+          <div className="truncate max-w-[110px] sm:max-w-none">nonce {a.nonce}</div>
+          <div className="truncate max-w-[110px] sm:max-w-none">attested {fmtDate(a.attestedAt)}</div>
         </div>
       </div>
 
@@ -205,15 +205,15 @@ export default function CustodyProofsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-5 sm:space-y-6">
       <header>
         <div className="text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">
           Custody attestations
         </div>
-        <h1 className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">
+        <h1 className="text-[24px] sm:text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em] leading-tight">
           Your custody-backed portfolios
         </h1>
-        <p className="text-[13px] text-[#86868b] mt-1 font-mono">
+        <p className="text-[13px] text-[#86868b] mt-1 font-mono truncate">
           {wallet.slice(0, 10)}…{wallet.slice(-6)}
         </p>
       </header>
