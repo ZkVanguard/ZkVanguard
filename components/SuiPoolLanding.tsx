@@ -107,7 +107,7 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* HERO                                                            */}
       {/* ─────────────────────────────────────────────────────────────── */}
-      <section className="relative pt-24 pb-16 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-32 px-5 lg:px-8 overflow-hidden">
+      <section className="relative pt-20 pb-12 sm:pt-32 sm:pb-24 lg:pt-40 lg:pb-32 px-4 sm:px-5 lg:px-8 overflow-hidden min-w-0">
         {/* Apple-style soft gradient backdrop */}
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-system-bg-tertiary via-system-bg-primary to-system-bg-primary" />
         <div
@@ -136,8 +136,8 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
             </div>
           </div>
 
-          {/* Headline */}
-          <h1 className="text-center text-[44px] sm:text-[64px] lg:text-[80px] font-bold tracking-[-0.03em] leading-[1.05] text-label-primary mb-6 sm:mb-8">
+          {/* Headline — scales down on tiny screens so it doesn't overflow */}
+          <h1 className="text-center text-[32px] xs:text-[36px] sm:text-[52px] md:text-[64px] lg:text-[80px] font-bold tracking-[-0.03em] leading-[1.05] text-label-primary mb-5 sm:mb-8 break-words">
             AI-managed USDC vault.
             <br />
             <span className="bg-gradient-to-r from-ios-blue to-[#5AC8FA] bg-clip-text text-transparent">
@@ -146,7 +146,7 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
           </h1>
 
           {/* Subtitle */}
-          <p className="text-center text-callout sm:text-[20px] text-label-secondary max-w-[640px] mx-auto leading-[1.5] mb-10 sm:mb-12">
+          <p className="text-center text-base sm:text-callout md:text-[20px] text-label-secondary max-w-[640px] mx-auto leading-relaxed sm:leading-[1.5] mb-8 sm:mb-12 px-1">
             Deposit USDC. A 7-agent system allocates across BTC, ETH, and SUI
             with auto-hedged perp protection on BlueFin. Verified by ZK-STARK
             proofs.
@@ -178,7 +178,7 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
           </div>
 
           {/* ─── LIVE STATS BAR ─── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 max-w-[920px] mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 max-w-[920px] mx-auto min-w-0">
             <StatCard
               label="Pool NAV"
               value={loading ? '—' : formatUsd(pool?.totalNAV ?? 0)}
@@ -211,18 +211,18 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* LIVE COMPOSITION                                                */}
       {/* ─────────────────────────────────────────────────────────────── */}
-      <section className="py-16 sm:py-24 px-5 lg:px-8 bg-system-bg-secondary">
+      <section className="py-12 sm:py-20 md:py-24 px-4 sm:px-5 lg:px-8 bg-system-bg-secondary min-w-0">
         <div className="max-w-[1100px] mx-auto">
-          <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
+          <div className="flex flex-col lg:flex-row gap-8 sm:gap-12 lg:gap-16 items-start min-w-0">
             {/* Left: heading */}
-            <div className="lg:max-w-[420px] lg:sticky lg:top-24">
-              <p className="text-caption-1 font-semibold uppercase tracking-wide text-ios-blue mb-3">
+            <div className="lg:max-w-[420px] lg:sticky lg:top-24 min-w-0">
+              <p className="text-[11px] sm:text-caption-1 font-semibold uppercase tracking-wide text-ios-blue mb-2 sm:mb-3">
                 Live composition
               </p>
-              <h2 className="text-[34px] sm:text-[40px] lg:text-[48px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-5">
+              <h2 className="text-[26px] sm:text-[34px] md:text-[40px] lg:text-[48px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-3 sm:mb-5 break-words">
                 Where your USDC is right now.
               </h2>
-              <p className="text-callout text-label-secondary leading-[1.55]">
+              <p className="text-sm sm:text-callout text-label-secondary leading-relaxed sm:leading-[1.55]">
                 The AI rebalances every 30 minutes across BTC, ETH and SUI based
                 on live market signals. Idle USDC counts as a defensive bucket.
                 Refreshes every 30s.
@@ -295,21 +295,21 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* HOW IT WORKS                                                    */}
       {/* ─────────────────────────────────────────────────────────────── */}
-      <section id="how-it-works" className="py-20 sm:py-28 px-5 lg:px-8 bg-system-bg-primary">
+      <section id="how-it-works" className="py-14 sm:py-20 md:py-28 px-4 sm:px-5 lg:px-8 bg-system-bg-primary min-w-0">
         <div className="max-w-[1100px] mx-auto">
-          <div className="text-center mb-14 sm:mb-16">
-            <p className="text-caption-1 font-semibold uppercase tracking-wide text-ios-blue mb-3">
+          <div className="text-center mb-10 sm:mb-14 md:mb-16">
+            <p className="text-[11px] sm:text-caption-1 font-semibold uppercase tracking-wide text-ios-blue mb-2 sm:mb-3">
               How it works
             </p>
-            <h2 className="text-[34px] sm:text-[44px] lg:text-[52px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-4">
+            <h2 className="text-[26px] sm:text-[34px] md:text-[44px] lg:text-[52px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-3 sm:mb-4 break-words">
               Three things working together.
             </h2>
-            <p className="text-callout text-label-secondary max-w-[560px] mx-auto leading-[1.55]">
+            <p className="text-sm sm:text-callout text-label-secondary max-w-[560px] mx-auto leading-relaxed sm:leading-[1.55] px-1">
               A continuous loop runs every 30 minutes. You just deposit and watch.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 min-w-0">
             <FeatureCard
               icon={<SparklesIcon className="w-6 h-6" />}
               accent="from-[#007AFF] to-[#5AC8FA]"
@@ -338,18 +338,18 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* TRUST STRIP — safety guarantees on chain                        */}
       {/* ─────────────────────────────────────────────────────────────── */}
-      <section className="py-16 sm:py-24 px-5 lg:px-8 bg-system-bg-secondary">
+      <section className="py-12 sm:py-20 md:py-24 px-4 sm:px-5 lg:px-8 bg-system-bg-secondary min-w-0">
         <div className="max-w-[1100px] mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-caption-1 font-semibold uppercase tracking-wide text-ios-blue mb-3">
+          <div className="text-center mb-8 sm:mb-12">
+            <p className="text-[11px] sm:text-caption-1 font-semibold uppercase tracking-wide text-ios-blue mb-2 sm:mb-3">
               Built for trust
             </p>
-            <h2 className="text-[28px] sm:text-[36px] lg:text-[42px] font-bold tracking-[-0.02em] leading-[1.15] text-label-primary mb-3">
+            <h2 className="text-[24px] sm:text-[28px] md:text-[36px] lg:text-[42px] font-bold tracking-[-0.02em] leading-[1.15] text-label-primary mb-3 break-words">
               Every safety guard is on chain.
             </h2>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 min-w-0">
             <TrustCard
               icon={<LockClosedIcon className="w-5 h-5" />}
               title="TVL cap"
@@ -381,23 +381,23 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* PLATFORM SURFACES — discoverability for the BlackRock-shaped views */}
       {/* ─────────────────────────────────────────────────────────────── */}
-      <section className="py-20 sm:py-24 px-5 lg:px-8 bg-system-bg-secondary border-y border-separator-opaque/20">
+      <section className="py-14 sm:py-20 md:py-24 px-4 sm:px-5 lg:px-8 bg-system-bg-secondary border-y border-separator-opaque/20 min-w-0">
         <div className="max-w-[1100px] mx-auto">
-          <div className="text-center mb-10 sm:mb-12">
-            <div className="inline-block text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary mb-3">
+          <div className="text-center mb-8 sm:mb-10 md:mb-12">
+            <div className="inline-block text-[11px] sm:text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary mb-2 sm:mb-3">
               How it works
             </div>
-            <h2 className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-4">
+            <h2 className="text-[24px] sm:text-[28px] md:text-[36px] lg:text-[44px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-3 sm:mb-4 break-words">
               An asset manager you can audit line by line.
             </h2>
-            <p className="text-callout sm:text-[18px] text-label-secondary max-w-[640px] mx-auto leading-[1.5]">
+            <p className="text-sm sm:text-callout md:text-[18px] text-label-secondary max-w-[640px] mx-auto leading-relaxed sm:leading-[1.5] px-1">
               A 7-agent orchestration fuses prediction-market signals, executes
               hedges on BlueFin, and ZK-attests every meaningful decision — all
               live on Sui mainnet.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 min-w-0">
             <SurfaceCard
               href="/dashboard/portfolio"
               eyebrow="Your position"
@@ -441,25 +441,25 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
       {/* ─────────────────────────────────────────────────────────────── */}
       {/* FOOTER CTA                                                      */}
       {/* ─────────────────────────────────────────────────────────────── */}
-      <section className="py-20 sm:py-28 px-5 lg:px-8 bg-system-bg-primary">
-        <div className="max-w-[800px] mx-auto text-center">
-          <h2 className="text-[34px] sm:text-[44px] lg:text-[52px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-5">
+      <section className="py-14 sm:py-20 md:py-28 px-4 sm:px-5 lg:px-8 bg-system-bg-primary min-w-0">
+        <div className="max-w-[800px] mx-auto text-center min-w-0">
+          <h2 className="text-[26px] sm:text-[34px] md:text-[44px] lg:text-[52px] font-bold tracking-[-0.02em] leading-[1.1] text-label-primary mb-4 sm:mb-5 break-words">
             Join in seconds.
           </h2>
-          <p className="text-callout sm:text-[20px] text-label-secondary mb-8 leading-[1.5]">
+          <p className="text-sm sm:text-callout md:text-[20px] text-label-secondary mb-6 sm:mb-8 leading-relaxed sm:leading-[1.5] px-1">
             Connect a SUI wallet, deposit any amount of USDC, and let the
             AI work. Currently {pool?.memberCount ?? 0}{' '}
             members{pool && pool.totalNAV > 0 ? ` sharing ${formatUsd(profitUsd)} in realised profit` : ''}.
           </p>
           <Link
             href="/dashboard"
-            className="group inline-flex items-center justify-center gap-2 px-10 h-[56px] bg-ios-blue text-white text-headline font-semibold rounded-ios-xl hover:bg-[#0062CC] active:scale-[0.97] transition-all duration-200 shadow-ios-2"
+            className="group inline-flex items-center justify-center gap-2 w-full sm:w-auto px-8 sm:px-10 h-[52px] sm:h-[56px] bg-ios-blue text-white text-base sm:text-headline font-semibold rounded-ios-xl hover:bg-[#0062CC] active:scale-[0.97] transition-all duration-200 shadow-ios-2"
           >
             Open Dashboard
             <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
           </Link>
           {pool?.paused && (
-            <p className="mt-6 text-footnote text-ios-orange font-medium">
+            <p className="mt-4 sm:mt-6 text-xs sm:text-footnote text-ios-orange font-medium">
               Note: deposits are currently paused for maintenance.
             </p>
           )}
@@ -479,15 +479,15 @@ function StatCard({
   label: string; value: string; hint?: string; valueClass?: string; loading?: boolean;
 }) {
   return (
-    <div className="bg-system-bg-primary rounded-ios-xl p-5 sm:p-6 shadow-ios-1 border border-separator-opaque/30">
-      <div className="text-caption-1 font-medium uppercase tracking-wide text-label-tertiary mb-2">
+    <div className="bg-system-bg-primary rounded-ios-xl p-3 sm:p-5 md:p-6 shadow-ios-1 border border-separator-opaque/30 min-w-0">
+      <div className="text-[10px] sm:text-caption-1 font-medium uppercase tracking-wide text-label-tertiary mb-1.5 sm:mb-2 truncate">
         {label}
       </div>
-      <div className={`text-title-2 sm:text-title-1 font-bold tabular-nums ${valueClass} ${loading ? 'animate-pulse' : ''}`}>
+      <div className={`text-lg sm:text-title-2 md:text-title-1 font-bold tabular-nums break-all ${valueClass} ${loading ? 'animate-pulse' : ''}`}>
         {value}
       </div>
       {hint && (
-        <div className="text-caption-1 text-label-tertiary mt-1.5 tabular-nums truncate">{hint}</div>
+        <div className="text-[10px] sm:text-caption-1 text-label-tertiary mt-1 sm:mt-1.5 tabular-nums truncate">{hint}</div>
       )}
     </div>
   );
@@ -499,17 +499,17 @@ function FeatureCard({
   icon: React.ReactNode; accent: string; eyebrow: string; title: string; body: string;
 }) {
   return (
-    <div className="bg-system-bg-secondary rounded-ios-xl p-6 sm:p-7 border border-separator-opaque/30 hover:shadow-ios-2 transition-shadow duration-300">
+    <div className="bg-system-bg-secondary rounded-ios-xl p-4 sm:p-6 md:p-7 border border-separator-opaque/30 hover:shadow-ios-2 transition-shadow duration-300 min-w-0">
       <div
-        className={`inline-flex items-center justify-center w-11 h-11 rounded-ios bg-gradient-to-br ${accent} text-white mb-5 shadow-ios-1`}
+        className={`inline-flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-ios bg-gradient-to-br ${accent} text-white mb-3 sm:mb-5 shadow-ios-1 flex-shrink-0`}
       >
         {icon}
       </div>
-      <div className="text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary mb-1.5">
+      <div className="text-[10px] sm:text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary mb-1 sm:mb-1.5">
         {eyebrow}
       </div>
-      <h3 className="text-title-3 font-semibold text-label-primary mb-2">{title}</h3>
-      <p className="text-subheadline text-label-secondary leading-[1.55]">{body}</p>
+      <h3 className="text-base sm:text-title-3 font-semibold text-label-primary mb-1.5 sm:mb-2 break-words">{title}</h3>
+      <p className="text-sm sm:text-subheadline text-label-secondary leading-relaxed sm:leading-[1.55] break-words">{body}</p>
     </div>
   );
 }
@@ -520,15 +520,15 @@ function TrustCard({
   icon: React.ReactNode; title: string; value: string; hint: string;
 }) {
   return (
-    <div className="bg-system-bg-primary rounded-ios-xl p-5 sm:p-6 border border-separator-opaque/30 shadow-ios-1">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="text-ios-blue">{icon}</div>
-        <div className="text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary">
+    <div className="bg-system-bg-primary rounded-ios-xl p-3 sm:p-5 md:p-6 border border-separator-opaque/30 shadow-ios-1 min-w-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 min-w-0">
+        <div className="text-ios-blue flex-shrink-0">{icon}</div>
+        <div className="text-[10px] sm:text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary truncate">
           {title}
         </div>
       </div>
-      <div className="text-title-3 sm:text-title-2 font-bold text-label-primary mb-1">{value}</div>
-      <div className="text-caption-1 text-label-tertiary leading-[1.4]">{hint}</div>
+      <div className="text-base sm:text-title-3 md:text-title-2 font-bold text-label-primary mb-1 break-words tabular-nums">{value}</div>
+      <div className="text-[10px] sm:text-caption-1 text-label-tertiary leading-[1.4] break-words">{hint}</div>
     </div>
   );
 }
@@ -541,21 +541,21 @@ function SurfaceCard({
   return (
     <Link
       href={href}
-      className="group block bg-system-bg-primary rounded-ios-xl p-5 sm:p-6 border border-separator-opaque/30 hover:shadow-ios-2 hover:border-ios-blue/30 transition-all duration-300"
+      className="group block bg-system-bg-primary rounded-ios-xl p-4 sm:p-5 md:p-6 border border-separator-opaque/30 hover:shadow-ios-2 hover:border-ios-blue/30 active:scale-[0.99] transition-all duration-300 min-w-0"
     >
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary">
+      <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+        <div className="text-[10px] sm:text-caption-1 font-semibold uppercase tracking-wide text-label-tertiary truncate">
           {eyebrow}
         </div>
         <ArrowRightIcon
-          className="w-4 h-4 text-label-tertiary group-hover:text-ios-blue group-hover:translate-x-1 transition-all"
+          className="w-4 h-4 text-label-tertiary group-hover:text-ios-blue group-hover:translate-x-1 transition-all flex-shrink-0"
           strokeWidth={2}
         />
       </div>
-      <h3 className="text-headline font-semibold text-label-primary mb-1.5 leading-tight">
+      <h3 className="text-sm sm:text-headline font-semibold text-label-primary mb-1 sm:mb-1.5 leading-tight break-words">
         {title}
       </h3>
-      <p className="text-subheadline text-label-secondary leading-[1.5]">{body}</p>
+      <p className="text-xs sm:text-subheadline text-label-secondary leading-relaxed sm:leading-[1.5] break-words">{body}</p>
     </Link>
   );
 }
