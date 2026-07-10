@@ -32,6 +32,7 @@ import {
   Leaderboard,
   AIInsightsModal,
   CollapsibleSection,
+  PoolVolatilityContext,
   useCommunityPool,
 } from './community-pool';
 import { PieChart, Shield, Users } from 'lucide-react';
@@ -275,6 +276,14 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
       />
 
       <PoolStats poolData={pool.poolData} selectedChain={pool.selectedChain} />
+
+      {/* Honest volatility context — shows "24h range" and "vs 30d ago" so
+          users don't misread a routine pullback from ATH as ongoing loss. */}
+      <PoolVolatilityContext
+        selectedChain={pool.selectedChain}
+        network={pool.network}
+        currentSharePrice={Number(pool.poolData?.sharePrice) || undefined}
+      />
 
       {/* Show user position if wallet is connected — kept above allocation
           on mobile so members see their stake before the pool-wide charts. */}

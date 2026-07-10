@@ -8,6 +8,7 @@ export { StatusMessages } from './StatusMessages';
 export { Leaderboard } from './Leaderboard';
 export { AIInsightsModal } from './AIInsightsModal';
 export { CollapsibleSection } from './CollapsibleSection';
+export { PoolVolatilityContext } from './PoolVolatilityContext';
 export { useCommunityPool } from './useCommunityPool';
 export * from './Skeletons';
 export type * from './types';

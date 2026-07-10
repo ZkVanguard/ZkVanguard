@@ -603,6 +603,69 @@ export async function GET(request: NextRequest) {
         network,
       }, 60);
     }
+
+    // Volatility context — used by the pool card to give users an honest
+    // "24h range" + "30d ago" reference so they don't anchor to ATH and
+    // misread normal pullbacks as loss. Read-only aggregate over
+    // community_pool_nav_history. Cached 5 minutes.
+    if (action === 'volatility') {
+      try {
+        const { query } = await import('@/lib/db/postgres');
+        const [rangeRes, backRes, latestRes] = await Promise.all([
+          query<{ min_sp: string; max_sp: string; min_nav: string; max_nav: string }>(
+            `SELECT MIN(share_price)::text min_sp, MAX(share_price)::text max_sp,
+                    MIN(total_nav)::text min_nav, MAX(total_nav)::text max_nav
+             FROM community_pool_nav_history
+             WHERE chain = 'sui' AND timestamp >= NOW() - INTERVAL '24 hours'`,
+          ),
+          query<{ share_price: string; total_nav: string; timestamp: Date }>(
+            `SELECT share_price::text, total_nav::text, timestamp
+             FROM community_pool_nav_history
+             WHERE chain = 'sui' AND timestamp <= NOW() - INTERVAL '30 days'
+             ORDER BY timestamp DESC LIMIT 1`,
+          ),
+          query<{ share_price: string; total_nav: string; timestamp: Date }>(
+            `SELECT share_price::text, total_nav::text, timestamp
+             FROM community_pool_nav_history
+             WHERE chain = 'sui'
+             ORDER BY timestamp DESC LIMIT 1`,
+          ),
+        ]);
+        const range = rangeRes[0];
+        const back = backRes[0];
+        const latest = latestRes[0];
+        return cachedJsonResponse({
+          success: true,
+          data: {
+            range24h: range ? {
+              minSharePrice: Number(range.min_sp) || 0,
+              maxSharePrice: Number(range.max_sp) || 0,
+              minNav: Number(range.min_nav) || 0,
+              maxNav: Number(range.max_nav) || 0,
+            } : null,
+            since30d: back ? {
+              sharePrice: Number(back.share_price) || 0,
+              nav: Number(back.total_nav) || 0,
+              at: back.timestamp,
+            } : null,
+            latest: latest ? {
+              sharePrice: Number(latest.share_price) || 0,
+              nav: Number(latest.total_nav) || 0,
+              at: latest.timestamp,
+            } : null,
+          },
+          chain: 'sui',
+          network,
+        }, 300);
+      } catch (err) {
+        // Non-critical — a missing volatility panel is better than a 500.
+        logger.warn('[sui-pool] volatility action failed', { error: err });
+        return NextResponse.json({
+          success: false,
+          error: 'volatility data unavailable',
+        }, { status: 200 });
+      }
+    }
     
     // Get specific user's position — single getPoolStats() call shared
     if (user) {
