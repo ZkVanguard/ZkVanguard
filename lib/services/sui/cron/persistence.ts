@@ -17,64 +17,92 @@ import { logger } from '@/lib/utils/logger';
 // observed jitter has been 4–6% (BlueFin uPnL/collateral read racing). We
 // clamp at 3.5% — permissive enough for real market moves in a single
 // tick, tight enough to absorb the oscillation.
-const MAX_NAV_STEP_PCT = 3.5;
+export const MAX_NAV_STEP_PCT = 3.5;
 // Median window for outlier detection. Odd number so the median is a
 // single sample. 3 gives us "typical of the last 90 min".
-const MEDIAN_WINDOW = 3;
+export const MEDIAN_WINDOW = 3;
 
-/**
- * Compute a stabilized NAV and share price from the raw cron reading.
- *
- * Rejects clearly-jittery snapshots by clamping the write to `±
- * MAX_NAV_STEP_PCT` of the trailing median. Real market moves eventually
- * catch up over multiple ticks; jitter is absorbed without publishing a
- * false spike. Returns `{ ok, publishedNav, publishedShare, diagnostics }`
- * so the caller can log both the raw and clamped values.
- *
- * If DB history is unavailable (fresh pool / degraded connection), passes
- * the raw value through unchanged with `stabilized: false`.
- */
-async function stabilizeNav(
-  rawNavUsd: number,
-  totalShares: number,
-  chain: string,
-): Promise<{
+export interface StabilizerResult {
   publishedNav: number;
   publishedSharePrice: number;
   stabilized: boolean;
   clampedFromRaw: number;
   median: number | null;
-}> {
+}
+
+/**
+ * Pure clamp math — takes raw NAV + trailing history + shares and returns
+ * the stabilized result. Separated from `stabilizeNav()` so it's unit-
+ * testable without touching the DB. Behavior is locked by
+ * test/unit/nav-stabilizer.test.ts.
+ *
+ * The `history` argument should be the most-recent NAV samples in
+ * chronological order (oldest → newest). Only the last `MEDIAN_WINDOW`
+ * are consulted. When fewer than one usable sample is present, the raw
+ * value passes through unchanged.
+ */
+export function clampNavAgainstMedian(
+  rawNavUsd: number,
+  totalShares: number,
+  history: number[],
+): StabilizerResult {
   const shares = Math.max(totalShares, 1e-9);
-  try {
-    // Fetch enough history to compute a rolling median. Order ascending
-    // then take the last MEDIAN_WINDOW.
-    const hist = await getNavHistory(1, chain); // last 24h
-    const recent = hist.slice(-MEDIAN_WINDOW).map(s => Number(s.total_nav)).filter(Number.isFinite);
-    if (recent.length === 0) {
-      return { publishedNav: rawNavUsd, publishedSharePrice: rawNavUsd / shares, stabilized: false, clampedFromRaw: 0, median: null };
-    }
-    const sorted = [...recent].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const deltaPct = median > 0 ? ((rawNavUsd - median) / median) * 100 : 0;
-    if (Math.abs(deltaPct) <= MAX_NAV_STEP_PCT) {
-      // Within band; publish raw.
-      return { publishedNav: rawNavUsd, publishedSharePrice: rawNavUsd / shares, stabilized: false, clampedFromRaw: 0, median };
-    }
-    // Out of band: clamp to median ± MAX_NAV_STEP_PCT.
-    const capped = deltaPct > 0
-      ? median * (1 + MAX_NAV_STEP_PCT / 100)
-      : median * (1 - MAX_NAV_STEP_PCT / 100);
+  const recent = history.slice(-MEDIAN_WINDOW).filter(Number.isFinite);
+  if (recent.length === 0) {
     return {
-      publishedNav: capped,
-      publishedSharePrice: capped / shares,
-      stabilized: true,
-      clampedFromRaw: rawNavUsd - capped,
+      publishedNav: rawNavUsd,
+      publishedSharePrice: rawNavUsd / shares,
+      stabilized: false,
+      clampedFromRaw: 0,
+      median: null,
+    };
+  }
+  const sorted = [...recent].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const deltaPct = median > 0 ? ((rawNavUsd - median) / median) * 100 : 0;
+  if (Math.abs(deltaPct) <= MAX_NAV_STEP_PCT) {
+    return {
+      publishedNav: rawNavUsd,
+      publishedSharePrice: rawNavUsd / shares,
+      stabilized: false,
+      clampedFromRaw: 0,
       median,
     };
+  }
+  const capped = deltaPct > 0
+    ? median * (1 + MAX_NAV_STEP_PCT / 100)
+    : median * (1 - MAX_NAV_STEP_PCT / 100);
+  return {
+    publishedNav: capped,
+    publishedSharePrice: capped / shares,
+    stabilized: true,
+    clampedFromRaw: rawNavUsd - capped,
+    median,
+  };
+}
+
+/**
+ * I/O wrapper around `clampNavAgainstMedian`. Fetches the last 24h of
+ * chain-scoped NAV history from the DB and delegates to the pure clamp.
+ *
+ * On DB failure passes the raw value through with `stabilized: false`
+ * — stabilization must never *cause* an outage.
+ */
+async function stabilizeNav(
+  rawNavUsd: number,
+  totalShares: number,
+  chain: string,
+): Promise<StabilizerResult> {
+  try {
+    const hist = await getNavHistory(1, chain);
+    return clampNavAgainstMedian(
+      rawNavUsd,
+      totalShares,
+      hist.map(s => Number(s.total_nav)),
+    );
   } catch (err) {
-    // Never let stabilization *cause* an outage — pass raw through.
     logger.warn('[SUI Cron] NAV stabilizer failed, passing raw through', { error: err });
+    const shares = Math.max(totalShares, 1e-9);
     return { publishedNav: rawNavUsd, publishedSharePrice: rawNavUsd / shares, stabilized: false, clampedFromRaw: 0, median: null };
   }
 }
