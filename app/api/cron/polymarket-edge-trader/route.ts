@@ -111,6 +111,22 @@ const KEY_ACTIVE = 'polymarket-edge:active-trade';
 const KEY_STATS = 'polymarket-edge:stats';
 const KEY_HALTED_UNTIL = 'polymarket-edge:halted-until';
 const KEY_DAILY = 'polymarket-edge:daily';
+// Records why the last tick did not open a trade. Small helper: gives
+// operators a single lookup ("why is the trader idle?") without grepping
+// serverless logs across many invocations.
+const KEY_LAST_SKIP = 'polymarket-edge:last-skip';
+
+async function recordSkip(action: string, reason: string): Promise<void> {
+  try {
+    await setCronState(KEY_LAST_SKIP, {
+      at: Date.now(),
+      action,
+      reason,
+    });
+  } catch {
+    /* non-critical — don't fail the tick because we couldn't record a diagnostic */
+  }
+}
 
 interface ActiveTrade {
   symbol: string;
@@ -579,6 +595,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     );
 
     if (!scan.best) {
+      await recordSkip('no-edge', 'no asset cleared confidence/consensus/source gates');
       return NextResponse.json({
         success: true,
         ranAt,
@@ -596,6 +613,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
     const side = recommendationToSide(prediction.recommendation);
     if (!side) {
+      await recordSkip('no-edge', 'recommendation is WAIT');
       return NextResponse.json({
         success: true,
         ranAt,
@@ -619,9 +637,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const asset = scan.best.asset as SupportedAsset;
     const symbol = `${asset}-PERP`;
 
-    // Free collateral & sizing
+    // Free collateral & sizing.
+    //
+    // The absolute MIN_FREE_COLLATERAL_USD floor (default $15) was a
+    // silent no-op on small pools: a $50-NAV pool with ~$29 in BlueFin
+    // collateral and one active hedge locking $16 margin has ~$13 free.
+    // The trader would refuse to open every 5-min tick because $13 < $15,
+    // even though the actual stake it wants to place is only ~$5.
+    //
+    // Small-pool relief: cap the effective floor at 2× BASE_STAKE_USD.
+    // Operators still get their configured threshold on any pool where
+    // that threshold is ≤ 2× the stake (i.e. large pools where the
+    // absolute floor is small relative to trade size). Small pools get
+    // the relaxed 2×-stake requirement, which is the actual amount the
+    // trader will spend + 1 stake of headroom for slippage.
     const free = Number(await bf.getBalance().catch(() => 0)) || 0;
-    if (free < MIN_FREE_COLLATERAL_USD) {
+    const effectiveMinFree = Math.min(MIN_FREE_COLLATERAL_USD, BASE_STAKE_USD * 2);
+    if (free < effectiveMinFree) {
+      const reason = `free=$${free.toFixed(2)} < effective-min=$${effectiveMinFree.toFixed(2)} (configured min=$${MIN_FREE_COLLATERAL_USD}, base-stake=$${BASE_STAKE_USD})`;
+      await recordSkip('no-collateral', reason);
       return NextResponse.json({
         success: true,
         ranAt,
@@ -629,7 +663,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         action: 'no-collateral',
         stats: safeStats,
         daily,
-        reason: `free=$${free.toFixed(2)} < min=$${MIN_FREE_COLLATERAL_USD}`,
+        reason,
       });
     }
 
@@ -683,6 +717,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           requiredPct: (requiredStakePct * 100).toFixed(1),
           maxPct: MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100,
         });
+        const skipReason = `${asset}: needs $${minStakeToClearFloor.toFixed(2)} stake to clear minQty ($${(minStakeToClearFloor * LEVERAGE).toFixed(2)} notional at ${LEVERAGE}x); would be ${(requiredStakePct * 100).toFixed(1)}% of free $${free.toFixed(2)} (max ${MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100}%). Pool NAV too small for ${asset}.`;
+        await recordSkip('skip-asset-too-small-nav', skipReason);
         return NextResponse.json({
           success: true,
           ranAt,
@@ -690,7 +726,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           action: 'skip-asset-too-small-nav',
           stats: safeStats,
           daily,
-          reason: `${asset}: needs $${minStakeToClearFloor.toFixed(2)} stake to clear minQty ($${(minStakeToClearFloor * LEVERAGE).toFixed(2)} notional at ${LEVERAGE}x); would be ${(requiredStakePct * 100).toFixed(1)}% of free $${free.toFixed(2)} (max ${MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100}%). Pool NAV too small for ${asset}.`,
+          reason: skipReason,
         });
       }
       logger.info('[PolymarketEdge] auto-bumping stake to clear minQty', {
