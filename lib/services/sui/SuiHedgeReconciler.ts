@@ -362,7 +362,24 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
   for (const [key, dbHedge] of db.entries()) {
     if (onChainIds.has(key)) continue;
     try {
-      const exit = priceMap[dbHedge.asset] ?? 0;
+      // Price fallback cascade for the close estimate:
+      // 1. Fresh price from priceMap (best — live market data)
+      // 2. `current_price` last stamped on the row by the price-refresh
+      //    block below on a previous reconcile tick (next best)
+      // 3. 0 → estimator returns 0, which was the old behavior. This is
+      //    why the 201-hedge backlog all show realized_pnl=$0: the
+      //    priceMap silently returned no entry, so we had no exit price.
+      const priceMapExit = Number(priceMap[dbHedge.asset] || 0);
+      const rowLastKnown = Number(dbHedge.current_price || 0);
+      const exit = priceMapExit > 0 ? priceMapExit : rowLastKnown;
+      // Tag provenance so the analytics can distinguish live-price closes
+      // from stored-price closes from unknowable closes.
+      const priceProvenance = priceMapExit > 0
+        ? 'reconciler-live'
+        : rowLastKnown > 0
+          ? 'reconciler-lastknown'
+          : 'reconciler-unknown';
+
       const estPnl = estimateHedgePnl(
         dbHedge.side,
         Number(dbHedge.notional_value ?? 0),
@@ -380,15 +397,23 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
         await closeHedge(dbHedge.order_id, estPnl, 'closed');
       }
 
-      // Tag provenance so downstream code never mistakes an estimate for a
-      // BlueFin-confirmed fill. Only mark when we actually estimated (exit>0).
-      if (estPnl !== 0) {
-        await query(
-          `UPDATE hedges
-           SET close_reason = 'reconciler-estimate', price_source = 'reconciler-estimate'
-           WHERE (hedge_id_onchain = $1 OR order_id = $1) AND close_reason IS NULL`,
-          [dbHedge.hedge_id_onchain || dbHedge.order_id],
-        );
+      // Tag every reconciler-driven close (including 0-PnL ones) so
+      // downstream analytics can bucket them separately from BlueFin-
+      // confirmed fills.
+      await query(
+        `UPDATE hedges
+         SET close_reason = 'reconciler-estimate', price_source = $2
+         WHERE (hedge_id_onchain = $1 OR order_id = $1) AND close_reason IS NULL`,
+        [dbHedge.hedge_id_onchain || dbHedge.order_id, priceProvenance],
+      );
+
+      if (priceProvenance === 'reconciler-unknown') {
+        logger.warn('[HedgeReconciler] Closed hedge with no exit price', {
+          id: dbHedge.id,
+          asset: dbHedge.asset,
+          side: dbHedge.side,
+          notional: dbHedge.notional_value,
+        });
       }
       result.closed++;
     } catch (err) {
