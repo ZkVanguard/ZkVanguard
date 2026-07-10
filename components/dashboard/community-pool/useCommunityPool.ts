@@ -313,28 +313,57 @@ export function useCommunityPool(propAddress?: string) {
           fetch(`/api/sui/community-pool?network=${suiNetwork}`),
           userAddress ? fetch(`/api/sui/community-pool?user=${userAddress}&network=${suiNetwork}`) : null,
         ]);
-        
+
         const [poolJson, userJson] = await Promise.all([
           poolRes.json(),
           userRes ? userRes.json() : null,
         ]);
-        
+
         if (!mountedRef.current) return;
-        
+
         if (poolJson.success) {
           if (poolJson.data.poolStateId) {
             dispatchPool({ type: 'SET_SUI_POOL_STATE_ID', payload: poolJson.data.poolStateId });
           }
-          
+
           dispatchPool({ type: 'SET_POOL_DATA', payload: mapApiToPoolSummary(poolJson.data) });
         }
 
         if (userJson?.success) {
           dispatchPool({ type: 'SET_USER_POSITION', payload: mapApiToUserPosition(userJson.data, userAddress) });
         }
-        
-        dispatchPool({ type: 'SET_LEADERBOARD', payload: [] });
+
+        // Stop the spinner as soon as pool+user data land — leaderboard
+        // is enrichment, not critical path.
         dispatchPool({ type: 'SET_LOADING', payload: false });
+
+        // Fetch SUI members and map to the shared LeaderboardEntry shape.
+        // Was previously hardcoded to []; the members action is served by
+        // /api/sui/community-pool (not the EVM /api/community-pool route,
+        // which returns 400 for SUI). Non-blocking so a slow member scan
+        // can't stall the rest of the UI.
+        fetch(`/api/sui/community-pool?action=members&network=${suiNetwork}`)
+          .then(res => res.json())
+          .then(memJson => {
+            if (!mountedRef.current) return;
+            const raw = memJson?.data?.members;
+            if (!memJson?.success || !Array.isArray(raw)) {
+              dispatchPool({ type: 'SET_LEADERBOARD', payload: [] });
+              return;
+            }
+            const entries = raw
+              .filter((m: { isMember?: boolean; shares?: number }) => m?.isMember && Number(m?.shares) > 0)
+              .map((m: { address: string; shares: number; percentage: number; valueUsd?: number }) => ({
+                walletAddress: m.address,
+                shares: Number(m.shares) || 0,
+                percentage: Number(m.percentage) || 0,
+                valueUSD: Number(m.valueUsd) || undefined,
+              }))
+              .sort((a: { shares: number }, b: { shares: number }) => b.shares - a.shares)
+              .slice(0, 5);
+            dispatchPool({ type: 'SET_LEADERBOARD', payload: entries });
+          })
+          .catch(err => logger.warn('[CommunityPool] SUI members fetch warning:', err));
       } catch (err: any) {
         logger.error('[CommunityPool] SUI fetch error:', err);
         if (mountedRef.current) {
