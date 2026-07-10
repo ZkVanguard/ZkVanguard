@@ -325,6 +325,41 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
 
     const orphanBluefinPositions: ReconcileResult['orphanBluefinPositions'] = [];
     const orphanInsertedIds: number[] = [];
+    // De-duplication window for reconstructed_* recovery rows. Without it,
+    // a jittery BlueFin /positions response (visible on tick N, gone on
+    // tick N+1, visible again on tick N+2) generates a fresh
+    // reconstructed_<symbol>_<side>_<ts> order every visible tick because
+    // the newly-created row was already closed as a phantom on the next.
+    // That's how a single manually-opened ETH-SHORT produced 37 SHORT
+    // rows in a single day on 2026-06-12 and skewed all downstream
+    // analytics to "86% short bias" for a month afterwards. Look for a
+    // recently-created recovery row with the same market+side before
+    // inserting a new one.
+    const RECOVERY_DEDUPE_HOURS = 6;
+    const recentRecoveryMatch = async (symbol: string, side: string): Promise<boolean> => {
+      try {
+        const { query } = await import('@/lib/db/postgres');
+        const rows = await query<{ id: number }>(
+          `SELECT id FROM hedges
+           WHERE chain = 'sui'
+             AND market = $1
+             AND side = $2
+             AND order_id LIKE 'reconstructed_%'
+             AND created_at >= NOW() - make_interval(hours => $3)
+           LIMIT 1`,
+          [symbol, side, RECOVERY_DEDUPE_HOURS],
+        );
+        return rows.length > 0;
+      } catch (e) {
+        // On DB probe error, err on the side of NOT inserting a duplicate
+        // — a missing recovery row is easier to detect + fix than a
+        // duplicate storm poisoning the analytics.
+        logger.warn('[bluefin-db-reconcile] dedupe probe failed, treating as duplicate to be safe', {
+          symbol, side, error: e instanceof Error ? e.message : String(e),
+        });
+        return true;
+      }
+    };
     for (const p of positions) {
       const pp = p as unknown as Record<string, unknown>;
       const symbol = String(pp.symbol || '').toUpperCase();
@@ -335,6 +370,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
         && String(h.side || '').toUpperCase() === side,
       );
       if (!matchedInDb && symbol && size > 0) {
+        // Second guard: does a recovery row for this exact (market, side)
+        // already exist within the dedupe window? If so, this is the
+        // orphan storm scenario — bail.
+        if (await recentRecoveryMatch(symbol, side)) {
+          logger.info('[bluefin-db-reconcile] skipping duplicate orphan recovery', {
+            symbol, side, size,
+            reason: `recovery row for this shape exists within ${RECOVERY_DEDUPE_HOURS}h window`,
+          });
+          continue;
+        }
         orphanBluefinPositions.push({ symbol, side, size });
         // Auto-recover: insert a reconstructed DB row with markPrice as the
         // entry estimate. Without this, the orphan sits forever and every
