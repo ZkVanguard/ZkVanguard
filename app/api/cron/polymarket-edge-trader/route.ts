@@ -57,6 +57,7 @@ import { errMsg } from '@/lib/utils/error-handler';
 import { computeEdgeStake } from '@/lib/services/trading/edge-sizing';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
+import { safeBluefinSnapshot } from '@/lib/services/sui/bluefin-read-safe';
 import {
   PredictionAggregatorService,
   type AggregatedPrediction,
@@ -651,10 +652,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // absolute floor is small relative to trade size). Small pools get
     // the relaxed 2×-stake requirement, which is the actual amount the
     // trader will spend + 1 stake of headroom for slippage.
-    const free = Number(await bf.getBalance().catch(() => 0)) || 0;
+    //
+    // Use safeBluefinSnapshot so a transient venue API blip (empty
+    // getBalance response) falls back to the last-good cache rather
+    // than freezing the trader for hours. `onChainHasExposure: true`
+    // means "if venue reports empty AND we have active hedges, prefer
+    // cache" — the trader is by definition operating on a chain where
+    // it opens hedges, so any hedge id it has ever created counts as
+    // exposure. Observed 2026-07-10: 9 consecutive empty BlueFin reads
+    // caused the trader to skip 45 minutes of a STRONG_HEDGE_LONG BTC
+    // signal at 83% confidence.
+    const bfSnap = await safeBluefinSnapshot({
+      network: (process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet',
+      onChainHasExposure: true,
+    });
+    const free = bfSnap.free;
+    if (bfSnap.source !== 'live') {
+      logger.info('[PolymarketEdge] Using cached BlueFin snapshot', {
+        source: bfSnap.source, ageMs: bfSnap.ageMs, free, warning: bfSnap.warning,
+      });
+    }
     const effectiveMinFree = Math.min(MIN_FREE_COLLATERAL_USD, BASE_STAKE_USD * 2);
     if (free < effectiveMinFree) {
-      const reason = `free=$${free.toFixed(2)} < effective-min=$${effectiveMinFree.toFixed(2)} (configured min=$${MIN_FREE_COLLATERAL_USD}, base-stake=$${BASE_STAKE_USD})`;
+      const reason = `free=$${free.toFixed(2)} < effective-min=$${effectiveMinFree.toFixed(2)} (configured min=$${MIN_FREE_COLLATERAL_USD}, base-stake=$${BASE_STAKE_USD}, bf-source=${bfSnap.source})`;
       await recordSkip('no-collateral', reason);
       return NextResponse.json({
         success: true,
