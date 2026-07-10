@@ -40,8 +40,8 @@ const ActiveHedges = nextDynamic(() => import('@/components/dashboard/ActiveHedg
 });
 
 // SUI-only mode: Cronos/EVM-bound widgets (SwapModal, ManualHedgeModal,
-// RecentTransactions, SettlementsPanel, ZKProofDemo, AdvancedPortfolioCreator)
-// are intentionally not imported. They can be restored when those chains
+// RecentTransactions, SettlementsPanel, AdvancedPortfolioCreator) are
+// intentionally not imported. They can be restored when those chains
 // are re-enabled in the UI.
 
 const PredictionInsights = nextDynamic(() => import('@/components/dashboard/PredictionInsights').then(mod => ({ default: mod.PredictionInsights })), {
