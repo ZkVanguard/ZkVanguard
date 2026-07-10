@@ -390,10 +390,14 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         <CollapsibleSection
           title="Members & Pool Info"
           icon={<Users className="w-4 h-4 text-yellow-500" />}
-          summary={`${pool.leaderboard?.length ?? 0} holders`}
+          summary={(() => {
+            const n = pool.poolData?.memberCount ?? pool.leaderboard?.length ?? 0;
+            return `${n.toLocaleString()} ${n === 1 ? 'member' : 'members'}`;
+          })()}
         >
           <Leaderboard
             entries={pool.leaderboard}
+            totalMembers={pool.poolData?.memberCount}
             poolTVL={pool.poolData?.totalValueUSD}
             chainId={typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111}
             selectedChain={pool.selectedChain}

@@ -44,9 +44,13 @@ const ASSET_GRADIENTS: Record<string, string> = {
 
 function formatUsd(n: number, decimals = 2): string {
   if (!Number.isFinite(n)) return '—';
-  if (Math.abs(n) >= 1000) {
-    return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  }
+  const abs = Math.abs(n);
+  // Compact suffixes above 10k so the stat cards stay readable at scale.
+  // ($3,214,857 in a card is a nightmare; $3.21M is fine.)
+  if (abs >= 1_000_000_000) return `${n < 0 ? '-' : ''}$${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000)     return `${n < 0 ? '-' : ''}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 10_000)        return `${n < 0 ? '-' : ''}$${(abs / 1_000).toFixed(1)}K`;
+  if (abs >= 1_000)         return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
   return '$' + n.toFixed(decimals);
 }
 
@@ -54,6 +58,16 @@ function formatPct(n: number, decimals = 2): string {
   if (!Number.isFinite(n)) return '—';
   const sign = n >= 0 ? '+' : '';
   return `${sign}${n.toFixed(decimals)}%`;
+}
+
+// Compact member/share formatter that also handles pluralisation.
+function formatCount(n: number, singular: string, plural: string): string {
+  if (!Number.isFinite(n) || n < 0) return `— ${plural}`;
+  const rounded = Math.floor(n);
+  if (rounded >= 1_000_000) return `${(rounded / 1_000_000).toFixed(1)}M ${plural}`;
+  if (rounded >= 10_000)    return `${(rounded / 1_000).toFixed(1)}K ${plural}`;
+  if (rounded >= 1_000)     return `${rounded.toLocaleString('en-US')} ${plural}`;
+  return `${rounded} ${rounded === 1 ? singular : plural}`;
 }
 
 export const SuiPoolLanding = memo(function SuiPoolLanding() {
@@ -92,7 +106,12 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
   }, []);
 
   const returnPct = pool ? ((pool.sharePrice - 1) / 1) * 100 : 0;
-  const profitUsd = pool ? pool.totalNAV - (pool.totalDeposited - pool.totalWithdrawn) : 0;
+  // Net capital = lifetime deposits − withdrawals. Unrealised gain compares
+  // current NAV to that basis. When nothing has been withdrawn this is
+  // paper gain, not realised — worded accordingly below.
+  const netCapital = pool ? pool.totalDeposited - pool.totalWithdrawn : 0;
+  const unrealisedGainUsd = pool ? pool.totalNAV - netCapital : 0;
+  const hasWithdrawals = pool ? pool.totalWithdrawn > 0 : false;
   const offAthPct = pool ? ((pool.sharePrice - pool.allTimeHighNav) / pool.allTimeHighNav) * 100 : 0;
 
   // Build allocation legend (positive entries only)
@@ -130,8 +149,8 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
                 Live on SUI Mainnet
               </span>
               <span className="w-px h-3 bg-separator-opaque/40" />
-              <span className="text-footnote font-semibold text-label-primary">
-                {pool?.memberCount ?? 0} members
+              <span className="text-footnote font-semibold text-label-primary tabular-nums">
+                {formatCount(pool?.memberCount ?? 0, 'member', 'members')}
               </span>
             </div>
           </div>
@@ -200,8 +219,8 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
             />
             <StatCard
               label="Members"
-              value={loading ? '—' : String(pool?.memberCount ?? 0)}
-              hint={loading ? '' : `${(pool?.totalShares ?? 0).toFixed(2)} shares issued`}
+              value={loading ? '—' : formatCount(pool?.memberCount ?? 0, 'member', 'members').split(' ')[0]}
+              hint={loading ? '' : `${formatCount(Number(pool?.totalShares ?? 0), 'share', 'shares')} issued`}
               loading={loading}
             />
           </div>
@@ -448,8 +467,17 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
           </h2>
           <p className="text-sm sm:text-callout md:text-[20px] text-label-secondary mb-6 sm:mb-8 leading-relaxed sm:leading-[1.5] px-1">
             Connect a SUI wallet, deposit any amount of USDC, and let the
-            AI work. Currently {pool?.memberCount ?? 0}{' '}
-            members{pool && pool.totalNAV > 0 ? ` sharing ${formatUsd(profitUsd)} in realised profit` : ''}.
+            AI work.{' '}
+            {pool ? (
+              <>
+                Currently {formatCount(pool.memberCount, 'member', 'members')}
+                {unrealisedGainUsd > 0
+                  ? ` sharing ${formatUsd(unrealisedGainUsd)} in ${hasWithdrawals ? 'total' : 'unrealised'} gains`
+                  : ''}.
+              </>
+            ) : (
+              <>Live on SUI Mainnet.</>
+            )}
           </p>
           <Link
             href="/dashboard"

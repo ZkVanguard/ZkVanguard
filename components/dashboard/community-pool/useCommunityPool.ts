@@ -360,7 +360,7 @@ export function useCommunityPool(propAddress?: string) {
                 valueUSD: Number(m.valueUsd) || undefined,
               }))
               .sort((a: { shares: number }, b: { shares: number }) => b.shares - a.shares)
-              .slice(0, 5);
+              .slice(0, 10);
             dispatchPool({ type: 'SET_LEADERBOARD', payload: entries });
           })
           .catch(err => logger.warn('[CommunityPool] SUI members fetch warning:', err));

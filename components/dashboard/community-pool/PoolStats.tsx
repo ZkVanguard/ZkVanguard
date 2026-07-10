@@ -99,8 +99,8 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
           </div>
         )}
         <div className="text-center min-w-0">
-          <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums">{poolData.memberCount}</p>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Members</p>
+          <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums">{Number(poolData.memberCount).toLocaleString()}</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">{poolData.memberCount === 1 ? 'Member' : 'Members'}</p>
         </div>
         {(!isSui || !profit) && (
           <div className="text-center min-w-0">
@@ -138,8 +138,8 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
           </div>
         )}
         <div className="text-center min-w-0">
-          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{poolData.memberCount}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Pool Members</p>
+          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{Number(poolData.memberCount).toLocaleString()}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">{poolData.memberCount === 1 ? 'Pool Member' : 'Pool Members'}</p>
         </div>
         <div className="text-center min-w-0">
           <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>

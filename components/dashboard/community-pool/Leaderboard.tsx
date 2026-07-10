@@ -7,6 +7,9 @@ import { formatPercent } from './utils';
 
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
+  /** Total member count (may exceed `entries.length` if the leaderboard is
+   *  truncated to top N). Falls back to `entries.length` when omitted. */
+  totalMembers?: number;
   proxyWallet?: string;
   poolTVL?: number;
   chainId?: number;
@@ -57,7 +60,12 @@ async function deriveTreasuryProxyClient(): Promise<string> {
   return '0x' + hashHex.slice(-40);
 }
 
-export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poolTVL, chainId = 11155111, selectedChain, chainConfig }: LeaderboardProps) {
+export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, proxyWallet, poolTVL, chainId = 11155111, selectedChain, chainConfig }: LeaderboardProps) {
+  // Effective total — prop wins, but fall back to entries.length so the
+  // "top N of M" chip is always sane even if the caller didn't wire it.
+  const memberTotal = Math.max(totalMembers ?? 0, entries.length);
+  const showingCount = entries.length;
+  const isTruncated = memberTotal > showingCount;
   const [showProof, setShowProof] = useState(false);
   const [treasuryProxy, setTreasuryProxy] = useState<string>('');
   const isSui = selectedChain === 'sui' || chainConfig?.chainType === 'sui';
@@ -169,9 +177,14 @@ export const Leaderboard = memo(function Leaderboard({ entries, proxyWallet, poo
       {/* Shareholders Leaderboard */}
       {entries.length > 0 && (
         <>
-          <h3 className="pool-inner-heading font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2 text-sm sm:text-base">
+          <h3 className="pool-inner-heading font-semibold text-gray-900 dark:text-white flex items-center gap-2 flex-wrap mb-2 text-sm sm:text-base">
             <Award className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-            Top Shareholders
+            <span>Top Shareholders</span>
+            {isTruncated && (
+              <span className="text-[10px] sm:text-[11px] font-normal text-gray-500 dark:text-gray-400 tabular-nums">
+                showing {showingCount} of {memberTotal.toLocaleString()}
+              </span>
+            )}
           </h3>
           <p className="pool-inner-subheading text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
             All deposits are routed through the single treasury proxy. Real addresses are never disclosed.
