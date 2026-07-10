@@ -9,8 +9,75 @@
  * Pure relocation; no behavior change. The navUsd / sharePriceUsd / safety-
  * ceiling computation stays in the route because later steps depend on it.
  */
-import { recordNavSnapshot, saveUserSharesToDb, savePoolStateToDb } from '@/lib/db/community-pool';
+import { recordNavSnapshot, saveUserSharesToDb, savePoolStateToDb, getNavHistory } from '@/lib/db/community-pool';
 import { logger } from '@/lib/utils/logger';
+
+// Maximum allowed NAV move between two consecutive 30-min cron ticks. A
+// stable USDC-heavy pool cannot legitimately swing more than ~2% per tick;
+// observed jitter has been 4–6% (BlueFin uPnL/collateral read racing). We
+// clamp at 3.5% — permissive enough for real market moves in a single
+// tick, tight enough to absorb the oscillation.
+const MAX_NAV_STEP_PCT = 3.5;
+// Median window for outlier detection. Odd number so the median is a
+// single sample. 3 gives us "typical of the last 90 min".
+const MEDIAN_WINDOW = 3;
+
+/**
+ * Compute a stabilized NAV and share price from the raw cron reading.
+ *
+ * Rejects clearly-jittery snapshots by clamping the write to `±
+ * MAX_NAV_STEP_PCT` of the trailing median. Real market moves eventually
+ * catch up over multiple ticks; jitter is absorbed without publishing a
+ * false spike. Returns `{ ok, publishedNav, publishedShare, diagnostics }`
+ * so the caller can log both the raw and clamped values.
+ *
+ * If DB history is unavailable (fresh pool / degraded connection), passes
+ * the raw value through unchanged with `stabilized: false`.
+ */
+async function stabilizeNav(
+  rawNavUsd: number,
+  totalShares: number,
+  chain: string,
+): Promise<{
+  publishedNav: number;
+  publishedSharePrice: number;
+  stabilized: boolean;
+  clampedFromRaw: number;
+  median: number | null;
+}> {
+  const shares = Math.max(totalShares, 1e-9);
+  try {
+    // Fetch enough history to compute a rolling median. Order ascending
+    // then take the last MEDIAN_WINDOW.
+    const hist = await getNavHistory(1, chain); // last 24h
+    const recent = hist.slice(-MEDIAN_WINDOW).map(s => Number(s.total_nav)).filter(Number.isFinite);
+    if (recent.length === 0) {
+      return { publishedNav: rawNavUsd, publishedSharePrice: rawNavUsd / shares, stabilized: false, clampedFromRaw: 0, median: null };
+    }
+    const sorted = [...recent].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const deltaPct = median > 0 ? ((rawNavUsd - median) / median) * 100 : 0;
+    if (Math.abs(deltaPct) <= MAX_NAV_STEP_PCT) {
+      // Within band; publish raw.
+      return { publishedNav: rawNavUsd, publishedSharePrice: rawNavUsd / shares, stabilized: false, clampedFromRaw: 0, median };
+    }
+    // Out of band: clamp to median ± MAX_NAV_STEP_PCT.
+    const capped = deltaPct > 0
+      ? median * (1 + MAX_NAV_STEP_PCT / 100)
+      : median * (1 - MAX_NAV_STEP_PCT / 100);
+    return {
+      publishedNav: capped,
+      publishedSharePrice: capped / shares,
+      stabilized: true,
+      clampedFromRaw: rawNavUsd - capped,
+      median,
+    };
+  } catch (err) {
+    // Never let stabilization *cause* an outage — pass raw through.
+    logger.warn('[SUI Cron] NAV stabilizer failed, passing raw through', { error: err });
+    return { publishedNav: rawNavUsd, publishedSharePrice: rawNavUsd / shares, stabilized: false, clampedFromRaw: 0, median: null };
+  }
+}
 
 const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
 
@@ -41,16 +108,40 @@ export async function recordPoolNavSnapshot(args: {
 }): Promise<void> {
   const { sharePriceUsd, navUsd, poolStats, allocations } = args;
   try {
+    const rawNav = navUsd || poolStats.totalNAV;
+    const rawSharePrice = sharePriceUsd || poolStats.sharePrice;
+
+    // Step-clamp against the trailing median. Rejects the 4–6% "jitter"
+    // spikes we've observed from racing BlueFin uPnL reads without
+    // affecting real market moves (which catch up over multiple ticks).
+    const stab = await stabilizeNav(rawNav, poolStats.totalShares, 'sui');
+    const finalNav = stab.publishedNav;
+    const finalSharePrice = stab.publishedSharePrice || rawSharePrice;
+
+    if (stab.stabilized) {
+      logger.warn('[SUI Cron] NAV clamped by stabilizer', {
+        raw: rawNav.toFixed(4),
+        published: finalNav.toFixed(4),
+        clampedDelta: stab.clampedFromRaw.toFixed(4),
+        median: stab.median?.toFixed(4),
+        deltaPct: (((rawNav - (stab.median || rawNav)) / (stab.median || rawNav)) * 100).toFixed(2) + '%',
+      });
+    }
+
     await recordNavSnapshot({
-      sharePrice: sharePriceUsd || poolStats.sharePrice,
-      totalNav: navUsd || poolStats.totalNAV,
+      sharePrice: finalSharePrice,
+      totalNav: finalNav,
       totalShares: poolStats.totalShares,
       memberCount: poolStats.memberCount,
       allocations,
-      source: 'sui-usdc-pool',
+      source: stab.stabilized ? 'sui-usdc-pool:clamped' : 'sui-usdc-pool',
       chain: 'sui',
     });
-    logger.info('[SUI Cron] NAV snapshot recorded');
+    logger.info('[SUI Cron] NAV snapshot recorded', {
+      nav: finalNav.toFixed(4),
+      sharePrice: finalSharePrice.toFixed(6),
+      stabilized: stab.stabilized,
+    });
   } catch (navErr) {
     logger.warn('[SUI Cron] Failed to record NAV (non-critical)', { error: navErr });
   }
