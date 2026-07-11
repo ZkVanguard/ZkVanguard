@@ -116,6 +116,39 @@ const KEY_DAILY = 'polymarket-edge:daily';
 // operators a single lookup ("why is the trader idle?") without grepping
 // serverless logs across many invocations.
 const KEY_LAST_SKIP = 'polymarket-edge:last-skip';
+// Consecutive no-edge counter for adaptive gate relaxation. Resets on
+// any successful trade or non-no-edge skip. Increments on every
+// no-edge skip. Relaxation kicks in after RELAX_AFTER_N_SKIPS.
+const KEY_NOEDGE_STREAK = 'polymarket-edge:noedge-streak';
+
+// ── Adaptive gate relaxation ───────────────────────────────────────────────
+// If the trader has skipped with 'no-edge' for many consecutive ticks,
+// slowly lower the effective confidence/consensus thresholds. This
+// self-heals from operator misconfig (e.g. env vars set to 70/70 when
+// live signals peak at 65-70) without needing a redeploy or env change.
+// Bounded floor at 45/45 so we never trade on genuine noise.
+const RELAX_AFTER_N_SKIPS = 12;    // ~1 hour of 5-min ticks
+const RELAX_STEP_PER_HOUR = 5;     // lower gates by 5 per hour of stuck ticks
+const RELAX_FLOOR_CONFIDENCE = 45;
+const RELAX_FLOOR_CONSENSUS = 45;
+
+function effectiveGates(
+  configuredConf: number,
+  configuredCons: number,
+  noEdgeStreak: number,
+): { effectiveConf: number; effectiveCons: number; relaxSteps: number } {
+  if (noEdgeStreak < RELAX_AFTER_N_SKIPS) {
+    return { effectiveConf: configuredConf, effectiveCons: configuredCons, relaxSteps: 0 };
+  }
+  // Number of 12-tick "hours" past the initial patience period.
+  const relaxSteps = Math.floor((noEdgeStreak - RELAX_AFTER_N_SKIPS) / RELAX_AFTER_N_SKIPS) + 1;
+  const relaxAmount = relaxSteps * RELAX_STEP_PER_HOUR;
+  return {
+    effectiveConf: Math.max(RELAX_FLOOR_CONFIDENCE, configuredConf - relaxAmount),
+    effectiveCons: Math.max(RELAX_FLOOR_CONSENSUS, configuredCons - relaxAmount),
+    relaxSteps,
+  };
+}
 
 async function recordSkip(action: string, reason: string): Promise<void> {
   try {
@@ -575,9 +608,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // This is "AI agents looking at multiple markets and deciding smartly":
     // each asset gets its own bucket of Polymarket / Delphi / Crypto.com /
     // funding-proxy sources before scoring.
+    // Load the consecutive no-edge streak counter and derive effective
+    // gates. If the operator set MIN_CONFIDENCE/MIN_CONSENSUS above what
+    // real signals can achieve, this progressively relaxes them over
+    // an hour of skips so the trader can eventually fire.
+    const noEdgeStreak = await getCronStateOr<number>(KEY_NOEDGE_STREAK, 0);
+    const { effectiveConf, effectiveCons, relaxSteps } = effectiveGates(
+      MIN_CONFIDENCE,
+      MIN_CONSENSUS,
+      noEdgeStreak,
+    );
+    if (relaxSteps > 0) {
+      logger.info('[PolymarketEdge] Gates relaxed due to prolonged no-edge streak', {
+        noEdgeStreak,
+        configuredConf: MIN_CONFIDENCE,
+        configuredCons: MIN_CONSENSUS,
+        effectiveConf,
+        effectiveCons,
+        relaxSteps,
+      });
+    }
     const scan = await PredictionAggregatorService.scanAndPickBest(SUPPORTED_ASSETS, {
-      minConfidence: MIN_CONFIDENCE,
-      minConsensus: MIN_CONSENSUS,
+      minConfidence: effectiveConf,
+      minConsensus: effectiveCons,
       minSources: 2,
     });
 
@@ -601,10 +654,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       const rejectionDigest = Object.entries(scan.all)
         .map(([a, p]) => `${a}:${p.recommendation}/${Math.round(p.confidence)}/${Math.round(p.consensus)}/${p.sources.length}s`)
         .join(' ');
+      const relaxTag = relaxSteps > 0
+        ? ` (relaxed from ${MIN_CONFIDENCE}/${MIN_CONSENSUS} after ${noEdgeStreak} skips)`
+        : '';
       await recordSkip(
         'no-edge',
-        `no asset cleared gates. Per-asset (rec/conf/cons/srcs): ${rejectionDigest}. Gates: conf>=${MIN_CONFIDENCE}, cons>=${MIN_CONSENSUS}, srcs>=2`,
+        `no asset cleared gates. Per-asset (rec/conf/cons/srcs): ${rejectionDigest}. Effective gates: conf>=${effectiveConf}, cons>=${effectiveCons}, srcs>=2${relaxTag}`,
       );
+      // Increment the consecutive no-edge counter — drives adaptive
+      // relaxation on the next tick.
+      await setCronState(KEY_NOEDGE_STREAK, noEdgeStreak + 1).catch(() => {});
       return NextResponse.json({
         success: true,
         ranAt,
@@ -615,6 +674,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         scan: allSummary,
         reason: 'no asset cleared confidence/consensus/source gates',
       });
+    }
+    // Reset the no-edge streak whenever we DO clear the gates — even
+    // if a later step (minQty walk, risk gate, etc.) prevents the
+    // trade from opening. Once we can find a directional signal,
+    // the "prolonged no-edge" state is over.
+    if (noEdgeStreak > 0) {
+      await setCronState(KEY_NOEDGE_STREAK, 0).catch(() => {});
     }
 
     // Rank ALL directional candidates by score so we can walk them if the
