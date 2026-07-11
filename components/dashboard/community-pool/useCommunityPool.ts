@@ -337,6 +337,27 @@ export function useCommunityPool(propAddress?: string) {
         // is enrichment, not critical path.
         dispatchPool({ type: 'SET_LOADING', payload: false });
 
+        // Override the on-chain ATH with the DB-verified peak.
+        // Why: Move's all_time_high_nav_per_share is a monotonic
+        // ratchet — once set high, it can never come down. A jittery
+        // NAV read pre-stabilizer (12h ago) baked a phantom peak of
+        // $2.32 into on-chain state even though the DB never persisted
+        // any share_price above $1.97. That phantom makes every
+        // "off ATH" display look 12+ percentage points worse than
+        // reality. Volatility endpoint returns the true verified peak
+        // computed from non-clamped DB snapshots. Non-blocking so a
+        // slow lookup can't stall the rest of the UI.
+        fetch(`/api/sui/community-pool?action=volatility&network=${suiNetwork}`)
+          .then(res => res.json())
+          .then(volJson => {
+            if (!mountedRef.current) return;
+            const verifiedAthSp = Number(volJson?.data?.verifiedAth?.sharePrice) || 0;
+            if (verifiedAthSp > 0) {
+              dispatchPool({ type: 'PATCH_POOL_DATA', payload: { allTimeHighNav: verifiedAthSp } });
+            }
+          })
+          .catch(err => logger.warn('[CommunityPool] SUI verified-ATH fetch warning:', err));
+
         // Fetch SUI members and map to the shared LeaderboardEntry shape.
         // Was previously hardcoded to []; the members action is served by
         // /api/sui/community-pool (not the EVM /api/community-pool route,

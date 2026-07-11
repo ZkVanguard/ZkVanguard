@@ -18,6 +18,7 @@ import type {
 export type PoolAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_POOL_DATA'; payload: PoolSummary | null }
+  | { type: 'PATCH_POOL_DATA'; payload: Partial<PoolSummary> }
   | { type: 'SET_USER_POSITION'; payload: UserPosition | null }
   | { type: 'SET_AI_RECOMMENDATION'; payload: AIRecommendation | null }
   | { type: 'SET_LEADERBOARD'; payload: LeaderboardEntry[] }
@@ -69,6 +70,13 @@ export function poolReducer(state: CommunityPoolState, action: PoolAction): Comm
       return { ...state, loading: action.payload };
     case 'SET_POOL_DATA':
       return { ...state, poolData: action.payload };
+    case 'PATCH_POOL_DATA':
+      // Merge partial fields into the existing poolData without wiping
+      // it — used to overlay the DB-verified ATH on top of the on-chain
+      // phantom without racing the initial pool fetch.
+      return state.poolData
+        ? { ...state, poolData: { ...state.poolData, ...action.payload } }
+        : state;
     case 'SET_USER_POSITION':
       return { ...state, userPosition: action.payload };
     case 'SET_AI_RECOMMENDATION':

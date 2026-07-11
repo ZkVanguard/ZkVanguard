@@ -82,10 +82,30 @@ export const SuiPoolLanding = memo(function SuiPoolLanding() {
         const j = await r.json();
         if (!cancelled && j?.success && j?.data) {
           const d = j.data;
+          // Overlay DB-verified ATH on top of the on-chain phantom.
+          // See useCommunityPool.ts for the full rationale: Move's ATH
+          // is a monotonic ratchet, so a single pre-stabilizer jitter
+          // spike locked in a peak that never actually persisted. The
+          // volatility endpoint returns the honest ATH computed from
+          // non-clamped DB snapshots. If it's higher-than-zero AND
+          // lower-than-on-chain (i.e. the on-chain value is inflated),
+          // use it. Otherwise trust the on-chain value.
+          const onChainAth = Number(d.allTimeHighNav ?? 1);
+          let honestAth = onChainAth;
+          try {
+            const vr = await fetch('/api/sui/community-pool?action=volatility&network=mainnet');
+            const vj = await vr.json();
+            const verifiedAth = Number(vj?.data?.verifiedAth?.sharePrice ?? 0);
+            if (verifiedAth > 0 && verifiedAth < onChainAth) {
+              honestAth = verifiedAth;
+            }
+          } catch {
+            /* non-critical — fall back to on-chain value */
+          }
           setPool({
             totalNAV: Number(d.totalNAV ?? 0),
             sharePrice: Number(d.sharePrice ?? 1),
-            allTimeHighNav: Number(d.allTimeHighNav ?? 1),
+            allTimeHighNav: honestAth,
             totalDeposited: Number(d.totalDeposited ?? 0),
             totalWithdrawn: Number(d.totalWithdrawn ?? 0),
             memberCount: Number(d.memberCount ?? 0),

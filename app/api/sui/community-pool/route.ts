@@ -611,7 +611,7 @@ export async function GET(request: NextRequest) {
     if (action === 'volatility') {
       try {
         const { query } = await import('@/lib/db/postgres');
-        const [rangeRes, backRes, latestRes] = await Promise.all([
+        const [rangeRes, backRes, latestRes, verifiedAthRes] = await Promise.all([
           query<{ min_sp: string; max_sp: string; min_nav: string; max_nav: string }>(
             `SELECT MIN(share_price)::text min_sp, MAX(share_price)::text max_sp,
                     MIN(total_nav)::text min_nav, MAX(total_nav)::text max_nav
@@ -630,10 +630,28 @@ export async function GET(request: NextRequest) {
              WHERE chain = 'sui'
              ORDER BY timestamp DESC LIMIT 1`,
           ),
+          // Verified ATH — computed from the honest DB record instead of
+          // the on-chain all_time_high_nav_per_share which is a
+          // monotonically-ratcheting counter. If a jittery NAV snapshot
+          // ever spiked (as happened pre-stabilizer), the on-chain ATH
+          // baked that phantom permanently. The DB record is what
+          // actually persisted, so it's the honest peak. Only trust
+          // snapshots the write-time stabilizer approved (source not
+          // ending in ':clamped') so we don't reintroduce the same
+          // phantom via the DB either.
+          query<{ share_price: string; total_nav: string; timestamp: Date }>(
+            `SELECT share_price::text, total_nav::text, timestamp
+             FROM community_pool_nav_history
+             WHERE chain = 'sui'
+               AND (source IS NULL OR source NOT LIKE '%:clamped')
+             ORDER BY share_price DESC
+             LIMIT 1`,
+          ),
         ]);
         const range = rangeRes[0];
         const back = backRes[0];
         const latest = latestRes[0];
+        const verifiedAth = verifiedAthRes[0];
         return cachedJsonResponse({
           success: true,
           data: {
@@ -652,6 +670,11 @@ export async function GET(request: NextRequest) {
               sharePrice: Number(latest.share_price) || 0,
               nav: Number(latest.total_nav) || 0,
               at: latest.timestamp,
+            } : null,
+            verifiedAth: verifiedAth ? {
+              sharePrice: Number(verifiedAth.share_price) || 0,
+              nav: Number(verifiedAth.total_nav) || 0,
+              at: verifiedAth.timestamp,
             } : null,
           },
           chain: 'sui',
