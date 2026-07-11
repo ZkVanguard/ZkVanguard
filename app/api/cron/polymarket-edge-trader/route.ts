@@ -617,15 +617,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // gates. If the operator set MIN_CONFIDENCE/MIN_CONSENSUS above what
     // real signals can achieve, this progressively relaxes them over
     // an hour of skips so the trader can eventually fire.
-    const noEdgeStreak = await getCronStateOr<number>(KEY_NOEDGE_STREAK, 0);
+    //
+    // Increment the streak IMMEDIATELY and unconditionally so downstream
+    // early-returns (halt, daily-cap, no-collateral, scan errors, risk
+    // gate blocks, thrown exceptions caught by outer catch) cannot
+    // collapse the accumulator. Only a successful open (setCronState
+    // KEY_ACTIVE around line 1070) resets it. Observed 2026-07-11 21:35+:
+    // streak froze at 4 across 5 ticks because something between the
+    // read and the increment was returning early — that pattern is
+    // impossible with pre-increment.
+    const priorNoEdgeStreak = await getCronStateOr<number>(KEY_NOEDGE_STREAK, 0);
+    const noEdgeStreak = priorNoEdgeStreak + 1;
+    await setCronState(KEY_NOEDGE_STREAK, noEdgeStreak).catch(() => {});
     const { effectiveConf, effectiveCons, relaxSteps } = effectiveGates(
       MIN_CONFIDENCE,
       MIN_CONSENSUS,
-      noEdgeStreak,
+      priorNoEdgeStreak,   // Use the value the previous tick set — this
+                            // tick's increment is a "fingerprint" for future
+                            // ticks. Prevents off-by-one where a fresh tick
+                            // would see its own increment.
     );
     if (relaxSteps > 0) {
       logger.info('[PolymarketEdge] Gates relaxed due to prolonged no-edge streak', {
-        noEdgeStreak,
+        priorNoEdgeStreak,
         configuredConf: MIN_CONFIDENCE,
         configuredCons: MIN_CONSENSUS,
         effectiveConf,
@@ -666,9 +680,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         'no-edge',
         `no asset cleared gates. Per-asset (rec/conf/cons/srcs): ${rejectionDigest}. Effective gates: conf>=${effectiveConf}, cons>=${effectiveCons}, srcs>=2${relaxTag}`,
       );
-      // Increment the consecutive no-edge counter — drives adaptive
-      // relaxation on the next tick.
-      await setCronState(KEY_NOEDGE_STREAK, noEdgeStreak + 1).catch(() => {});
+      // Note: streak was already incremented at the top of the tick
+      // (pre-increment pattern) so downstream early-returns can't
+      // collapse the accumulator.
       return NextResponse.json({
         success: true,
         ranAt,
@@ -1072,9 +1086,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // back to the operator's configured MIN_CONFIDENCE / MIN_CONSENSUS.
     // Only reset here (not on scan.best truthy) so a signal that
     // exists but can't be traded doesn't collapse the accumulator.
-    if (noEdgeStreak > 0) {
-      await setCronState(KEY_NOEDGE_STREAK, 0).catch(() => {});
-    }
+    // The pre-increment at tick top has already bumped by 1 above; the
+    // reset overwrites that with 0 so a successful trade wipes the
+    // relaxation state cleanly.
+    await setCronState(KEY_NOEDGE_STREAK, 0).catch(() => {});
 
     logger.info('[PolymarketEdge] Opened trade', {
       asset,
