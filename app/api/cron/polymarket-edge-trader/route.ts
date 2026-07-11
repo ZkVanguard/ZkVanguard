@@ -609,12 +609,24 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const prediction = scan.best.prediction;
-    const sourceNames = prediction.sources.map((s) => s.name.split(':')[0].trim());
+    // Rank ALL directional candidates by score so we can walk them if the
+    // top pick fails the minQty affordability check further down. Without
+    // this walk, the trader silently no-ops for weeks whenever BTC (usual
+    // top pick) can't clear minQty on a small pool — even though ETH or
+    // SUI with much smaller minQty would trade the same signal.
+    const rankedCandidates = Object.entries(scan.all)
+      .map(([a, p]) => ({
+        asset: a as SupportedAsset,
+        prediction: p,
+        score: PredictionAggregatorService.scoreOpportunity(p),
+        side: recommendationToSide(p.recommendation),
+      }))
+      .filter((c) => c.side !== null && Number.isFinite(c.score))
+      .sort((a, b) => b.score - a.score);
 
-    const side = recommendationToSide(prediction.recommendation);
-    if (!side) {
-      await recordSkip('no-edge', 'recommendation is WAIT');
+    if (rankedCandidates.length === 0) {
+      const bestPrediction = scan.best.prediction;
+      await recordSkip('no-edge', 'no directional recommendation across universe');
       return NextResponse.json({
         success: true,
         ranAt,
@@ -624,19 +636,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         daily,
         scan: allSummary,
         prediction: {
-          direction: prediction.direction,
-          recommendation: prediction.recommendation,
-          confidence: prediction.confidence,
-          consensus: prediction.consensus,
-          probability: prediction.probability,
-          sourceNames,
+          direction: bestPrediction.direction,
+          recommendation: bestPrediction.recommendation,
+          confidence: bestPrediction.confidence,
+          consensus: bestPrediction.consensus,
+          probability: bestPrediction.probability,
+          sourceNames: bestPrediction.sources.map((s) => s.name.split(':')[0].trim()),
         },
-        reason: 'recommendation is WAIT',
+        reason: 'all candidates are WAIT / no directional recommendation',
       });
     }
 
-    const asset = scan.best.asset as SupportedAsset;
-    const symbol = `${asset}-PERP`;
+    // Provisionally use the top-ranked candidate; the minQty affordability
+    // walk below may downgrade to a lower-scored candidate when the top
+    // pick is too expensive for the pool.
+    let asset = rankedCandidates[0].asset;
+    let prediction = rankedCandidates[0].prediction;
+    let side = rankedCandidates[0].side!;
+    let symbol = `${asset}-PERP`;
+    let sourceNames = prediction.sources.map((s) => s.name.split(':')[0].trim());
 
     // Free collateral & sizing.
     //
@@ -687,75 +705,97 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    // Compounding × aggregator's sizeMultiplier (see lib/services/trading/edge-sizing.ts)
-    const { compoundMul, stakeUsd } = computeEdgeStake({
-      baseStakeUsd: BASE_STAKE_USD,
-      totalPnlUsd: safeStats.totalPnlUsd,
-      sizeMultiplier: prediction.sizeMultiplier,
-      freeCollateral: free,
-      stakePctOfFree: STAKE_PCT_OF_FREE,
-      maxStakeUsd: MAX_STAKE_USD,
-    });
-
-    // Reference price for sizing.
-    const md = await bf.getMarketData(symbol).catch(() => null);
-    const refPrice = Number(md?.price) || 0;
-    if (!refPrice) {
-      return NextResponse.json({
-        success: false,
-        ranAt,
-        attempted: true,
-        stats: safeStats,
-        daily,
-        error: `Could not read ${symbol} mark price`,
-      });
-    }
-
-    // ── MIN-QTY-AWARE STAKE SIZING ──────────────────────────────────
-    // The trader was making ZERO trades in 30 days despite live signals
-    // because the base $5 stake × 3x lev / asset_price produced a
-    // sub-minQty quantity that snapped to 0. Root cause: stake calc
-    // didn't account for BlueFin's per-symbol minQty. Fix: auto-bump
-    // stake to clear minQty × price × buffer / leverage. If required
-    // stake exceeds MAX_STAKE_PCT_OF_FREE, skip this asset — pool NAV
-    // is too small to hedge it responsibly.
+    // ── MIN-QTY-AWARE CANDIDATE WALK ────────────────────────────────
+    // Fetch reference prices for every ranked candidate in parallel so
+    // we can rank affordability without adding round-trips. Then walk
+    // candidates highest-score first and pick the first one whose
+    // minQty stake fits inside MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY of
+    // the pool's free collateral.
     const OPEN_BUFFER = 1.5;             // matches BluefinService dust guard
     const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = 0.7; // hard cap: don't spend >70% of free collateral clearing minQty
-    const actualMinQty = ASSET_STEP[asset]; // ASSET_STEP already stores minQty
-    const minNotionalToClearFloor = actualMinQty * refPrice * OPEN_BUFFER;
-    const minStakeToClearFloor = minNotionalToClearFloor / LEVERAGE;
 
-    let effectiveStake = stakeUsd;
-    if (stakeUsd < minStakeToClearFloor) {
-      const requiredStakePct = minStakeToClearFloor / free;
+    const priceFetches = await Promise.all(
+      rankedCandidates.map(async (c) => {
+        const md = await bf.getMarketData(`${c.asset}-PERP`).catch(() => null);
+        return { asset: c.asset, refPrice: Number(md?.price) || 0 };
+      }),
+    );
+    const priceMap = new Map(priceFetches.map((p) => [p.asset, p.refPrice]));
+
+    let compoundMul = 1;
+    let stakeUsd = BASE_STAKE_USD;
+    let effectiveStake = BASE_STAKE_USD;
+    let refPrice = 0;
+    let picked: (typeof rankedCandidates)[number] | null = null;
+    const rejectedForMinQty: string[] = [];
+
+    for (const c of rankedCandidates) {
+      const rp = priceMap.get(c.asset) || 0;
+      if (rp <= 0) {
+        rejectedForMinQty.push(`${c.asset}: no mark price`);
+        continue;
+      }
+      const cStake = computeEdgeStake({
+        baseStakeUsd: BASE_STAKE_USD,
+        totalPnlUsd: safeStats.totalPnlUsd,
+        sizeMultiplier: c.prediction.sizeMultiplier,
+        freeCollateral: free,
+        stakePctOfFree: STAKE_PCT_OF_FREE,
+        maxStakeUsd: MAX_STAKE_USD,
+      });
+      const actualMinQty = ASSET_STEP[c.asset];
+      const minNotionalToClearFloor = actualMinQty * rp * OPEN_BUFFER;
+      const minStakeToClearFloor = minNotionalToClearFloor / LEVERAGE;
+      const requiredStakeUsd = Math.max(cStake.stakeUsd, minStakeToClearFloor);
+      const requiredStakePct = requiredStakeUsd / free;
       if (requiredStakePct > MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY) {
-        logger.warn('[PolymarketEdge] skipping asset — required stake exceeds safe pct of free', {
-          asset, symbol,
-          computedStake: stakeUsd,
-          minStakeToClearFloor,
-          freeCollateral: free,
-          requiredPct: (requiredStakePct * 100).toFixed(1),
-          maxPct: MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100,
-        });
-        const skipReason = `${asset}: needs $${minStakeToClearFloor.toFixed(2)} stake to clear minQty ($${(minStakeToClearFloor * LEVERAGE).toFixed(2)} notional at ${LEVERAGE}x); would be ${(requiredStakePct * 100).toFixed(1)}% of free $${free.toFixed(2)} (max ${MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY * 100}%). Pool NAV too small for ${asset}.`;
-        await recordSkip('skip-asset-too-small-nav', skipReason);
-        return NextResponse.json({
-          success: true,
-          ranAt,
-          attempted: true,
-          action: 'skip-asset-too-small-nav',
-          stats: safeStats,
-          daily,
-          reason: skipReason,
+        rejectedForMinQty.push(
+          `${c.asset}: needs $${requiredStakeUsd.toFixed(2)} stake (${(requiredStakePct * 100).toFixed(1)}% of free)`,
+        );
+        continue;
+      }
+      // Found an affordable candidate — pin it and break.
+      picked = c;
+      asset = c.asset;
+      prediction = c.prediction;
+      side = c.side!;
+      symbol = `${asset}-PERP`;
+      sourceNames = prediction.sources.map((s) => s.name.split(':')[0].trim());
+      compoundMul = cStake.compoundMul;
+      stakeUsd = cStake.stakeUsd;
+      effectiveStake = requiredStakeUsd;
+      refPrice = rp;
+      if (requiredStakeUsd > cStake.stakeUsd) {
+        logger.info('[PolymarketEdge] auto-bumping stake to clear minQty', {
+          asset, originalStake: cStake.stakeUsd.toFixed(2),
+          bumpedStake: requiredStakeUsd.toFixed(2),
+          originalPct: (cStake.stakeUsd / free * 100).toFixed(1),
+          bumpedPct: (requiredStakeUsd / free * 100).toFixed(1),
         });
       }
-      logger.info('[PolymarketEdge] auto-bumping stake to clear minQty', {
-        asset, originalStake: stakeUsd.toFixed(2),
-        bumpedStake: minStakeToClearFloor.toFixed(2),
-        originalPct: (stakeUsd / free * 100).toFixed(1),
-        bumpedPct: (minStakeToClearFloor / free * 100).toFixed(1),
+      if (c !== rankedCandidates[0]) {
+        logger.info('[PolymarketEdge] fell back from top-ranked candidate', {
+          topRanked: rankedCandidates[0].asset,
+          picked: c.asset,
+          reason: 'top-ranked failed minQty affordability check',
+          rejected: rejectedForMinQty,
+        });
+      }
+      break;
+    }
+
+    if (!picked) {
+      const skipReason = `all candidates fail minQty check on free=$${free.toFixed(2)}. Rejects: ${rejectedForMinQty.join('; ')}`;
+      await recordSkip('skip-asset-too-small-nav', skipReason);
+      return NextResponse.json({
+        success: true,
+        ranAt,
+        attempted: true,
+        action: 'skip-asset-too-small-nav',
+        stats: safeStats,
+        daily,
+        reason: skipReason,
       });
-      effectiveStake = minStakeToClearFloor;
     }
 
     const notionalUsd = effectiveStake * LEVERAGE;
