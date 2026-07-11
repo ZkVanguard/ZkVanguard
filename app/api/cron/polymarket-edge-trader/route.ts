@@ -680,13 +680,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         reason: 'no asset cleared confidence/consensus/source gates',
       });
     }
-    // Reset the no-edge streak whenever we DO clear the gates — even
-    // if a later step (minQty walk, risk gate, etc.) prevents the
-    // trade from opening. Once we can find a directional signal,
-    // the "prolonged no-edge" state is over.
-    if (noEdgeStreak > 0) {
-      await setCronState(KEY_NOEDGE_STREAK, 0).catch(() => {});
-    }
+    // Note: the no-edge streak is NOT reset here even though scan.best
+    // is truthy. Original design reset it "when a directional signal
+    // exists", but that turned out to be too eager: any single tick
+    // where signals barely cleared the (already-relaxed) gates but
+    // downstream checks (minQty walk / risk gate / no affordable
+    // asset) blocked the trade would reset the counter and force us
+    // to accumulate again. Observed on 2026-07-11: streak hit 4 at
+    // 21:00 (gates 63/63), one intermediate tick had scan.best truthy
+    // but nothing affordable, reset to 0, then next observed tick was
+    // back at streak=1 with gates=70/70. So the relaxation never
+    // stayed. Reset only when a trade actually opens (see the
+    // post-open reset near the successful-open Discord notify).
 
     // Rank ALL directional candidates by score so we can walk them if the
     // top pick fails the minQty affordability check further down. Without
@@ -1063,6 +1068,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       clientOrderId,
     };
     await setCronState(KEY_ACTIVE, trade);
+    // Trade actually opened — reset the no-edge streak so gates snap
+    // back to the operator's configured MIN_CONFIDENCE / MIN_CONSENSUS.
+    // Only reset here (not on scan.best truthy) so a signal that
+    // exists but can't be traded doesn't collapse the accumulator.
+    if (noEdgeStreak > 0) {
+      await setCronState(KEY_NOEDGE_STREAK, 0).catch(() => {});
+    }
 
     logger.info('[PolymarketEdge] Opened trade', {
       asset,
