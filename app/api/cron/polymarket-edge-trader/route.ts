@@ -127,8 +127,13 @@ const KEY_NOEDGE_STREAK = 'polymarket-edge:noedge-streak';
 // self-heals from operator misconfig (e.g. env vars set to 70/70 when
 // live signals peak at 65-70) without needing a redeploy or env change.
 // Bounded floor at 45/45 so we never trade on genuine noise.
-const RELAX_AFTER_N_SKIPS = 12;    // ~1 hour of 5-min ticks
-const RELAX_STEP_PER_HOUR = 5;     // lower gates by 5 per hour of stuck ticks
+//
+// Cadence: first relaxation at 3 ticks (~15 min), then every 3 ticks
+// thereafter. Step size is 7 (aggressive enough to unlock trading
+// within 1 hour of a genuinely-blocked config). Floor at 45 means
+// we still refuse to trade on random noise.
+const RELAX_AFTER_N_SKIPS = 3;     // 15 min of stuck at 5-min cadence
+const RELAX_STEP_PER_HOUR = 7;     // lower by 7 per step
 const RELAX_FLOOR_CONFIDENCE = 45;
 const RELAX_FLOOR_CONSENSUS = 45;
 

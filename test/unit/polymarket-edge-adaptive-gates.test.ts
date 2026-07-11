@@ -14,8 +14,8 @@
  *   - Floors enforced: conf ≥ 45, cons ≥ 45 (never trade on noise)
  */
 
-const RELAX_AFTER_N_SKIPS = 12;
-const RELAX_STEP_PER_HOUR = 5;
+const RELAX_AFTER_N_SKIPS = 3;
+const RELAX_STEP_PER_HOUR = 7;
 const RELAX_FLOOR_CONFIDENCE = 45;
 const RELAX_FLOOR_CONSENSUS = 45;
 
@@ -46,8 +46,8 @@ describe('polymarket-edge adaptive gate relaxation', () => {
       expect(r.relaxSteps).toBe(0);
     });
 
-    it('returns configured gates unchanged when streak is 11 (one below trigger)', () => {
-      const r = effectiveGates(70, 70, 11);
+    it('returns configured gates unchanged when streak is 2 (one below trigger)', () => {
+      const r = effectiveGates(70, 70, 2);
       expect(r.effectiveConf).toBe(70);
       expect(r.effectiveCons).toBe(70);
       expect(r.relaxSteps).toBe(0);
@@ -55,44 +55,47 @@ describe('polymarket-edge adaptive gate relaxation', () => {
   });
 
   describe('first relaxation step at trigger point', () => {
-    it('lowers gates by 5 exactly at streak=12', () => {
-      const r = effectiveGates(70, 70, 12);
-      expect(r.effectiveConf).toBe(65);
-      expect(r.effectiveCons).toBe(65);
+    it('lowers gates by 7 exactly at streak=3', () => {
+      const r = effectiveGates(70, 70, 3);
+      expect(r.effectiveConf).toBe(63);
+      expect(r.effectiveCons).toBe(63);
       expect(r.relaxSteps).toBe(1);
     });
 
-    it('reproduces the observed prod scenario (BTC 66/60 clears after 1 relax)', () => {
+    it('reproduces the observed prod scenario (BTC 66/60 clears after 2 relax)', () => {
       // Operator's config: 70/70. Signals: BTC 66/60.
-      // After 12 no-edge skips (1 hour), effective becomes 65/65.
-      // BTC now clears conf (66 >= 65) but still fails cons (60 < 65).
-      const r = effectiveGates(70, 70, 12);
-      expect(66 >= r.effectiveConf).toBe(true);   // BTC would pass conf
-      expect(60 >= r.effectiveCons).toBe(false);  // BTC still fails cons
+      // After 3 no-edge skips (15 min), effective becomes 63/63.
+      // BTC 66 clears conf but 60 still fails cons.
+      const r1 = effectiveGates(70, 70, 3);
+      expect(66 >= r1.effectiveConf).toBe(true);
+      expect(60 >= r1.effectiveCons).toBe(false);
+      // After 6 skips (30 min), effective 56/56 — BTC 60 clears cons.
+      const r2 = effectiveGates(70, 70, 6);
+      expect(66 >= r2.effectiveConf).toBe(true);
+      expect(60 >= r2.effectiveCons).toBe(true);
     });
   });
 
   describe('progressive relaxation over multiple hours', () => {
-    it('applies 2 relax steps at streak=24 (2 hours stuck)', () => {
-      const r = effectiveGates(70, 70, 24);
-      expect(r.effectiveConf).toBe(60);
-      expect(r.effectiveCons).toBe(60);
+    it('applies 2 relax steps at streak=6 (30 min stuck)', () => {
+      const r = effectiveGates(70, 70, 6);
+      expect(r.effectiveConf).toBe(56);
+      expect(r.effectiveCons).toBe(56);
       expect(r.relaxSteps).toBe(2);
     });
 
-    it('BTC 66/60 clears after 2 hours of stuck', () => {
-      // At streak=24, gates are 60/60. BTC 66/60 passes conf and just
-      // barely misses cons... wait — 60 >= 60 → passes.
-      const r = effectiveGates(70, 70, 24);
-      expect(66 >= r.effectiveConf).toBe(true);
-      expect(60 >= r.effectiveCons).toBe(true);
+    it('applies 3 relax steps at streak=9 (45 min stuck)', () => {
+      const r = effectiveGates(70, 70, 9);
+      expect(r.effectiveConf).toBe(49);
+      expect(r.effectiveCons).toBe(49);
+      expect(r.relaxSteps).toBe(3);
     });
 
-    it('applies 3 relax steps at streak=36 (3 hours stuck)', () => {
-      const r = effectiveGates(70, 70, 36);
-      expect(r.effectiveConf).toBe(55);
-      expect(r.effectiveCons).toBe(55);
-      expect(r.relaxSteps).toBe(3);
+    it('applies 4 relax steps at streak=12 (1 hour stuck) hitting the floor', () => {
+      const r = effectiveGates(70, 70, 12);
+      expect(r.effectiveConf).toBe(45);
+      expect(r.effectiveCons).toBe(45);
+      expect(r.relaxSteps).toBe(4);
     });
   });
 
@@ -119,10 +122,10 @@ describe('polymarket-edge adaptive gate relaxation', () => {
       expect(r.effectiveCons).toBe(50);
     });
 
-    it('operator at 55/50 lowers to 50/45 after 1 hour of stuck (floor kicks in)', () => {
-      const r = effectiveGates(55, 50, 12);
-      expect(r.effectiveConf).toBe(50);
-      expect(r.effectiveCons).toBe(45);  // floor: max(45, 45) = 45
+    it('operator at 55/50 lowers to 48/45 after 3 skips (~15 min, floor kicks in on cons)', () => {
+      const r = effectiveGates(55, 50, 3);
+      expect(r.effectiveConf).toBe(48);
+      expect(r.effectiveCons).toBe(45);  // floor: max(45, 43) = 45
     });
   });
 });
