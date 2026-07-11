@@ -647,11 +647,31 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         relaxSteps,
       });
     }
-    const scan = await PredictionAggregatorService.scanAndPickBest(SUPPORTED_ASSETS, {
-      minConfidence: effectiveConf,
-      minConsensus: effectiveCons,
-      minSources: 2,
-    });
+    let scan: Awaited<ReturnType<typeof PredictionAggregatorService.scanAndPickBest>>;
+    try {
+      scan = await PredictionAggregatorService.scanAndPickBest(SUPPORTED_ASSETS, {
+        minConfidence: effectiveConf,
+        minConsensus: effectiveCons,
+        minSources: 2,
+      });
+    } catch (scanErr) {
+      // If the aggregator throws (upstream API down, malformed response,
+      // etc.), record it as a skip so operators can see it. Otherwise
+      // the outer catch swallows the error into a generic 500 and the
+      // last-skip diagnostic stays frozen on stale content.
+      const msg = scanErr instanceof Error ? scanErr.message : String(scanErr);
+      logger.error('[PolymarketEdge] scanAndPickBest threw', { error: msg });
+      await recordSkip('no-edge', `scanAndPickBest threw: ${msg.slice(0, 200)}`);
+      return NextResponse.json({
+        success: false,
+        ranAt,
+        attempted: true,
+        action: 'no-edge',
+        stats: safeStats,
+        daily,
+        error: msg,
+      }, { status: 200 });
+    }
 
     const allSummary = Object.fromEntries(
       Object.entries(scan.all).map(([a, p]) => [
