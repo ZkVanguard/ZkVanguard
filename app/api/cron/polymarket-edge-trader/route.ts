@@ -596,7 +596,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     );
 
     if (!scan.best) {
-      await recordSkip('no-edge', 'no asset cleared confidence/consensus/source gates');
+      // Log per-asset scoring so operators can see WHY nothing cleared.
+      // Compact digest small enough for cron_state.
+      const rejectionDigest = Object.entries(scan.all)
+        .map(([a, p]) => `${a}:${p.recommendation}/${Math.round(p.confidence)}/${Math.round(p.consensus)}/${p.sources.length}s`)
+        .join(' ');
+      await recordSkip(
+        'no-edge',
+        `no asset cleared gates. Per-asset (rec/conf/cons/srcs): ${rejectionDigest}. Gates: conf>=${MIN_CONFIDENCE}, cons>=${MIN_CONSENSUS}, srcs>=2`,
+      );
       return NextResponse.json({
         success: true,
         ranAt,
