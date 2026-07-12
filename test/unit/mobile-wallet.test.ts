@@ -10,6 +10,7 @@
 import {
   SUI_MOBILE_WALLETS,
   isMobileBrowser,
+  buildMobileWalletLink,
 } from '@/lib/utils/mobile-wallet';
 
 // Small helper to swap window/navigator for the duration of a test.
@@ -133,5 +134,39 @@ describe('SUI_MOBILE_WALLETS', () => {
   it('universal link points at my.slush.app', () => {
     const link = SUI_MOBILE_WALLETS[0].buildUniversalLink('x');
     expect(link).toContain('my.slush.app');
+  });
+});
+
+describe('buildMobileWalletLink', () => {
+  it('returns an empty string on the server (no window)', () => {
+    // In this test env `window` is defined by jsdom. Simulate SSR by
+    // temporarily deleting it.
+    const originalWindow = globalThis.window;
+    try {
+      // @ts-expect-error - deliberately clobbering for SSR simulation
+      delete (globalThis as { window?: unknown }).window;
+      const link = buildMobileWalletLink(SUI_MOBILE_WALLETS[0]);
+      expect(link).toBe('');
+    } finally {
+      globalThis.window = originalWindow;
+    }
+  });
+
+  it('produces a full universal link when window.location.href is set', () => {
+    withFakeBrowser(
+      'https://www.zkvanguard.xyz/dashboard?section=vault#deposit',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+      5,
+      () => {
+        const link = buildMobileWalletLink(SUI_MOBILE_WALLETS[0]);
+        expect(link).toMatch(/^https:\/\/my\.slush\.app\/browse\//);
+        // The encoded segment MUST decode back to the current href so
+        // route context (path + query + hash) is preserved.
+        const encoded = link.split('/browse/')[1];
+        expect(decodeURIComponent(encoded)).toBe(
+          'https://www.zkvanguard.xyz/dashboard?section=vault#deposit',
+        );
+      },
+    );
   });
 });

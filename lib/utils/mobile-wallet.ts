@@ -75,23 +75,37 @@ export const SUI_MOBILE_WALLETS: MobileWalletOption[] = [
 ];
 
 /**
- * Fire the mobile deep-link redirect for a given wallet. Uses
- * `window.location.assign` so the back button lands the user back on the
- * dApp page they started from (rather than dropping them into the wallet's
- * home). Returns the URL that was navigated to for logging.
+ * Compute the ready-to-navigate universal link for a wallet. Prefer
+ * putting this on an `<a href={...}>` element rather than assigning
+ * `window.location`.
+ *
+ * Why anchors matter: iOS universal links only reliably trigger the
+ * installed app when navigation comes from a user-initiated
+ * `<a>` click. `window.location.assign()` from JS is often treated as
+ * an in-page navigation and just opens the URL in Safari, leaving the
+ * installed Slush app untouched. Observed live 2026-07-12: users with
+ * Slush installed reported "connect wallet doesn't open Slush" —
+ * exactly this iOS behavior.
+ *
+ * Returns empty string on the server so SSR can safely render the
+ * anchor with a placeholder href; a client-side effect fills in the
+ * real href once `window.location.href` is available.
  */
-export function openMobileWallet(wallet: MobileWalletOption): string {
-  const url = wallet.buildUniversalLink(dappHrefEncoded());
-  if (typeof window !== 'undefined') {
-    window.location.assign(url);
-  }
-  return url;
+export function buildMobileWalletLink(wallet: MobileWalletOption): string {
+  const encoded = dappHrefEncoded();
+  if (!encoded) return '';
+  return wallet.buildUniversalLink(encoded);
 }
 
 /**
- * Shorthand for the default (Slush) redirect — matches the pre-fix
- * behavior of ConnectButton / SuiWalletConnect but with the .href fix.
+ * @deprecated Prefer rendering an `<a href={buildMobileWalletLink(w)}>`
+ * so iOS honors the universal-link association. Kept for callers that
+ * legitimately need a programmatic redirect (e.g. from a router event).
  */
-export function openDefaultMobileWallet(): string {
-  return openMobileWallet(SUI_MOBILE_WALLETS[0]);
+export function openMobileWallet(wallet: MobileWalletOption): string {
+  const url = buildMobileWalletLink(wallet);
+  if (typeof window !== 'undefined' && url) {
+    window.location.assign(url);
+  }
+  return url;
 }

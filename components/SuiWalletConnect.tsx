@@ -15,7 +15,7 @@ import { useSuiSafe } from '@/app/sui-providers';
 import {
   SUI_MOBILE_WALLETS,
   isMobileBrowser,
-  openMobileWallet,
+  buildMobileWalletLink,
   type MobileWalletOption,
 } from '@/lib/utils/mobile-wallet';
 
@@ -43,10 +43,17 @@ export function SuiWalletConnect({
   }, []);
 
   const [pendingMobileWallet, setPendingMobileWallet] = useState<string | null>(null);
+  // Track pending state only — the anchor's href does the navigation.
+  // See ConnectButton.tsx for the iOS universal-link rationale.
   const pickMobileWallet = useCallback((wallet: MobileWalletOption) => {
     setPendingMobileWallet(wallet.name);
-    openMobileWallet(wallet);
   }, []);
+  const [slushDeepLink, setSlushDeepLink] = useState<string>('#');
+  useEffect(() => {
+    if (isMobile && showSelector) {
+      setSlushDeepLink(buildMobileWalletLink(SUI_MOBILE_WALLETS[0]) || '#');
+    }
+  }, [isMobile, showSelector]);
   
   // Sui wallet hooks
   const wallets = useWallets() || [];
@@ -222,13 +229,15 @@ export function SuiWalletConnect({
                   <p className="text-sm text-gray-300 mb-3">
                     Tap below to open this page in Slush.
                   </p>
-                  <button
+                  <a
+                    href={slushDeepLink}
                     onClick={() => pickMobileWallet(SUI_MOBILE_WALLETS[0])}
-                    disabled={pendingMobileWallet !== null}
-                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors mb-2 active:scale-[0.98]"
+                    className={`block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-center rounded-lg text-sm font-medium transition-colors mb-2 active:scale-[0.98]
+                               ${pendingMobileWallet ? 'opacity-60 cursor-wait pointer-events-none' : ''}
+                               ${slushDeepLink === '#' ? 'opacity-60 cursor-wait pointer-events-none' : ''}`}
                   >
                     {pendingMobileWallet ? `Opening ${pendingMobileWallet}…` : 'Open in Slush'}
-                  </button>
+                  </a>
                   <a
                     href={SUI_MOBILE_WALLETS[0].installUrl}
                     target="_blank"

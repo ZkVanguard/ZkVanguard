@@ -18,7 +18,7 @@ import { useWdkModal } from '@/contexts/WdkModalContext';
 import {
   SUI_MOBILE_WALLETS,
   isMobileBrowser,
-  openMobileWallet,
+  buildMobileWalletLink,
   type MobileWalletOption,
 } from '@/lib/utils/mobile-wallet';
 
@@ -75,6 +75,16 @@ export function ConnectButton() {
   // because it's paired with the mobile-branch of handleConnectSui.
   const [showMobileWallets, setShowMobileWallets] = useState(false);
   const [pendingMobileWallet, setPendingMobileWallet] = useState<string | null>(null);
+  // Client-computed deep link. Recomputed on every mount so it always
+  // reflects the current route (window.location.href changes as the
+  // user navigates within the SPA before hitting Connect). Empty on
+  // SSR; the anchor renders with # and gets filled once mounted.
+  const [slushDeepLink, setSlushDeepLink] = useState<string>('#');
+  useEffect(() => {
+    if (mounted && showMobileWallets) {
+      setSlushDeepLink(buildMobileWalletLink(SUI_MOBILE_WALLETS[0]) || '#');
+    }
+  }, [mounted, showMobileWallets]);
   
   // WDK modal context — modal renders outside Navbar's DOM tree
   const { openWdkModal } = useWdkModal();
@@ -138,15 +148,12 @@ export function ConnectButton() {
     setShowSelector(false);
   }, [suiWallets, connectSui, isMobile]);
 
-  // Fires when the user picks a wallet from the mobile chooser.
-  // Records which wallet they picked (so the "opening…" state is
-  // meaningful) and issues the deep link. On real hardware the browser
-  // navigates away immediately; the pending-state UI covers the ~100 ms
-  // before that.
+  // Called from the anchor's onClick — we don't preventDefault, we
+  // just track pending state so the sheet can show "Opening Slush…".
+  // The <a> element's `href` does the actual navigation, which is the
+  // path iOS honors for universal-link → installed-app deep linking.
   const pickMobileWallet = useCallback((wallet: MobileWalletOption) => {
     setPendingMobileWallet(wallet.name);
-    // Use assign so back-button lands the user back on our dApp.
-    openMobileWallet(wallet);
   }, []);
 
   // Wait for client mount to avoid hydration mismatch
@@ -220,19 +227,29 @@ export function ConnectButton() {
                 deposit form all stay put.
               </p>
 
-              {/* Primary action */}
-              <button
+              {/*
+                Primary action — MUST be an <a> not a <button>. iOS Safari
+                only reliably triggers Slush's universal-link association
+                when navigation originates from a real anchor click.
+                window.location.assign() from a button onClick just opens
+                my.slush.app in Safari and never launches the installed
+                app — that was the "even with Slush installed nothing
+                opens" report from 2026-07-12.
+              */}
+              <a
+                href={slushDeepLink}
                 onClick={() => pickMobileWallet(SUI_MOBILE_WALLETS[0])}
-                disabled={pendingMobileWallet !== null}
-                className="group w-full h-12 sm:h-14 rounded-2xl
+                aria-disabled={pendingMobileWallet !== null || slushDeepLink === '#'}
+                className={`group w-full h-12 sm:h-14 rounded-2xl
                            bg-gradient-to-r from-[#4DA2FF] to-[#3F91E8]
                            hover:from-[#3F91E8] hover:to-[#2F80D7]
                            active:scale-[0.985]
-                           disabled:opacity-60 disabled:cursor-wait
                            text-white text-[15px] sm:text-base font-semibold
                            shadow-lg shadow-[#4DA2FF]/25
                            transition-all duration-200
-                           flex items-center justify-center gap-2 min-w-0"
+                           flex items-center justify-center gap-2 min-w-0
+                           ${pendingMobileWallet ? 'opacity-70 cursor-wait pointer-events-none' : ''}
+                           ${slushDeepLink === '#' ? 'opacity-60 cursor-wait pointer-events-none' : ''}`}
               >
                 {pendingMobileWallet ? (
                   <>
@@ -255,7 +272,7 @@ export function ConnectButton() {
                     </svg>
                   </>
                 )}
-              </button>
+              </a>
 
               {pendingMobileWallet && (
                 <p className="text-[11px] sm:text-xs text-[#86868B] mt-3 text-center leading-relaxed">
