@@ -986,6 +986,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       logger.warn('[PolymarketEdge] Agent guard BLOCKED', {
         asset, side, notionalUsd, stage: guard.stage, reason: guard.reason,
       });
+      const guardSkipReason = `agent-guard blocked ${asset} ${side} ($${notionalUsd.toFixed(2)}) at stage=${guard.stage}: ${guard.reason}`;
+      await recordSkip('no-edge', guardSkipReason);
       await notifyDiscord(
         `🛡️ PolymarketEdge agent-guard blocked ${asset} ${side} ($${notionalUsd.toFixed(2)}): ${guard.reason}`,
         'WARN',
@@ -1028,6 +1030,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
     if (!open.success) {
       logger.error('[PolymarketEdge] openHedge failed', { error: open.error });
+      const openErrMsg = String(open.error || 'openHedge returned !success').slice(0, 200);
+      await recordSkip(
+        'no-edge',
+        `openHedge failed for ${asset} ${side} size=${sizeQty} @ $${refPrice}: ${openErrMsg}`,
+      );
       return NextResponse.json({
         success: false,
         ranAt,
@@ -1157,9 +1164,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       daily,
     });
   } catch (e) {
-    logger.error('[PolymarketEdge] tick failed', { error: errMsg(e) });
+    const errText = errMsg(e);
+    logger.error('[PolymarketEdge] tick failed', { error: errText });
+    // Record the exception as a skip so operators can see WHY the tick
+    // failed instead of watching noedge-streak climb forever with a
+    // stale last-skip. Fire-and-forget: if setCronState itself fails
+    // we don't want to swallow the original error.
+    try {
+      await recordSkip('no-edge', `tick threw: ${errText.slice(0, 220)}`);
+    } catch {
+      /* best-effort observability */
+    }
     return NextResponse.json(
-      { success: false, ranAt, attempted: true, stats: safeStats, daily, error: errMsg(e) },
+      { success: false, ranAt, attempted: true, stats: safeStats, daily, error: errText },
       { status: 500 },
     );
   }
