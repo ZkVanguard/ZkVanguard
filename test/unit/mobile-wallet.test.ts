@@ -111,43 +111,27 @@ describe('isMobileBrowser', () => {
 });
 
 describe('SUI_MOBILE_WALLETS', () => {
-  it('has at least 4 wallet options', () => {
-    expect(SUI_MOBILE_WALLETS.length).toBeGreaterThanOrEqual(4);
-  });
-
-  it('universal-link builders reproduce the original href when decoded', () => {
-    const href = 'https://www.zkvanguard.xyz/dashboard?section=vault#deposit';
-    const encoded = encodeURIComponent(href);
-    for (const w of SUI_MOBILE_WALLETS) {
-      const link = w.buildUniversalLink(encoded);
-      // The last URL-encoded segment must decode back to the original.
-      const lastSegment = link.split('/').pop() ?? '';
-      expect(decodeURIComponent(lastSegment)).toBe(href);
-    }
-  });
-
-  it('every option has an install URL', () => {
-    for (const w of SUI_MOBILE_WALLETS) {
-      expect(w.installUrl).toMatch(/^https:\/\//);
-    }
-  });
-
-  it('Slush is the default (first) option', () => {
+  it('ships exactly one canonical SUI wallet (Slush)', () => {
+    expect(SUI_MOBILE_WALLETS.length).toBe(1);
     expect(SUI_MOBILE_WALLETS[0].id).toBe('slush');
   });
 
-  it('links point at wallet-specific hosts (no cross-wallet mixing)', () => {
-    const bySlushConvention: Array<'slush' | 'sui-wallet'> = ['slush', 'sui-wallet'];
-    for (const w of SUI_MOBILE_WALLETS) {
-      const link = w.buildUniversalLink('x');
-      if (bySlushConvention.includes(w.id as 'slush' | 'sui-wallet')) {
-        // Slush and Sui Wallet share the my.slush.app browser host by design.
-        expect(link).toContain('my.slush.app');
-      } else if (w.id === 'suiet') {
-        expect(link).toContain('suiet.app');
-      } else if (w.id === 'ethos') {
-        expect(link).toContain('ethoswallet.xyz');
-      }
-    }
+  it('universal-link builder reproduces the original href when decoded', () => {
+    // Includes query + hash to catch the two most common ways route
+    // context gets clobbered.
+    const href = 'https://www.zkvanguard.xyz/dashboard?section=vault#deposit';
+    const encoded = encodeURIComponent(href);
+    const link = SUI_MOBILE_WALLETS[0].buildUniversalLink(encoded);
+    const lastSegment = link.split('/').pop() ?? '';
+    expect(decodeURIComponent(lastSegment)).toBe(href);
+  });
+
+  it('has a real install URL', () => {
+    expect(SUI_MOBILE_WALLETS[0].installUrl).toMatch(/^https:\/\//);
+  });
+
+  it('universal link points at my.slush.app', () => {
+    const link = SUI_MOBILE_WALLETS[0].buildUniversalLink('x');
+    expect(link).toContain('my.slush.app');
   });
 });

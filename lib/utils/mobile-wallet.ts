@@ -60,33 +60,17 @@ function dappHrefEncoded(): string {
   return encodeURIComponent(window.location.href);
 }
 
+// SUI-first mobile flow: just Slush. It's the officially rebranded Sui
+// Wallet Mobile and is what the SUI Foundation currently ships as the
+// canonical mobile wallet. Multiple options was over-engineering — the
+// user reports Slush is what they want to see. If we ever add another
+// mobile wallet, this array is where it goes.
 export const SUI_MOBILE_WALLETS: MobileWalletOption[] = [
   {
     id: 'slush',
     name: 'Slush',
     buildUniversalLink: (encodedHref: string) => `https://my.slush.app/browse/${encodedHref}`,
     installUrl: 'https://slush.app/download',
-  },
-  {
-    id: 'sui-wallet',
-    name: 'Sui Wallet',
-    // Sui Wallet mobile uses a dApp browser deep link. Same universal-link
-    // convention as Slush (the old Sui Wallet Mobile → Slush rebrand keeps
-    // the same URL scheme).
-    buildUniversalLink: (encodedHref: string) => `https://my.slush.app/browse/${encodedHref}`,
-    installUrl: 'https://suiwallet.com',
-  },
-  {
-    id: 'suiet',
-    name: 'Suiet',
-    buildUniversalLink: (encodedHref: string) => `https://suiet.app/browser/${encodedHref}`,
-    installUrl: 'https://suiet.app/download',
-  },
-  {
-    id: 'ethos',
-    name: 'Ethos',
-    buildUniversalLink: (encodedHref: string) => `https://ethoswallet.xyz/browser/${encodedHref}`,
-    installUrl: 'https://ethoswallet.xyz',
   },
 ];
 

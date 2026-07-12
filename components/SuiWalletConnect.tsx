@@ -217,44 +217,25 @@ export function SuiWalletConnect({
                   </button>
                 ))
               ) : isMobile ? (
-                <div className="p-3">
-                  <div className="flex items-center gap-2 mb-3 px-1">
-                    <Smartphone className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                    <p className="text-xs text-gray-300">
-                      Open this page in a wallet app
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {SUI_MOBILE_WALLETS.map((w) => (
-                      <button
-                        key={w.id}
-                        onClick={() => pickMobileWallet(w)}
-                        disabled={pendingMobileWallet !== null}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-800 disabled:opacity-50 active:scale-[0.99] transition-all text-left"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-[#4DA2FF] flex items-center justify-center flex-shrink-0">
-                          <span className="text-white font-bold text-[10px]">{w.name.slice(0, 3).toUpperCase()}</span>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm text-white truncate">
-                            {pendingMobileWallet === w.name ? `Opening ${w.name}…` : w.name}
-                          </div>
-                          {pendingMobileWallet === w.name && (
-                            <div className="text-[10px] text-gray-400 truncate">
-                              If nothing happens, install the app first
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                <div className="p-4 text-center">
+                  <Smartphone className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-300 mb-3">
+                    Tap below to open this page in Slush.
+                  </p>
+                  <button
+                    onClick={() => pickMobileWallet(SUI_MOBILE_WALLETS[0])}
+                    disabled={pendingMobileWallet !== null}
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-medium transition-colors mb-2 active:scale-[0.98]"
+                  >
+                    {pendingMobileWallet ? `Opening ${pendingMobileWallet}…` : 'Open in Slush'}
+                  </button>
                   <a
                     href={SUI_MOBILE_WALLETS[0].installUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-center text-blue-400 hover:underline text-xs mt-3 pt-2 border-t border-gray-700/30"
+                    className="text-blue-400 hover:underline text-xs"
                   >
-                    Don&apos;t have one? Install →
+                    Don&apos;t have Slush? Install it →
                   </a>
                 </div>
               ) : (

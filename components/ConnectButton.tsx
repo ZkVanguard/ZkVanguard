@@ -156,52 +156,48 @@ export function ConnectButton() {
 
   return (
     <div className="relative">
-      {/* Mobile wallet chooser sheet — bottom-sheet on <sm, centered on ≥sm.
-          Rendered outside the Connect-dropdown flow so it can cover the
-          whole screen while the deep link is opening. */}
+      {/* Mobile SUI-wallet redirect sheet — SUI-first pool means only
+          Slush is offered. Bottom-sheet on <sm, centered on ≥sm. */}
       {showMobileWallets && (
         <div
           className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
           onClick={() => setShowMobileWallets(false)}
         >
           <div
-            className="w-full sm:max-w-md bg-white dark:bg-[#1c1c1e] rounded-t-[24px] sm:rounded-2xl shadow-2xl pb-safe sm:pb-0 min-w-0"
+            className="w-full sm:max-w-sm bg-white dark:bg-[#1c1c1e] rounded-t-[24px] sm:rounded-2xl shadow-2xl pb-safe sm:pb-0 min-w-0"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sm:hidden flex justify-center pt-2 pb-1">
               <div className="w-9 h-1 rounded-full bg-black/15" />
             </div>
             <div className="p-4 sm:p-5">
-              <h3 className="text-base sm:text-lg font-semibold text-[#1D1D1F] dark:text-white mb-1">
-                Choose a wallet
-              </h3>
-              <p className="text-xs sm:text-sm text-[#86868B] mb-4">
-                Tap a wallet to open this page inside its in-app browser.
-              </p>
-              <div className="space-y-2">
-                {SUI_MOBILE_WALLETS.map((w) => (
-                  <button
-                    key={w.id}
-                    onClick={() => pickMobileWallet(w)}
-                    disabled={pendingMobileWallet !== null}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-[#E5E5EA] dark:border-[#38383a] hover:bg-[#F5F5F7] dark:hover:bg-[#2c2c2e] active:scale-[0.99] disabled:opacity-50 transition-all min-w-0"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-[#4DA2FF] flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-bold text-xs">{w.name.slice(0, 3).toUpperCase()}</span>
-                    </div>
-                    <div className="text-left flex-1 min-w-0">
-                      <div className="font-medium text-sm text-[#1D1D1F] dark:text-white truncate">
-                        {pendingMobileWallet === w.name ? `Opening ${w.name}…` : w.name}
-                      </div>
-                      <div className="text-[11px] text-[#86868B] truncate">
-                        {pendingMobileWallet === w.name
-                          ? 'If nothing happens, install the app first'
-                          : 'Open in wallet'}
-                      </div>
-                    </div>
-                  </button>
-                ))}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-11 h-11 rounded-full bg-[#4DA2FF] flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-bold text-xs">SUI</span>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-[#1D1D1F] dark:text-white truncate">
+                    Connect Slush
+                  </h3>
+                  <p className="text-xs text-[#86868B]">SUI mainnet wallet</p>
+                </div>
               </div>
+              <p className="text-xs sm:text-sm text-[#86868B] mb-4 leading-relaxed">
+                We&apos;ll open this page inside the Slush app. Your dashboard
+                position, deposits and network stay exactly where they are.
+              </p>
+              <button
+                onClick={() => pickMobileWallet(SUI_MOBILE_WALLETS[0])}
+                disabled={pendingMobileWallet !== null}
+                className="w-full h-12 rounded-xl bg-[#4DA2FF] hover:bg-[#3F91E8] active:scale-[0.98] disabled:opacity-60 text-white text-sm font-semibold transition-all"
+              >
+                {pendingMobileWallet ? `Opening ${pendingMobileWallet}…` : 'Open in Slush'}
+              </button>
+              {pendingMobileWallet && (
+                <p className="text-[11px] text-[#86868B] mt-2 text-center leading-relaxed">
+                  If nothing opens, tap Install below to get Slush first.
+                </p>
+              )}
               <div className="mt-4 pt-4 border-t border-[#E5E5EA] dark:border-[#38383a] flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => { setShowMobileWallets(false); setPendingMobileWallet(null); }}
@@ -215,7 +211,7 @@ export function ConnectButton() {
                   rel="noopener noreferrer"
                   className="w-full sm:flex-1 h-11 sm:h-auto px-4 py-2 text-sm font-medium text-center text-[#4DA2FF] bg-[#4DA2FF]/10 active:scale-[0.98] rounded-xl transition-all inline-flex items-center justify-center"
                 >
-                  Don&apos;t have one? Install →
+                  Install Slush →
                 </a>
               </div>
             </div>
