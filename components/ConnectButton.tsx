@@ -156,52 +156,145 @@ export function ConnectButton() {
 
   return (
     <div className="relative">
-      {/* Mobile SUI-wallet redirect sheet — SUI-first pool means only
-          Slush is offered. Bottom-sheet on <sm, centered on ≥sm. */}
+      {/* SUI wallet connect sheet — bottom-sheet on mobile, centered
+          card on desktop. Same layout scales 320px → 4K. */}
       {showMobileWallets && (
         <div
-          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center animate-fade-in"
           onClick={() => setShowMobileWallets(false)}
         >
+          {/* Backdrop with soft SUI-blue tint so the sheet feels
+              integrated with the brand rather than floating above a
+              generic black scrim. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#4DA2FF]/10 via-black/50 to-black/60 backdrop-blur-md" />
+
           <div
-            className="w-full sm:max-w-sm bg-white dark:bg-[#1c1c1e] rounded-t-[24px] sm:rounded-2xl shadow-2xl pb-safe sm:pb-0 min-w-0"
+            className="relative w-full sm:max-w-[420px] mx-auto sm:mx-4 bg-white dark:bg-[#1c1c1e]
+                       rounded-t-[28px] sm:rounded-[24px]
+                       shadow-2xl shadow-[#4DA2FF]/10
+                       pb-safe sm:pb-0
+                       min-w-0 overflow-hidden
+                       animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sm:hidden flex justify-center pt-2 pb-1">
-              <div className="w-9 h-1 rounded-full bg-black/15" />
+            {/* Sheet-handle indicator on mobile */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-black/15 dark:bg-white/20" />
             </div>
-            <div className="p-4 sm:p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-11 h-11 rounded-full bg-[#4DA2FF] flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold text-xs">SUI</span>
+
+            {/* Hero header — SUI gradient panel with wave motif */}
+            <div className="relative overflow-hidden px-5 sm:px-6 pt-5 sm:pt-7 pb-5 bg-gradient-to-br from-[#4DA2FF] via-[#79C2FF] to-[#B0DDFF]">
+              {/* Decorative drop background */}
+              <div
+                aria-hidden
+                className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/10 blur-2xl"
+              />
+              <div
+                aria-hidden
+                className="absolute -bottom-16 -left-4 w-48 h-24 rounded-full bg-white/10 blur-3xl"
+              />
+
+              <div className="relative flex items-center gap-3">
+                {/* SUI drop-shape mark */}
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/95 flex items-center justify-center shadow-lg shadow-[#4DA2FF]/30 flex-shrink-0">
+                  <span className="text-[#4DA2FF] font-black text-lg sm:text-xl tracking-tight">
+                    SUI
+                  </span>
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-semibold text-[#1D1D1F] dark:text-white truncate">
-                    Connect Slush
+                  <h3 className="text-white font-bold text-lg sm:text-xl tracking-tight truncate">
+                    Connect to Vault
                   </h3>
-                  <p className="text-xs text-[#86868B]">SUI mainnet wallet</p>
+                  <p className="text-white/85 text-xs sm:text-sm">
+                    SUI mainnet · Slush wallet
+                  </p>
                 </div>
               </div>
-              <p className="text-xs sm:text-sm text-[#86868B] mb-4 leading-relaxed">
-                We&apos;ll open this page inside the Slush app. Your dashboard
-                position, deposits and network stay exactly where they are.
+            </div>
+
+            {/* Body */}
+            <div className="p-5 sm:p-6">
+              <p className="text-[13px] sm:text-sm text-[#424245] dark:text-[#EBEBF0] leading-relaxed mb-5">
+                Slush opens this page in its in-app browser where the
+                vault can request signatures. Your route, network and
+                deposit form all stay put.
               </p>
+
+              {/* Primary action */}
               <button
                 onClick={() => pickMobileWallet(SUI_MOBILE_WALLETS[0])}
                 disabled={pendingMobileWallet !== null}
-                className="w-full h-12 rounded-xl bg-[#4DA2FF] hover:bg-[#3F91E8] active:scale-[0.98] disabled:opacity-60 text-white text-sm font-semibold transition-all"
+                className="group w-full h-12 sm:h-14 rounded-2xl
+                           bg-gradient-to-r from-[#4DA2FF] to-[#3F91E8]
+                           hover:from-[#3F91E8] hover:to-[#2F80D7]
+                           active:scale-[0.985]
+                           disabled:opacity-60 disabled:cursor-wait
+                           text-white text-[15px] sm:text-base font-semibold
+                           shadow-lg shadow-[#4DA2FF]/25
+                           transition-all duration-200
+                           flex items-center justify-center gap-2 min-w-0"
               >
-                {pendingMobileWallet ? `Opening ${pendingMobileWallet}…` : 'Open in Slush'}
+                {pendingMobileWallet ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin flex-shrink-0" />
+                    <span className="truncate">Opening {pendingMobileWallet}…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="truncate">Open in Slush</span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-4 h-4 flex-shrink-0 transition-transform group-hover:translate-x-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M5 12h14M13 5l7 7-7 7" />
+                    </svg>
+                  </>
+                )}
               </button>
+
               {pendingMobileWallet && (
-                <p className="text-[11px] text-[#86868B] mt-2 text-center leading-relaxed">
-                  If nothing opens, tap Install below to get Slush first.
+                <p className="text-[11px] sm:text-xs text-[#86868B] mt-3 text-center leading-relaxed">
+                  If Slush didn&apos;t open, install it and try again.
                 </p>
               )}
-              <div className="mt-4 pt-4 border-t border-[#E5E5EA] dark:border-[#38383a] flex flex-col sm:flex-row gap-2">
+
+              {/* Small trust row — three cues that this is safe */}
+              <div className="mt-5 grid grid-cols-3 gap-1.5 sm:gap-3 text-[10px] sm:text-[11px] text-[#86868B]">
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <span className="w-7 h-7 rounded-full bg-[#4DA2FF]/10 text-[#4DA2FF] flex items-center justify-center font-bold text-xs">
+                    1
+                  </span>
+                  <span className="leading-tight">Opens Slush</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <span className="w-7 h-7 rounded-full bg-[#4DA2FF]/10 text-[#4DA2FF] flex items-center justify-center font-bold text-xs">
+                    2
+                  </span>
+                  <span className="leading-tight">Same page reloads</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <span className="w-7 h-7 rounded-full bg-[#4DA2FF]/10 text-[#4DA2FF] flex items-center justify-center font-bold text-xs">
+                    3
+                  </span>
+                  <span className="leading-tight">Tap Connect</span>
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <div className="mt-5 pt-5 border-t border-[#E5E5EA] dark:border-[#38383a] flex flex-col-reverse sm:flex-row gap-2">
                 <button
                   onClick={() => { setShowMobileWallets(false); setPendingMobileWallet(null); }}
-                  className="w-full sm:w-auto h-11 sm:h-auto px-4 py-2 text-sm font-medium text-[#1D1D1F] dark:text-white bg-[#F5F5F7] dark:bg-[#2c2c2e] active:scale-[0.98] rounded-xl transition-all"
+                  className="h-11 sm:h-auto px-4 py-2 text-sm font-medium
+                             text-[#1D1D1F] dark:text-white
+                             bg-[#F5F5F7] dark:bg-[#2c2c2e]
+                             hover:bg-[#E5E5EA] dark:hover:bg-[#3c3c3e]
+                             active:scale-[0.98]
+                             rounded-xl transition-all"
                 >
                   Cancel
                 </button>
@@ -209,9 +302,15 @@ export function ConnectButton() {
                   href={SUI_MOBILE_WALLETS[0].installUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full sm:flex-1 h-11 sm:h-auto px-4 py-2 text-sm font-medium text-center text-[#4DA2FF] bg-[#4DA2FF]/10 active:scale-[0.98] rounded-xl transition-all inline-flex items-center justify-center"
+                  className="flex-1 h-11 sm:h-auto px-4 py-2 text-sm font-medium text-center
+                             text-[#4DA2FF]
+                             bg-[#4DA2FF]/10 hover:bg-[#4DA2FF]/15
+                             active:scale-[0.98]
+                             rounded-xl transition-all
+                             inline-flex items-center justify-center gap-1"
                 >
-                  Install Slush →
+                  Don&apos;t have Slush?
+                  <span className="opacity-80">Install →</span>
                 </a>
               </div>
             </div>
@@ -223,45 +322,13 @@ export function ConnectButton() {
       {showConnect && (
         <div className="relative">
           <button
-            onClick={() => setShowSelector(!showSelector)}
-            className="px-5 h-11 bg-claude-orange hover:bg-claude-rust text-white rounded-[12px] font-semibold text-[15px] transition-colors flex items-center gap-2"
+            onClick={handleConnectSui}
+            disabled={isConnectingSui}
+            className="px-5 h-11 bg-claude-orange hover:bg-claude-rust active:scale-[0.98] disabled:opacity-70 text-white rounded-[12px] font-semibold text-[15px] transition-all flex items-center gap-2"
           >
             <Wallet className="w-4 h-4" />
-            <span>Connect</span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${showSelector ? 'rotate-180' : ''}`} />
+            <span>{isConnectingSui ? 'Connecting…' : 'Connect'}</span>
           </button>
-
-          {showSelector && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowSelector(false)} />
-              <div className="absolute top-full mt-2 right-0 w-64 bg-white dark:bg-[#1c1c1e] border border-[#E5E5EA] dark:border-[#38383a] rounded-xl shadow-lg overflow-hidden z-50">
-                <div className="p-2">
-                  {/* SUI-only mode: Tether WDK (EVM/Cronos/Hedera) wallet option
-                      is intentionally disabled. Restore the WDK button below
-                      when re-enabling other chains. */}
-                  <button
-                    onClick={handleConnectSui}
-                    disabled={isConnectingSui}
-                    className="w-full p-2.5 rounded-lg hover:bg-[#F5F5F7] dark:hover:bg-[#2c2c2e] transition-colors text-left flex items-center gap-3 disabled:opacity-50"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-[#4DA2FF] flex items-center justify-center">
-                      <span className="text-white font-bold text-[9px]">SUI</span>
-                    </div>
-                    <div>
-                      <div className="font-medium text-[#1D1D1F] dark:text-white text-[14px]">
-                        {isConnectingSui ? 'Connecting...' : 'SUI'}
-                      </div>
-                      <div className="text-[11px] text-[#86868B]">
-                        {suiWallets.length > 0 
-                          ? suiWallets.map(w => w.name).join(', ')
-                          : isMobile ? 'Open in Slush app' : 'Slush, Sui Wallet'}
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
         </div>
       )}
 

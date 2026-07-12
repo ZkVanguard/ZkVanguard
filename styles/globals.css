@@ -612,6 +612,23 @@ h1, h2, h3, h4, h5, h6 {
   animation: tabFadeIn 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* Bottom-sheet slide-in from below the viewport, resolves to rest with
+   an iOS-style spring. Used by wallet-connect sheet and other mobile
+   sheets. */
+@keyframes sheetSlideUp {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-slide-up {
+  animation: sheetSlideUp 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 @keyframes fadeInScale {
   from {
     opacity: 0;
