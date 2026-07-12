@@ -15,6 +15,12 @@ import { useSuiSafe } from '@/app/sui-providers';
 import { useWdk, useWdkAccount } from '@/lib/wdk/wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { useWdkModal } from '@/contexts/WdkModalContext';
+import {
+  SUI_MOBILE_WALLETS,
+  isMobileBrowser,
+  openMobileWallet,
+  type MobileWalletOption,
+} from '@/lib/utils/mobile-wallet';
 
 // Safe hook wrapper for Sui wallet functionality
 function useSuiWalletSafe() {
@@ -61,8 +67,14 @@ export function ConnectButton() {
   
   useEffect(() => {
     setMounted(true);
-    setIsMobile(/Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    setIsMobile(isMobileBrowser());
   }, []);
+
+  // Show the mobile-wallet chooser sheet (Slush / Sui Wallet / Suiet /
+  // Ethos) instead of hardcoding a Slush redirect. State lives here
+  // because it's paired with the mobile-branch of handleConnectSui.
+  const [showMobileWallets, setShowMobileWallets] = useState(false);
+  const [pendingMobileWallet, setPendingMobileWallet] = useState<string | null>(null);
   
   // WDK modal context — modal renders outside Navbar's DOM tree
   const { openWdkModal } = useWdkModal();
@@ -108,18 +120,34 @@ export function ConnectButton() {
   const handleConnectSui = useCallback(() => {
     if (suiWallets.length > 0) {
       connectSui({ wallet: suiWallets[0] });
-    } else if (isMobile) {
-      // Mobile: Slush universal link opens the dApp inside Slush's in-app browser
-      // where wallet-standard auto-injects. Domain: my.slush.app, path: /browse/*
-      const dappUrl = encodeURIComponent(window.location.origin);
-      window.location.href = `https://my.slush.app/browse/${dappUrl}`;
-    } else {
-      if (window.confirm('No SUI wallet detected.\n\nWould you like to install Slush wallet?')) {
-        window.open('https://slush.app/', '_blank');
-      }
+      setShowSelector(false);
+      return;
+    }
+    if (isMobile) {
+      // Mobile: open the wallet-chooser sheet. Redirect happens when the
+      // user picks a specific wallet, so they see which options they have
+      // rather than being silently thrown into Slush. Fixes the "connect
+      // wallet on mobile doesn't redirect or connect" report.
+      setShowSelector(false);
+      setShowMobileWallets(true);
+      return;
+    }
+    if (window.confirm('No SUI wallet detected.\n\nWould you like to install Slush wallet?')) {
+      window.open('https://slush.app/', '_blank');
     }
     setShowSelector(false);
   }, [suiWallets, connectSui, isMobile]);
+
+  // Fires when the user picks a wallet from the mobile chooser.
+  // Records which wallet they picked (so the "opening…" state is
+  // meaningful) and issues the deep link. On real hardware the browser
+  // navigates away immediately; the pending-state UI covers the ~100 ms
+  // before that.
+  const pickMobileWallet = useCallback((wallet: MobileWalletOption) => {
+    setPendingMobileWallet(wallet.name);
+    // Use assign so back-button lands the user back on our dApp.
+    openMobileWallet(wallet);
+  }, []);
 
   // Wait for client mount to avoid hydration mismatch
   const showWdk = mounted && wdkIsConnected && wdkAddress;
@@ -128,6 +156,73 @@ export function ConnectButton() {
 
   return (
     <div className="relative">
+      {/* Mobile wallet chooser sheet — bottom-sheet on <sm, centered on ≥sm.
+          Rendered outside the Connect-dropdown flow so it can cover the
+          whole screen while the deep link is opening. */}
+      {showMobileWallets && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowMobileWallets(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-white dark:bg-[#1c1c1e] rounded-t-[24px] sm:rounded-2xl shadow-2xl pb-safe sm:pb-0 min-w-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sm:hidden flex justify-center pt-2 pb-1">
+              <div className="w-9 h-1 rounded-full bg-black/15" />
+            </div>
+            <div className="p-4 sm:p-5">
+              <h3 className="text-base sm:text-lg font-semibold text-[#1D1D1F] dark:text-white mb-1">
+                Choose a wallet
+              </h3>
+              <p className="text-xs sm:text-sm text-[#86868B] mb-4">
+                Tap a wallet to open this page inside its in-app browser.
+              </p>
+              <div className="space-y-2">
+                {SUI_MOBILE_WALLETS.map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => pickMobileWallet(w)}
+                    disabled={pendingMobileWallet !== null}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-[#E5E5EA] dark:border-[#38383a] hover:bg-[#F5F5F7] dark:hover:bg-[#2c2c2e] active:scale-[0.99] disabled:opacity-50 transition-all min-w-0"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-[#4DA2FF] flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-xs">{w.name.slice(0, 3).toUpperCase()}</span>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <div className="font-medium text-sm text-[#1D1D1F] dark:text-white truncate">
+                        {pendingMobileWallet === w.name ? `Opening ${w.name}…` : w.name}
+                      </div>
+                      <div className="text-[11px] text-[#86868B] truncate">
+                        {pendingMobileWallet === w.name
+                          ? 'If nothing happens, install the app first'
+                          : 'Open in wallet'}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-[#E5E5EA] dark:border-[#38383a] flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={() => { setShowMobileWallets(false); setPendingMobileWallet(null); }}
+                  className="w-full sm:w-auto h-11 sm:h-auto px-4 py-2 text-sm font-medium text-[#1D1D1F] dark:text-white bg-[#F5F5F7] dark:bg-[#2c2c2e] active:scale-[0.98] rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <a
+                  href={SUI_MOBILE_WALLETS[0].installUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:flex-1 h-11 sm:h-auto px-4 py-2 text-sm font-medium text-center text-[#4DA2FF] bg-[#4DA2FF]/10 active:scale-[0.98] rounded-xl transition-all inline-flex items-center justify-center"
+                >
+                  Don&apos;t have one? Install →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Not connected - show connect options */}
       {showConnect && (
         <div className="relative">
