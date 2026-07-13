@@ -581,6 +581,21 @@ export class BluefinService {
           continue;
         }
 
+        // 401 UNAUTHORIZED — the venue rejected our JWT even though
+        // `ensureValidToken()` thought it was fresh (tokenExpiresAt vs
+        // server truth can drift by TTL grace / server-side revocation
+        // / clock skew). Force a full re-authentication and retry.
+        // Observed 2026-07-13: openHedge failed repeatedly with
+        // "401 - Jwt is expired" because tokenExpiresAt hadn't lapsed
+        // yet from the client's view, so ensureValidToken was a no-op.
+        if (response.status === 401 && attempt < MAX_RETRIES) {
+          logger.warn('BlueFin API 401 — forcing re-auth + retry', { attempt, path });
+          this.accessToken = null;
+          this.tokenExpiresAt = 0;
+          await this.authenticate();
+          continue;
+        }
+
         if (!response.ok) {
           const error = await response.text();
           throw new Error(`BlueFin API error: ${response.status} - ${error}`);
