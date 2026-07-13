@@ -1005,6 +1005,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const conflict = !!findActivePosition(positionsPre, symbol);
     if (conflict) {
       logger.warn(`[PolymarketEdge] ${symbol} position already exists — skipping new entry`);
+      const preExistingReason = `pre-existing ${symbol} position (other assets can still trade)`;
+      await recordSkip('no-edge', preExistingReason);
       return NextResponse.json({
         success: true,
         ranAt,
@@ -1012,7 +1014,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         action: 'no-edge',
         stats: safeStats,
         daily,
-        reason: `pre-existing ${symbol} position (other assets can still trade)`,
+        reason: preExistingReason,
       });
     }
 
