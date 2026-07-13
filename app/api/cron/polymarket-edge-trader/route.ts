@@ -97,18 +97,43 @@ const DAILY_LOSS_CAP_USD = Number(
   process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
 );
 
-// ── Asymmetric price exits ─────────────────────────────────────────────────
-// Observed 2026-07-13: 19 trades, 58% win rate but net -$4.84 because
-// wins averaged ~$0.18 while losses averaged ~$0.87. Classic profit-factor
-// problem — 10-min hold + only signal-flip / slippage exits lets losers
-// run to the max-hold cap while winners get closed at the same cap.
+// ── Asymmetric price exits + trailing stop ────────────────────────────────
+// The trader is designed to be "profit hungry all the time": winners must
+// be allowed to compound, losers must be cut at a hard floor.
 //
-// Fix: hard bps thresholds on the LIVE mark price vs entry. Take profit
-// aggressively at any material move in our favor. Cut losses tightly
-// when the move goes against us. Both fire on every 5-min tick while a
-// trade is active — no waiting for signal reassessment.
-const TAKE_PROFIT_BPS = Number(process.env.POLYMARKET_EDGE_TAKE_PROFIT_BPS || 30);
-const STOP_LOSS_BPS   = Number(process.env.POLYMARKET_EDGE_STOP_LOSS_BPS   || 20);
+// Rule set (per tick, on the LIVE mark price vs entry, in bps):
+//   1. Initial stop-loss: exit at -STOP_LOSS_BPS. Hard floor.
+//   2. Once high-water >= TRAIL_ARM_BPS, arm the trailing stop by moving
+//      the effective stop from -STOP_LOSS_BPS to +TRAIL_LOCK_BPS.
+//   3. For every TRAIL_STEP_BPS the high-water climbs beyond TRAIL_ARM_BPS,
+//      raise the effective stop by TRAIL_LOCK_STEP_BPS.
+//   4. Exit whenever moveBps <= effective stop. Retraces past a raised
+//      stop lock in profit; retraces past -STOP_LOSS_BPS cap the loss.
+//
+// Round-trip taker fees on BlueFin are ~10 bps, so TRAIL_LOCK_BPS = 10
+// guarantees at least breakeven-after-fees on any armed exit.
+//
+// Historical context (before this fix):
+//   19 trades, 58% win rate, net -$4.84. Wins averaged $0.18 vs losses
+//   $0.87 — a 10-min hold with only signal-flip/slippage exits let losers
+//   run to the max-hold cap while winners got closed at the same cap.
+//   Fixed take-profit at +30 bps was a partial fix but didn't beat fees.
+const STOP_LOSS_BPS       = Number(process.env.POLYMARKET_EDGE_STOP_LOSS_BPS       || 20);
+const TRAIL_ARM_BPS       = Number(process.env.POLYMARKET_EDGE_TRAIL_ARM_BPS       || 30);
+const TRAIL_LOCK_BPS      = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_BPS      || 10);
+const TRAIL_STEP_BPS      = Number(process.env.POLYMARKET_EDGE_TRAIL_STEP_BPS      || 15);
+const TRAIL_LOCK_STEP_BPS = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_STEP_BPS || 10);
+
+/**
+ * Compute the effective stop given the initial floor, arm threshold, and
+ * high-water mark. Pure function — easy to unit-test. Signed bps.
+ */
+function computeEffectiveStopBps(highWaterBps: number): number {
+  const floor = -STOP_LOSS_BPS;
+  if (highWaterBps < TRAIL_ARM_BPS) return floor;
+  const stepsAbove = Math.floor((highWaterBps - TRAIL_ARM_BPS) / TRAIL_STEP_BPS);
+  return TRAIL_LOCK_BPS + stepsAbove * TRAIL_LOCK_STEP_BPS;
+}
 // Signal-flip score-collapse threshold — was 50% (very lax; let losers run).
 // Tightened to 30% so signal degradation triggers exit sooner.
 const SIGNAL_FLIP_SCORE_COLLAPSE = Number(
@@ -202,6 +227,13 @@ interface ActiveTrade {
   /** Hard close time. We exit at most one master tick after open (5min). */
   closeBy: number;
   clientOrderId: string;
+  /**
+   * Highest favourable move (in signed bps) observed since entry.
+   * Ratchets upward only. Used to drive the trailing stop — see
+   * `computeEffectiveStopBps`. Optional for back-compat with rows
+   * written before this field existed.
+   */
+  highWaterBps?: number;
 }
 
 interface EdgeStats {
@@ -468,25 +500,32 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
       const expired = now >= active.closeBy;
 
-      // ── PRICE-BASED EXITS (fire before signal reassessment) ─────────
+      // ── TRAILING-STOP EXIT (fire before signal reassessment) ────────
       // livePos.markPrice reflects the current mark on BlueFin. Compute
-      // move in bps and compare against take-profit / stop-loss.
+      // move in bps, ratchet the high-water mark, derive the effective
+      // stop from it. Exit only if the current move has retraced past
+      // that stop. Winners are allowed to keep running as long as they
+      // keep making new highs.
       // dir=+1 for LONG (up = win), -1 for SHORT (down = win).
       const markPrice = Number(livePos.markPrice) || Number(active.entryPrice);
       const dir = active.side === 'LONG' ? 1 : -1;
       const moveBps = ((markPrice - active.entryPrice) / active.entryPrice) * dir * 10_000;
+      const prevHighWater = active.highWaterBps ?? moveBps;
+      const highWaterBps = Math.max(prevHighWater, moveBps);
+      const effectiveStopBps = computeEffectiveStopBps(highWaterBps);
+
       // Only fire price exits BEFORE the max-hold expiration — after
       // expiration the outer block closes anyway and this branch is
       // dead code.
       if (!expired) {
         let priceExitReason: string | null = null;
-        if (moveBps >= TAKE_PROFIT_BPS) {
-          priceExitReason = `take-profit: mark $${markPrice.toFixed(4)} vs entry $${active.entryPrice.toFixed(4)} = +${moveBps.toFixed(1)} bps`;
-        } else if (moveBps <= -STOP_LOSS_BPS) {
-          priceExitReason = `stop-loss: mark $${markPrice.toFixed(4)} vs entry $${active.entryPrice.toFixed(4)} = ${moveBps.toFixed(1)} bps`;
+        if (moveBps <= effectiveStopBps) {
+          const armed = effectiveStopBps > -STOP_LOSS_BPS;
+          const label = armed ? 'trailing-stop' : 'stop-loss';
+          priceExitReason = `${label}: mark $${markPrice.toFixed(4)} vs entry $${active.entryPrice.toFixed(4)}, move=${moveBps.toFixed(1)}bps, hwm=${highWaterBps.toFixed(1)}bps, stop=${effectiveStopBps.toFixed(1)}bps`;
         }
         if (priceExitReason) {
-          logger.warn('[PolymarketEdge] Price-based exit', { reason: priceExitReason, asset: active.asset });
+          logger.warn('[PolymarketEdge] Trailing-stop exit', { reason: priceExitReason, asset: active.asset });
           const close = await closeWithRetry(bf, active.symbol);
           const exitPrice = pickExitPrice(close, markPrice, active.entryPrice);
           const fees = Number((close as { fees?: number }).fees) || 0;
@@ -496,15 +535,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           const halted = await maybeHalt(newStats, newDaily, haltedUntil);
           await setCronState(KEY_ACTIVE, null);
           await notifyDiscord(
-            `Price exit (${moveBps >= 0 ? 'take-profit' : 'stop-loss'}): ${priceExitReason.split(':')[1].trim()}. Realized $${realized.toFixed(2)}`,
+            `${effectiveStopBps > -STOP_LOSS_BPS ? 'Trailing-stop' : 'Stop-loss'} exit: ${priceExitReason.split(':').slice(1).join(':').trim()}. Realized $${realized.toFixed(2)}`,
             realized >= 0 ? 'TRADE' : 'WARN',
-            { asset: active.asset, side: active.side, exitPrice, entry: active.entryPrice, moveBps: moveBps.toFixed(1) },
+            { asset: active.asset, side: active.side, exitPrice, entry: active.entryPrice, moveBps: moveBps.toFixed(1), hwm: highWaterBps.toFixed(1), stop: effectiveStopBps.toFixed(1) },
           );
           return NextResponse.json({
             success: true,
             ranAt,
             attempted: true,
-            action: moveBps >= 0 ? 'closed' : 'slippage-exit',
+            action: realized >= 0 ? 'closed' : 'slippage-exit',
             closed: {
               symbol: active.symbol,
               asset: active.asset,
@@ -517,6 +556,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
             haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
             reason: priceExitReason,
           });
+        }
+        // No exit — persist the (possibly-raised) high-water mark so the
+        // trailing stop keeps ratcheting between ticks.
+        if (highWaterBps > prevHighWater) {
+          await setCronState(KEY_ACTIVE, { ...active, highWaterBps });
         }
       }
 
@@ -1244,6 +1288,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       openedAt: now,
       closeBy: now + (prediction.recommendation.startsWith('STRONG_') ? 10 : 5) * 60 * 1000,
       clientOrderId,
+      highWaterBps: 0,
     };
     await setCronState(KEY_ACTIVE, trade);
     // Trade actually opened — reset the no-edge streak so gates snap

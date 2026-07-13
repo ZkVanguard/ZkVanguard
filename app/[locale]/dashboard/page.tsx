@@ -549,7 +549,7 @@ export default function DashboardPage() {
         
         {/* Main Content */}
         <main className="flex-1 min-h-[calc(100vh-52px)] pt-12 lg:pt-0 pb-[calc(52px+env(safe-area-inset-bottom))] lg:pb-0">
-          <div className="max-w-[1280px] mx-auto px-4 sm:px-5 py-5 sm:py-6 lg:px-8 lg:py-10">
+          <div className="max-w-[1280px] mx-auto px-3 sm:px-5 py-3 sm:py-6 lg:px-8 lg:py-10">
             {/* Page Header - Desktop only */}
             <div className="hidden lg:block mb-8">
               <h1 className="text-[34px] font-bold text-[#1d1d1f] tracking-[-0.02em] leading-[1.1]">
@@ -681,7 +681,7 @@ export default function DashboardPage() {
     switch (activeNav) {
       case 'overview':
         return (
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-3 sm:space-y-6">
             {/* Portfolio Card */}
             <Card>
               <PortfolioOverview 
@@ -704,7 +704,7 @@ export default function DashboardPage() {
             />
             
             {/* Stats Grid - Stack on mobile, 2 cols on tablet+ */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 items-stretch">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-stretch">
               <Card className="flex flex-col">
                 <CardHeader title="Risk Metrics" />
                 <div className="flex-1">
@@ -760,7 +760,7 @@ export default function DashboardPage() {
         
       case 'hedges':
         return (
-          <div className="space-y-6">
+          <div className="space-y-3 sm:space-y-6">
             <Card>
               <CardHeader 
                 title="Active Hedges" 
@@ -780,7 +780,7 @@ export default function DashboardPage() {
         
       case 'agents':
         return (
-          <div className="space-y-4 sm:space-y-6">
+          <div className="space-y-3 sm:space-y-6">
             <Card>
               <CardHeader 
                 title="AI Agents" 
@@ -860,7 +860,7 @@ function CardHeader({
   badge?: React.ReactNode;
 }) {
   return (
-    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-black/5">
+    <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-black/5">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2.5">

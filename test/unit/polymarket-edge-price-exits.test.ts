@@ -1,142 +1,176 @@
 /**
- * Locks the take-profit / stop-loss decision math from the
- * polymarket-edge trader.
+ * Locks the trailing-stop decision math from the polymarket-edge trader.
  *
- * moveBps = (mark - entry) / entry × dir × 10_000
- *   dir = +1 for LONG (up = win), -1 for SHORT (down = win)
+ * Rules (bps, signed; dir=+1 for LONG, -1 for SHORT):
+ *   moveBps = (mark - entry) / entry × dir × 10_000
  *
- * Exit rules:
- *   moveBps >= TAKE_PROFIT_BPS  → take-profit close
- *   moveBps <= -STOP_LOSS_BPS   → stop-loss close
- *   otherwise                   → hold / signal-flip check
+ *   highWaterBps ratchets upward each tick.
+ *   effectiveStopBps depends on high-water:
+ *     hwm < ARM (30)        → floor = -STOP_LOSS (20)   [initial stop]
+ *     hwm ≥ ARM             → LOCK (10) + floor(hwm-ARM)/STEP × STEP_LOCK (10)
+ *                             (each STEP=15 bps of new high raises the
+ *                              locked stop by STEP_LOCK=10)
  *
- * Real-world calibration:
- *   TP = 30 bps  → close at first $22.90 move on a $76.50 SOL
- *   SL = 20 bps  → cut loss at $15.30 adverse
- *   Together they invert the profit-factor problem (avg win > avg loss).
+ *   Exit when moveBps ≤ effectiveStopBps.
+ *
+ * Why: "profit hungry" — winners keep running as long as they keep
+ * making new highs; losers are cut at -20 bps. Retraces past a raised
+ * stop lock in profit at that level.
  */
 
-const TAKE_PROFIT_BPS = 30;
 const STOP_LOSS_BPS = 20;
+const TRAIL_ARM_BPS = 30;
+const TRAIL_LOCK_BPS = 10;
+const TRAIL_STEP_BPS = 15;
+const TRAIL_LOCK_STEP_BPS = 10;
 
-interface TradeState {
-  side: 'LONG' | 'SHORT';
+function computeEffectiveStopBps(highWaterBps: number): number {
+  const floor = -STOP_LOSS_BPS;
+  if (highWaterBps < TRAIL_ARM_BPS) return floor;
+  const stepsAbove = Math.floor((highWaterBps - TRAIL_ARM_BPS) / TRAIL_STEP_BPS);
+  return TRAIL_LOCK_BPS + stepsAbove * TRAIL_LOCK_STEP_BPS;
+}
+
+interface TickState {
   entryPrice: number;
+  side: 'LONG' | 'SHORT';
+  highWaterBps: number;
 }
 
-function moveBps(state: TradeState, markPrice: number): number {
+function moveBps(state: TickState, mark: number): number {
   const dir = state.side === 'LONG' ? 1 : -1;
-  return ((markPrice - state.entryPrice) / state.entryPrice) * dir * 10_000;
+  return ((mark - state.entryPrice) / state.entryPrice) * dir * 10_000;
 }
 
-function shouldExit(
-  state: TradeState,
-  markPrice: number,
-): { exit: false } | { exit: true; reason: 'take-profit' | 'stop-loss'; bps: number } {
-  const bps = moveBps(state, markPrice);
-  if (bps >= TAKE_PROFIT_BPS) return { exit: true, reason: 'take-profit', bps };
-  if (bps <= -STOP_LOSS_BPS) return { exit: true, reason: 'stop-loss', bps };
-  return { exit: false };
+function tick(state: TickState, mark: number): {
+  moveBps: number;
+  highWaterBps: number;
+  stopBps: number;
+  exit: boolean;
+} {
+  const m = moveBps(state, mark);
+  const hwm = Math.max(state.highWaterBps, m);
+  const stop = computeEffectiveStopBps(hwm);
+  return { moveBps: m, highWaterBps: hwm, stopBps: stop, exit: m <= stop };
 }
 
-describe('polymarket-edge price-based exits', () => {
-  describe('LONG position', () => {
-    const trade: TradeState = { side: 'LONG', entryPrice: 76.50 };
-
-    it('holds when move is inside band (+15 bps)', () => {
-      // +15 bps = 76.50 × 1.0015 = 76.6148
-      const r = shouldExit(trade, 76.6148);
-      expect(r.exit).toBe(false);
+describe('polymarket-edge trailing stop', () => {
+  describe('computeEffectiveStopBps (pure)', () => {
+    it('returns -20 (floor) when hwm below arm threshold', () => {
+      expect(computeEffectiveStopBps(0)).toBe(-20);
+      expect(computeEffectiveStopBps(29.9)).toBe(-20);
     });
 
-    it('take-profit fires at +30.01 bps (just past threshold)', () => {
-      const target = 76.50 * (1 + 30.01 / 10_000);
-      const r = shouldExit(trade, target);
-      expect(r.exit).toBe(true);
-      if (r.exit) {
-        expect(r.reason).toBe('take-profit');
-        expect(r.bps).toBeCloseTo(30.01, 4);
-      }
+    it('arms at +30 hwm: stop jumps to +10 (breakeven after fees)', () => {
+      expect(computeEffectiveStopBps(30)).toBe(10);
     });
 
-    it('take-profit fires generously past +30 bps', () => {
-      const r = shouldExit(trade, 76.50 * 1.005); // +50 bps
-      expect(r.exit).toBe(true);
-      if (r.exit) {
-        expect(r.reason).toBe('take-profit');
-        expect(r.bps).toBeCloseTo(50, 5);
-      }
+    it('ratchets stop up by 10 bps per 15 bps of new high above arm', () => {
+      expect(computeEffectiveStopBps(45)).toBe(20);  // 1 step: 10 + 10
+      expect(computeEffectiveStopBps(60)).toBe(30);  // 2 steps: 10 + 20
+      expect(computeEffectiveStopBps(75)).toBe(40);
+      expect(computeEffectiveStopBps(90)).toBe(50);
     });
 
-    it('stop-loss fires at -20.01 bps (just past threshold)', () => {
-      const target = 76.50 * (1 - 20.01 / 10_000);
-      const r = shouldExit(trade, target);
-      expect(r.exit).toBe(true);
-      if (r.exit) {
-        expect(r.reason).toBe('stop-loss');
-        expect(r.bps).toBeCloseTo(-20.01, 4);
-      }
-    });
-
-    it('holds at -15 bps (inside band on downside)', () => {
-      const target = 76.50 * (1 - 15 / 10_000);
-      const r = shouldExit(trade, target);
-      expect(r.exit).toBe(false);
-    });
-  });
-
-  describe('SHORT position', () => {
-    const trade: TradeState = { side: 'SHORT', entryPrice: 3800 };
-
-    it('take-profit fires when price drops 30 bps (SHORT wins going down)', () => {
-      // Price down = SHORT profit → dir=-1 flips sign back to positive
-      const target = 3800 * (1 - 30 / 10_000); // price fell 30 bps
-      const r = shouldExit(trade, target);
-      expect(r.exit).toBe(true);
-      if (r.exit) {
-        expect(r.reason).toBe('take-profit');
-        expect(r.bps).toBeCloseTo(30, 5);
-      }
-    });
-
-    it('stop-loss fires when price rises 20.01 bps against a SHORT', () => {
-      const target = 3800 * (1 + 20.01 / 10_000); // price rose = SHORT loses
-      const r = shouldExit(trade, target);
-      expect(r.exit).toBe(true);
-      if (r.exit) {
-        expect(r.reason).toBe('stop-loss');
-        expect(r.bps).toBeCloseTo(-20.01, 4);
+    it('never regresses (monotonic in hwm)', () => {
+      let prev = computeEffectiveStopBps(0);
+      for (let hwm = 0; hwm <= 200; hwm += 3) {
+        const s = computeEffectiveStopBps(hwm);
+        expect(s).toBeGreaterThanOrEqual(prev);
+        prev = s;
       }
     });
   });
 
-  describe('profit-factor inversion (the actual point of the fix)', () => {
-    it('caps loss at 20 bps × leverage on a bad trade', () => {
-      // With stake $5, 3× leverage, notional $15:
-      // Max loss = 20 bps × $15 = $0.03 gross (ignore fees for math)
-      const trade: TradeState = { side: 'LONG', entryPrice: 100 };
-      const stopPrice = 100 * (1 - 20 / 10_000); // = 99.80
-      const notional = 15;
-      const maxLoss = ((stopPrice - 100) / 100) * notional;
-      expect(maxLoss).toBeCloseTo(-0.03, 4);
+  describe('LONG runner — winner keeps running', () => {
+    const initial: TickState = { entryPrice: 100, side: 'LONG', highWaterBps: 0 };
+
+    it('tiny drift keeps stop at -20 floor', () => {
+      const t = tick(initial, 100.05); // +5 bps
+      expect(t.stopBps).toBe(-20);
+      expect(t.exit).toBe(false);
     });
 
-    it('locks in gain at 30 bps × leverage on a good trade', () => {
-      const trade: TradeState = { side: 'LONG', entryPrice: 100 };
-      const tpPrice = 100 * (1 + 30 / 10_000); // = 100.30
-      const notional = 15;
-      const takenProfit = ((tpPrice - 100) / 100) * notional;
-      expect(takenProfit).toBeCloseTo(0.045, 4);
+    it('crossing arm locks +10 stop and does NOT exit', () => {
+      // Cross arm barely
+      const t = tick(initial, 100.301); // +30.1 bps
+      expect(t.stopBps).toBe(10);
+      expect(t.exit).toBe(false); // still above stop
     });
 
-    it('inverts historical avg-loss / avg-win imbalance', () => {
-      // Historical: avg win $0.18, avg loss $0.87 → net negative
-      // Post-fix cap: avg win ≤ $0.045, avg loss ≤ $0.03 per trade (at $15 notional)
-      // Win-loss ratio becomes 1.5× in our favor even at 40% win rate
+    it('after running to +100 bps then retracing to +40, exits at trailing stop', () => {
+      // Simulate: hwm previously reached 100 bps → stop = 50
+      const armed: TickState = { entryPrice: 100, side: 'LONG', highWaterBps: 100 };
+      const t = tick(armed, 100.40); // moveBps = 40, stop = 50
+      expect(t.stopBps).toBe(50);
+      expect(t.exit).toBe(true); // 40 < 50 → trailing-stop trigger, LOCKS +40 bps profit
+    });
+
+    it('does NOT exit while trade continues to make new highs', () => {
+      const state: TickState = { entryPrice: 100, side: 'LONG', highWaterBps: 60 };
+      const t = tick(state, 100.801); // +80.1 bps (new high)
+      expect(t.highWaterBps).toBeCloseTo(80.1, 4);
+      expect(t.stopBps).toBe(40); // was 30 at hwm=60, now 40 at hwm=80.1
+      expect(t.exit).toBe(false); // 80.1 > 40
+    });
+  });
+
+  describe('LONG loser — hard stop at -20', () => {
+    const initial: TickState = { entryPrice: 100, side: 'LONG', highWaterBps: 0 };
+
+    it('exits at -20 bps (never armed the trail)', () => {
+      const t = tick(initial, 99.80); // -20 bps
+      expect(t.stopBps).toBe(-20);
+      expect(t.exit).toBe(true);
+    });
+
+    it('holds at -15 bps (inside the stop band)', () => {
+      const t = tick(initial, 99.85);
+      expect(t.exit).toBe(false);
+    });
+  });
+
+  describe('SHORT runner + loser (mirror-image math)', () => {
+    it('SHORT arms when price drops 30.1 bps (dir=-1 flips sign back positive)', () => {
+      const s: TickState = { entryPrice: 100, side: 'SHORT', highWaterBps: 0 };
+      const t = tick(s, 99.699); // moveBps ≈ 30.1 (SHORT wins going down)
+      expect(t.moveBps).toBeGreaterThan(30);
+      expect(t.stopBps).toBe(10);
+      expect(t.exit).toBe(false);
+    });
+
+    it('SHORT loser exits when price rises 20 bps', () => {
+      const s: TickState = { entryPrice: 100, side: 'SHORT', highWaterBps: 0 };
+      const t = tick(s, 100.201); // moveBps ≈ -20.1
+      expect(t.exit).toBe(true);
+    });
+  });
+
+  describe('profit-factor: the point of "profit hungry"', () => {
+    // Round-trip fees ≈ 10 bps. At $15 notional (=$5 stake × 3× lev):
+    //   Fees ≈ $0.015 per trade.
+    // Compare max-loss vs typical trailing win.
+
+    it('caps loss at 20 bps × notional (never more)', () => {
       const notional = 15;
-      const maxWin = (30 / 10_000) * notional;
-      const maxLoss = (20 / 10_000) * notional;
-      expect(maxWin / maxLoss).toBeCloseTo(1.5, 3);
+      const maxLossGross = (-20 / 10_000) * notional; // -$0.030
+      expect(maxLossGross).toBeCloseTo(-0.03, 4);
+      // After fees ($0.015 round-trip): ~-$0.045
+    });
+
+    it('LOCKS +40 bps on a runner that hit +100 and retraced', () => {
+      // hwm=100 → stop=50; retrace exits at +40+ (whatever the mark shows)
+      const notional = 15;
+      const lockedGross = (40 / 10_000) * notional; // $0.060
+      expect(lockedGross).toBeCloseTo(0.06, 4);
+      // After fees ~$0.045 net = 1.5× the old fixed-TP of +30
+    });
+
+    it('EV positive after fees at 50% win rate assuming avg win = trailing +60 bps', () => {
+      // 50% × +60 bps - 50% × -20 bps = +30 bps - 10 bps = +20 bps expected before fees
+      // Post-fees: 50% × (60-10) + 50% × (-20-10) = 25 - 15 = +10 bps per trade net
+      const evNet = 0.5 * (60 - 10) + 0.5 * (-20 - 10);
+      expect(evNet).toBeGreaterThan(0);
     });
   });
 });
