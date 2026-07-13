@@ -126,6 +126,32 @@ const ZK_ATTEST_USD = Number(process.env.ZK_ATTEST_MIN_NOTIONAL_USD) || 1_000_00
 const REPORTING_ZK_REQUIRED_USD = Number(process.env.REPORTING_ZK_REQUIRED_USD) || 1_000_000;
 
 /**
+ * Read the current PriceMonitor alert list without running the full
+ * agent guard. Cheap: single cron_state fetch + array copy. Returns
+ * an uppercase-normalised set the caller can `.has()` against asset
+ * tickers.
+ *
+ * Used by the polymarket-edge trader's candidate walk to filter
+ * alerted assets out at selection time — otherwise the walk picks a
+ * blocked asset, calls the full guard, gets rejected, and returns
+ * skip without falling through to the next candidate.
+ */
+export async function getPriceAlertedSymbols(): Promise<Set<string>> {
+  try {
+    const att = await loadCycleAttestation();
+    if (!att || att.priceAlerts.alertsTriggered === 0) return new Set();
+    const out = new Set<string>();
+    for (const s of att.priceAlerts.symbolsAlerted) {
+      const norm = String(s).toUpperCase().replace(/-PERP$/i, '');
+      if (norm) out.add(norm);
+    }
+    return out;
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Load the last LeadAgent cycle's attestation (PriceMonitor alerts +
  * ReportingAgent ZK proof count). Used to gate trades:
  *   - PriceMonitor alerts trigger → tighten drift + block opens on the alerted symbol

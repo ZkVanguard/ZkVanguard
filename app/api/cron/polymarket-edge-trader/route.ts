@@ -840,6 +840,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     );
     const priceMap = new Map(priceFetches.map((p) => [p.asset, p.refPrice]));
 
+    // Pre-fetch the PriceMonitorAgent alert list so we can filter alerted
+    // assets out of the candidate walk BEFORE running the full agent
+    // guard. Without this the walk would pick the top-ranked asset,
+    // hit the guard, get rejected with "PriceMonitorAgent alert active
+    // on X" and bail — losing the chance to fall through to the next
+    // candidate. Observed 2026-07-13: 15+ hours of no trades because
+    // SOL kept getting picked and blocked while BTC/ETH were fine.
+    let alertedAssets = new Set<string>();
+    try {
+      const { getPriceAlertedSymbols } = await import('@/lib/services/agents/agent-trade-guard');
+      alertedAssets = await getPriceAlertedSymbols();
+    } catch {
+      /* non-critical — if the helper fails, walk proceeds unfiltered
+       * and the full guard downstream will still catch alerted trades.
+       */
+    }
+
     let compoundMul = 1;
     let stakeUsd = BASE_STAKE_USD;
     let effectiveStake = BASE_STAKE_USD;
@@ -848,6 +865,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const rejectedForMinQty: string[] = [];
 
     for (const c of rankedCandidates) {
+      // Fast alert filter: if PriceMonitor has an active threshold
+      // alert on this asset, downstream agent-guard will block it.
+      // Skip now so we can fall through to the next affordable
+      // non-alerted candidate.
+      if (alertedAssets.has(c.asset)) {
+        rejectedForMinQty.push(`${c.asset}: price-alert active`);
+        continue;
+      }
       const rp = priceMap.get(c.asset) || 0;
       if (rp <= 0) {
         rejectedForMinQty.push(`${c.asset}: no mark price`);
