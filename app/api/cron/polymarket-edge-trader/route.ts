@@ -849,11 +849,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // stayed. Reset only when a trade actually opens (see the
     // post-open reset near the successful-open Discord notify).
 
-    // Rank ALL directional candidates by score so we can walk them if the
-    // top pick fails the minQty affordability check further down. Without
-    // this walk, the trader silently no-ops for weeks whenever BTC (usual
-    // top pick) can't clear minQty on a small pool — even though ETH or
-    // SUI with much smaller minQty would trade the same signal.
+    // Rank directional candidates that INDIVIDUALLY clear the effective
+    // gates. Without the per-candidate gate filter, the walk can pick
+    // a lower-conf asset just because its consensus is high enough to
+    // beat scan.best's score (e.g. SOL 56/100 outranks ETH 66/67 by
+    // sqrt(conf × cons)). Observed 2026-07-13 20:40 UTC: gates were
+    // 63/63 (relaxed) and only ETH cleared, but SOL got picked because
+    // scan.all is unfiltered — resulting in a real trade opened on a
+    // 56% conf signal, well below the 63% floor the operator set.
+    //
+    // Applying the same gate on the walk keeps the fallback behaviour
+    // (walk lower-scored candidates when top pick fails minQty) but
+    // limits the pool to signals that actually cleared the noise floor.
     const rankedCandidates = Object.entries(scan.all)
       .map(([a, p]) => ({
         asset: a as SupportedAsset,
@@ -861,7 +868,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         score: PredictionAggregatorService.scoreOpportunity(p),
         side: recommendationToSide(p.recommendation),
       }))
-      .filter((c) => c.side !== null && Number.isFinite(c.score))
+      .filter((c) =>
+        c.side !== null &&
+        Number.isFinite(c.score) &&
+        c.prediction.confidence >= effectiveConf &&
+        c.prediction.consensus >= effectiveCons &&
+        c.prediction.sources.length >= 2,
+      )
       .sort((a, b) => b.score - a.score);
 
     if (rankedCandidates.length === 0) {
