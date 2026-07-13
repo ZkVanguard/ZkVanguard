@@ -1059,14 +1059,36 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const open = await bf.openHedge({
+    // Attempt the open. If BlueFin returns 401 / JWT expired, force
+    // a fresh initialize() (which reissues the auth token) and retry
+    // ONCE. Observed 2026-07-13: many ticks failed with "BlueFin API
+    // error: 401 - Jwt is expired" because the singleton's cached
+    // token had aged out and getBalance/getPositions calls elsewhere
+    // hadn't triggered a re-auth. Retry-on-401 makes the trader
+    // resilient to token TTL without needing every callsite to
+    // proactively refresh.
+    const openArgs = {
       symbol,
       side,
       size: sizeQty,
       leverage: LEVERAGE,
       clientOrderId,
       reason: `polyedge ${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} sources=${prediction.sources.length} | agent: ${guard.reason}`,
-    });
+    };
+    let open = await bf.openHedge(openArgs);
+    if (!open.success && /jwt.*expir|\b401\b/i.test(String(open.error || ''))) {
+      logger.warn('[PolymarketEdge] JWT expired — re-init + retry once', {
+        error: String(open.error).slice(0, 120),
+      });
+      try {
+        await bf.initialize(adminKey, network);
+      } catch (reInitErr) {
+        logger.warn('[PolymarketEdge] re-init before retry failed', {
+          error: reInitErr instanceof Error ? reInitErr.message : String(reInitErr),
+        });
+      }
+      open = await bf.openHedge(openArgs);
+    }
 
     // Settle the SafeGuard execution counter regardless of outcome
     try {
