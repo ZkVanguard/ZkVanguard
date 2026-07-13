@@ -97,6 +97,24 @@ const DAILY_LOSS_CAP_USD = Number(
   process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
 );
 
+// ── Asymmetric price exits ─────────────────────────────────────────────────
+// Observed 2026-07-13: 19 trades, 58% win rate but net -$4.84 because
+// wins averaged ~$0.18 while losses averaged ~$0.87. Classic profit-factor
+// problem — 10-min hold + only signal-flip / slippage exits lets losers
+// run to the max-hold cap while winners get closed at the same cap.
+//
+// Fix: hard bps thresholds on the LIVE mark price vs entry. Take profit
+// aggressively at any material move in our favor. Cut losses tightly
+// when the move goes against us. Both fire on every 5-min tick while a
+// trade is active — no waiting for signal reassessment.
+const TAKE_PROFIT_BPS = Number(process.env.POLYMARKET_EDGE_TAKE_PROFIT_BPS || 30);
+const STOP_LOSS_BPS   = Number(process.env.POLYMARKET_EDGE_STOP_LOSS_BPS   || 20);
+// Signal-flip score-collapse threshold — was 50% (very lax; let losers run).
+// Tightened to 30% so signal degradation triggers exit sooner.
+const SIGNAL_FLIP_SCORE_COLLAPSE = Number(
+  process.env.POLYMARKET_EDGE_SIGNAL_FLIP_SCORE_COLLAPSE || 0.7,
+); // ratio of live_score / entry_score below which we exit
+
 // Multi-asset universe — see lib/config/trader-assets.ts. Rationale:
 //   BTC: minQty $60 notional (needs $30 stake at 3x lev). Traded when pool ≥ $200.
 //   ETH: minQty $16 notional (needs $8 stake at 3x). Traded when pool ≥ $50.
@@ -450,9 +468,64 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
       const expired = now >= active.closeBy;
 
-      // Signal-flip stop: if hold not yet expired, re-fetch the per-asset
-      // prediction and exit early when the recommendation flipped against
-      // us, demoted to LIGHT/WAIT, or its score collapsed >50% from entry.
+      // ── PRICE-BASED EXITS (fire before signal reassessment) ─────────
+      // livePos.markPrice reflects the current mark on BlueFin. Compute
+      // move in bps and compare against take-profit / stop-loss.
+      // dir=+1 for LONG (up = win), -1 for SHORT (down = win).
+      const markPrice = Number(livePos.markPrice) || Number(active.entryPrice);
+      const dir = active.side === 'LONG' ? 1 : -1;
+      const moveBps = ((markPrice - active.entryPrice) / active.entryPrice) * dir * 10_000;
+      // Only fire price exits BEFORE the max-hold expiration — after
+      // expiration the outer block closes anyway and this branch is
+      // dead code.
+      if (!expired) {
+        let priceExitReason: string | null = null;
+        if (moveBps >= TAKE_PROFIT_BPS) {
+          priceExitReason = `take-profit: mark $${markPrice.toFixed(4)} vs entry $${active.entryPrice.toFixed(4)} = +${moveBps.toFixed(1)} bps`;
+        } else if (moveBps <= -STOP_LOSS_BPS) {
+          priceExitReason = `stop-loss: mark $${markPrice.toFixed(4)} vs entry $${active.entryPrice.toFixed(4)} = ${moveBps.toFixed(1)} bps`;
+        }
+        if (priceExitReason) {
+          logger.warn('[PolymarketEdge] Price-based exit', { reason: priceExitReason, asset: active.asset });
+          const close = await closeWithRetry(bf, active.symbol);
+          const exitPrice = pickExitPrice(close, markPrice, active.entryPrice);
+          const fees = Number((close as { fees?: number }).fees) || 0;
+          const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
+          const newStats = await applyOutcome(safeStats, realized, active.asset);
+          const newDaily = await applyDaily(daily, realized);
+          const halted = await maybeHalt(newStats, newDaily, haltedUntil);
+          await setCronState(KEY_ACTIVE, null);
+          await notifyDiscord(
+            `Price exit (${moveBps >= 0 ? 'take-profit' : 'stop-loss'}): ${priceExitReason.split(':')[1].trim()}. Realized $${realized.toFixed(2)}`,
+            realized >= 0 ? 'TRADE' : 'WARN',
+            { asset: active.asset, side: active.side, exitPrice, entry: active.entryPrice, moveBps: moveBps.toFixed(1) },
+          );
+          return NextResponse.json({
+            success: true,
+            ranAt,
+            attempted: true,
+            action: moveBps >= 0 ? 'closed' : 'slippage-exit',
+            closed: {
+              symbol: active.symbol,
+              asset: active.asset,
+              realizedPnlUsd: realized,
+              win: realized > 0,
+              durationS: Math.round((now - active.openedAt) / 1000),
+            },
+            stats: newStats,
+            daily: newDaily,
+            haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
+            reason: priceExitReason,
+          });
+        }
+      }
+
+      // Signal-flip stop: if hold not yet expired AND no price exit
+      // triggered above, re-fetch the per-asset prediction and exit
+      // early when the recommendation flipped against us, demoted to
+      // LIGHT/WAIT, or its score collapsed >SIGNAL_FLIP_SCORE_COLLAPSE
+      // from entry (default 70% — was 50%; tightened so weak signals
+      // exit sooner instead of running to max-hold).
       if (!expired) {
         let flipReason: string | null = null;
         try {
@@ -468,8 +541,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
               flipReason = `recommendation flipped: ${livePred.recommendation}`;
             } else if (!isActionable(livePred.recommendation)) {
               flipReason = `recommendation demoted to ${livePred.recommendation}`;
-            } else if (liveScore < active.entryScore * 0.5) {
-              flipReason = `score collapsed ${active.entryScore.toFixed(0)} → ${liveScore.toFixed(0)}`;
+            } else if (liveScore < active.entryScore * SIGNAL_FLIP_SCORE_COLLAPSE) {
+              flipReason = `score collapsed ${active.entryScore.toFixed(0)} → ${liveScore.toFixed(0)} (< ${(SIGNAL_FLIP_SCORE_COLLAPSE * 100).toFixed(0)}% threshold)`;
             }
           }
         } catch (e) {
@@ -503,7 +576,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         const close = await closeWithRetry(bf, active.symbol);
         const exitPrice = pickExitPrice(close, livePos.markPrice, active.entryPrice);
         const fees = Number((close as { fees?: number }).fees) || 0;
-        const dir = active.side === 'LONG' ? 1 : -1;
+        // dir is declared above (price-exit block) — reuse it here
         const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
         const newStats = await applyOutcome(safeStats, realized, active.asset);
         const newDaily = await applyDaily(daily, realized);
@@ -537,7 +610,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       const close = await closeWithRetry(bf, active.symbol);
       const exitPrice = pickExitPrice(close, livePos.markPrice, active.entryPrice);
       const fees = Number((close as { fees?: number }).fees) || 0;
-      const dir = active.side === 'LONG' ? 1 : -1;
+      // dir declared above (price-exit block) — reuse
       const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
 
       const win = realized > 0;
