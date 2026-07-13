@@ -585,6 +585,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
     // ── 2) No active trade — check halt & daily cap ──────────────────────
     if (haltedUntil > now) {
+      const haltReason = `Halted for ${Math.round((haltedUntil - now) / 60000)}m more (until ${new Date(haltedUntil).toISOString().slice(0, 16)})`;
+      // Record so operators can see WHY the trader is idle instead of
+      // watching cron:lastRun update with no other diagnostic. Halt was
+      // previously the only silent skip path.
+      await recordSkip('halted', haltReason);
       return NextResponse.json({
         success: true,
         ranAt,
@@ -593,7 +598,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         stats: safeStats,
         daily,
         haltedUntil,
-        reason: `Halted for ${Math.round((haltedUntil - now) / 60000)}m more`,
+        reason: haltReason,
       });
     }
     if (daily.pnlUsd <= DAILY_LOSS_CAP_USD) {
@@ -1317,7 +1322,16 @@ async function maybeHalt(
   const drawdown =
     stats.peakPnlUsd > 0 ? (stats.peakPnlUsd - stats.totalPnlUsd) / stats.peakPnlUsd : 0;
   const tripLosses = stats.consecutiveLosses >= MAX_CONSECUTIVE_LOSSES;
-  const tripDrawdown = drawdown >= MAX_DRAWDOWN_PCT && stats.peakPnlUsd > 0;
+  // Absolute-$ floor for the drawdown check. Otherwise a $0.10 win
+  // followed by a $0.10 loss reads as "100% drawdown from peak" and
+  // trips the kill switch for 24 hours — even though absolute dollars
+  // are trivial. Observed 2026-07-13: trader made $0.10 on first SOL
+  // trade, gave $0.10 back on next, killed itself for 22h while SOL
+  // was showing STRONG_HEDGE_LONG 88/100. Floor at max(4×BASE_STAKE, $10)
+  // — a peak below that isn't "meaningful profit worth defending."
+  const DRAWDOWN_PEAK_FLOOR = Math.max(BASE_STAKE_USD * 4, 10);
+  const peakMeaningful = stats.peakPnlUsd >= DRAWDOWN_PEAK_FLOOR;
+  const tripDrawdown = drawdown >= MAX_DRAWDOWN_PCT && peakMeaningful;
   const tripDaily = daily.pnlUsd <= DAILY_LOSS_CAP_USD;
   if (tripLosses || tripDrawdown || tripDaily) {
     const until = Date.now() + HALT_DURATION_MS;
