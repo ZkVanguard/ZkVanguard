@@ -941,9 +941,35 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
     }
 
-    const notionalUsd = effectiveStake * LEVERAGE;
-    const rawQty = notionalUsd / refPrice;
-    const sizeQty = quantize(rawQty, ASSET_STEP[asset]);
+    const step = ASSET_STEP[asset];
+    // BlueFin's dust guard requires size ≥ 1.5× minQty AFTER
+    // quantization. quantize() floors to step size, so an in-band raw
+    // qty like 0.197 for SOL (minQty 0.1) snaps to 0.1 — which is
+    // exactly minQty and fails the dust check. Bump to at least
+    // ceil(1.5 × minQty / step) × step so we always clear the guard.
+    // For minQty === step (all our supported assets) this simplifies
+    // to 2 × step. Observed 2026-07-13: SOL was snapping to 0.1 every
+    // tick and openHedge rejected with "Size 0.1 < 1.5× minQty 0.1".
+    const minDustSafeQty = Math.ceil((1.5 * step) / step) * step;
+    const initialNotional = effectiveStake * LEVERAGE;
+    const rawQty = initialNotional / refPrice;
+    const quantizedQty = quantize(rawQty, step);
+    const sizeQty = Math.max(quantizedQty, minDustSafeQty);
+    // Recompute notional from the ACTUAL size we're going to send, not
+    // the pre-quantize estimate — otherwise risk-gate + Discord alert
+    // would see a stale number after the dust-safe bump.
+    const notionalUsd = sizeQty * refPrice;
+    if (sizeQty > quantizedQty) {
+      logger.info('[PolymarketEdge] bumping qty to clear BlueFin dust guard', {
+        asset,
+        rawQty: rawQty.toFixed(6),
+        quantized: quantizedQty,
+        bumped: sizeQty,
+        minDustSafe: minDustSafeQty,
+        step,
+        notionalBumped: notionalUsd.toFixed(2),
+      });
+    }
 
     // Risk gate (mirrors RiskAgent invariants without an LLM round-trip).
     const risk = riskGate({
@@ -957,6 +983,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     });
     if (!risk.ok) {
       logger.warn('[PolymarketEdge] risk gate blocked entry', { reason: risk.reason });
+      // Record the block reason so it's visible via cron_state instead
+      // of a silent 500 or stale last-skip.
+      await recordSkip('no-edge', `risk-gate blocked ${asset} ${side}: ${risk.reason}`);
       return NextResponse.json({
         success: true,
         ranAt,
