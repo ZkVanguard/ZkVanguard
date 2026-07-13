@@ -172,6 +172,7 @@ export class PriceMonitorAgent {
 
     let alertsChecked = 0;
     let alertsTriggered = 0;
+    const alertedSymbols = new Set<string>();
     for (const alert of this.alerts.values()) {
       if (!alert.active) continue;
       const priceData = prices.get(alert.symbol);
@@ -179,6 +180,7 @@ export class PriceMonitorAgent {
       alertsChecked++;
       if (this.checkAlertCondition(alert, priceData)) {
         alertsTriggered++;
+        alertedSymbols.add(String(alert.symbol).toUpperCase());
         await this.handleAlertTriggered(alert, priceData);
       }
     }
@@ -202,7 +204,11 @@ export class PriceMonitorAgent {
       alertsChecked,
       alertsTriggered,
       fiveMinProcessed,
-      symbols: Array.from(prices.keys()),
+      // Only the symbols that actually crossed a threshold this tick.
+      // Callers (e.g. agent-trade-guard) treat this as the block-list;
+      // returning all monitored symbols here would gate every asset any
+      // time a single alert fires anywhere.
+      symbols: Array.from(alertedSymbols),
     };
   }
 
