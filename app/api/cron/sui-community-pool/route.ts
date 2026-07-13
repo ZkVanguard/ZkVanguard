@@ -1469,11 +1469,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           leverage: tierLev,
           hedgeRatio: ratio,
         });
-        await notifyDiscord(
-          `Allocation auto-adjusted: ${clamp.dropped.map(d => `${d.asset} ${d.originalPct}% (need $${d.notionalNeeded.toFixed(0)} notional, have $${d.notionalAvailable.toFixed(2)})`).join(', ')} dropped — redistributed to hedgeable assets to avoid naked spot exposure.`,
-          'INFO',
-          { navUsd, leverage: tierLev, dropped: clamp.dropped, before: aiResult.allocations, after: clamp.allocations },
-        );
+        // Discord intentionally silent — "AI target > minQty" is the
+        // steady state on a $50 pool and firing INFO every 30-min cron
+        // tick is pure noise. Logged above via logger for audit.
         aiResult.allocations = clamp.allocations as typeof aiResult.allocations;
       } else if (clamp.dropped.length > 0 && !clamp.redistributed) {
         // No survivor — every asset unhedgeable. Fall back to keeping
@@ -1483,11 +1481,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           leverage: tierLev,
           dropped: clamp.dropped,
         });
-        await notifyDiscord(
-          `Pool too small to hedge ANY asset (NAV $${navUsd.toFixed(2)}, leverage ${tierLev}x). All ${clamp.dropped.length} candidates below minQty. Skipping swap + hedge — pool stays in USDC.`,
-          'WARN',
-          { navUsd, leverage: tierLev, dropped: clamp.dropped },
-        );
+        // Discord silent — same reason: repeated WARN on a permanently-
+        // small pool is noise. Structural state, not an event.
         for (const a of Object.keys(aiResult.allocations)) {
           (aiResult.allocations as Record<string, number>)[a] = 0;
         }
@@ -2703,11 +2698,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                         commitment: emit.commitmentHashHex?.slice(0, 16) + '...',
                         txDigest: emit.txDigest,
                       });
-                      await notifyDiscord(
-                        `ZK commitment stored for ${asset}-PERP hedge (${emit.commitmentHashHex?.slice(0, 16)}...) — on-chain attestation without revealing position details.`,
-                        'INFO',
-                        { commitmentHashHex: emit.commitmentHashHex, txDigest: emit.txDigest },
-                      );
+                      // Discord silent — the "Auto-hedge OPENED" TRADE
+                      // alert above already announced the hedge. Adding
+                      // a second INFO ping about the ZK commitment
+                      // that ALWAYS accompanies it doubles Discord
+                      // volume without adding operator-actionable info.
+                      // ZK commitment digest is logged via logger for
+                      // audit trail.
                     } else if (!emit.skipped) {
                       logger.warn('[SUI Cron] Private hedge commitment failed (non-critical)', {
                         orderId: result.orderId, error: emit.error,

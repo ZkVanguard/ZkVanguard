@@ -1049,11 +1049,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       });
       const guardSkipReason = `agent-guard blocked ${asset} ${side} ($${notionalUsd.toFixed(2)}) at stage=${guard.stage}: ${guard.reason}`;
       await recordSkip('no-edge', guardSkipReason);
-      await notifyDiscord(
-        `🛡️ PolymarketEdge agent-guard blocked ${asset} ${side} ($${notionalUsd.toFixed(2)}): ${guard.reason}`,
-        'WARN',
-        { stage: guard.stage, asset, side, agentSide: guard.agentSide, agentConfidence: guard.agentConfidence },
-      );
+      // Discord intentionally silent here — agent-guard rejections are
+      // routine safety behavior (PriceMonitor alerts fire routinely),
+      // and repeat WARN messages for the same block are pure noise.
+      // Operators can inspect via polymarket-edge:last-skip cron_state.
+      // Discord stays for real capital events only: open, close, KILL.
       return NextResponse.json({
         success: false,
         ranAt,

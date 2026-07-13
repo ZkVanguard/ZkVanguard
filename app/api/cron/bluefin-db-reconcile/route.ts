@@ -420,13 +420,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
 
     const drifted = phantomDbRows.length > 0 || orphanBluefinPositions.length > 0;
     if (drifted) {
-      const phantomDesc = phantomDbRows.map(r => `${r.symbol} ${r.side} ${r.size}`).join(', ') || 'none';
-      const orphanDesc = orphanBluefinPositions.map(r => `${r.symbol} ${r.side} ${r.size}`).join(', ') || 'none';
-      await notifyDiscord(
-        `DB↔BlueFin drift detected. Phantoms closed (${phantomDbRows.length}): ${phantomDesc}. Orphans on BlueFin (${orphanBluefinPositions.length}): ${orphanDesc}.`,
-        orphanBluefinPositions.length > 0 ? 'WARN' : 'INFO',
-        { phantomDbRows, orphanBluefinPositions, closedDbRowIds },
-      );
+      // Discord only alerts on ACTUAL orphan adoption (new
+      // reconstructed_ rows inserted), not every reconcile that
+      // touched a phantom row. Pure phantom cleanups happen every
+      // time an operator closes a position manually on BlueFin — no
+      // capital at risk, no action needed, so keep them off Discord.
+      // Was firing INFO/WARN every 15 min for weeks pre-fix.
+      const insertedCount = orphanInsertedIds.length;
+      if (insertedCount > 0) {
+        const orphanDesc = orphanBluefinPositions
+          .map(r => `${r.symbol} ${r.side} ${r.size}`)
+          .join(', ');
+        await notifyDiscord(
+          `Orphan BlueFin position adopted into DB (${insertedCount} row${insertedCount === 1 ? '' : 's'}): ${orphanDesc}. Phantoms cleaned: ${phantomDbRows.length}.`,
+          'WARN',
+          { phantomDbRows, orphanBluefinPositions, closedDbRowIds, orphanInsertedIds },
+        );
+      }
     }
 
     logger.info('[bluefin-db-reconcile] complete', {
