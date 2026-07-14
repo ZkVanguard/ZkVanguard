@@ -144,7 +144,10 @@ const TRAIL_LOCK_STEP_BPS = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_STEP_B
 // After max defers, close at market — accepting the fee-loss is
 // better than an unbounded hold.
 const FEE_BREAKEVEN_BPS = Number(process.env.POLYMARKET_EDGE_FEE_BREAKEVEN_BPS || 12);
-const MAX_DEFER_COUNT   = Number(process.env.POLYMARKET_EDGE_MAX_DEFER_COUNT   || 2);
+// Greedy mode 2026-07-14: MAX_DEFER 2 → 3. One more chance for a
+// stalled trade to break past the fee floor before we accept the loss.
+// Each defer costs 5 min of hold; trailing stop still caps downside.
+const MAX_DEFER_COUNT   = Number(process.env.POLYMARKET_EDGE_MAX_DEFER_COUNT   || 3);
 const DEFER_EXTEND_MS   = 5 * 60 * 1000;
 
 /**
@@ -401,11 +404,19 @@ function riskGate(args: {
   }
   if (args.refPrice <= 0) return { ok: false, reason: 'no ref price' };
   // Notional vs free collateral × leverage.
+  //
+  // Greedy mode 2026-07-14: cap raised 50% → 90% (env-configurable).
+  // The 50% original was calibrated for UNSTOPPED trading — half of the
+  // margin buffer went to surviving adverse moves. Our tick-based
+  // trailing stop caps any single-trade loss at ~20 bps = ~$0.09 on a
+  // $45 notional, so we can safely deploy more capital per opportunity.
+  // At 90% cap, worst-case is still 10 bps headroom on adverse fill.
   const maxNotional = args.free * LEVERAGE;
-  if (args.notionalUsd > maxNotional * 0.5) {
+  const notionalCapPct = Number(process.env.POLYMARKET_EDGE_RISK_GATE_PCT || 0.9);
+  if (args.notionalUsd > maxNotional * notionalCapPct) {
     return {
       ok: false,
-      reason: `notional $${args.notionalUsd.toFixed(2)} > 50% of capacity $${maxNotional.toFixed(2)}`,
+      reason: `notional $${args.notionalUsd.toFixed(2)} > ${(notionalCapPct * 100).toFixed(0)}% of capacity $${maxNotional.toFixed(2)}`,
     };
   }
   return { ok: true };
@@ -1039,14 +1050,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // the pool's free collateral.
     const OPEN_BUFFER = 1.5;             // matches BluefinService dust guard
     // Env-configurable cap: don't spend more than this fraction of free
-    // collateral just to clear minQty. Was 0.7 (large-NAV safe), raised
-    // to 0.9 on 2026-07-13, then 0.92 after Lever A bumped base stake
-    // to $15 — SOL required 90.7% (just $0.11 over the 90% cap).
-    // Worst-case trade loss at $15 stake: 20 bps stop + 10 bps fees on
-    // $45 notional = ~$0.14. Cap at 0.92 leaves ~$0.15 headroom on
-    // $16.53 free — still 7× worst-case, safe.
+    // collateral just to clear minQty. Progression: 0.7 → 0.9 → 0.92 → 0.99.
+    // Greedy mode 2026-07-14: raised to 0.99 after 6+ hours of ETH being
+    // blocked at 99-100% of free. Worst-case trade loss on ETH is still
+    // capped by the -20 bps trailing stop (~$0.07 on ~$35 notional),
+    // dwarfed by even 1% headroom on $14 free ($0.14 buffer).
     const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = Number(
-      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 0.92,
+      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 0.99,
     );
 
     const priceFetches = await Promise.all(
