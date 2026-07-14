@@ -965,7 +965,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // minQty stake fits inside MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY of
     // the pool's free collateral.
     const OPEN_BUFFER = 1.5;             // matches BluefinService dust guard
-    const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = 0.7; // hard cap: don't spend >70% of free collateral clearing minQty
+    // Env-configurable cap: don't spend more than this fraction of free
+    // collateral just to clear minQty. Default was 0.7 for large-NAV
+    // safety; raised to 0.9 at operator request 2026-07-13 after the
+    // trader stalled with ~$17.87 free vs ETH minQty stake ~$13.28
+    // (74%). At the observed scale, 30% headroom = ~$5 vs worst-case
+    // trade loss of ~$0.28, so the extra 20% is safe.
+    const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = Number(
+      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 0.9,
+    );
 
     const priceFetches = await Promise.all(
       rankedCandidates.map(async (c) => {
