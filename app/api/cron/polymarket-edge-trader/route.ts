@@ -93,7 +93,16 @@ const MIN_FREE_COLLATERAL_USD = Number(process.env.POLYMARKET_EDGE_MIN_COLLATERA
 // (which removes margin-call safety headroom).
 const BASE_STAKE_USD = Number(process.env.POLYMARKET_EDGE_BASE_STAKE_USD || 5);
 const MAX_STAKE_USD = Number(process.env.POLYMARKET_EDGE_MAX_STAKE_USD || 500);
-const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.10);
+const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.30);
+// AUTONOMOUS EXPONENTIAL GROWTH driver. When free × DYNAMIC_BASE_PCT
+// exceeds BASE_STAKE_USD, the trader's effective base stake is bumped
+// up automatically. Result: stake scales with free collateral, every
+// winning trade increases the pool → increases stake → increases EV.
+// Set to 0 to disable and pin stake at BASE_STAKE_USD (legacy behaviour).
+// At free=$14 with 0.20: effective base = max($5, $2.80) = $5 (floor).
+// At free=$50 with 0.20: effective base = max($5, $10) = $10.
+// At free=$500 with 0.20: effective base = max($5, $100) = $100.
+const DYNAMIC_BASE_PCT = Number(process.env.POLYMARKET_EDGE_DYNAMIC_BASE_PCT || 0.20);
 const LEVERAGE = Number(process.env.POLYMARKET_EDGE_LEVERAGE || 3);
 const MAX_CONSECUTIVE_LOSSES = Number(process.env.POLYMARKET_EDGE_MAX_CONSECUTIVE_LOSSES || 5);
 const MAX_DRAWDOWN_PCT = Number(process.env.POLYMARKET_EDGE_MAX_DRAWDOWN_PCT || 0.30);
@@ -1111,6 +1120,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         freeCollateral: free,
         stakePctOfFree: STAKE_PCT_OF_FREE,
         maxStakeUsd: MAX_STAKE_USD,
+        dynamicBasePct: DYNAMIC_BASE_PCT,
       });
       const actualMinQty = ASSET_STEP[c.asset];
       const minNotionalToClearFloor = actualMinQty * rp * OPEN_BUFFER;
