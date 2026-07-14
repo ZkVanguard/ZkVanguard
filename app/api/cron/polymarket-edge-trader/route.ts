@@ -173,37 +173,10 @@ async function recordSkip(action: string, reason: string): Promise<void> {
   }
 }
 
-interface ActiveTrade {
-  symbol: string;
-  asset: SupportedAsset;
-  side: 'LONG' | 'SHORT';
-  size: number;
-  entryPrice: number;
-  stakeUsd: number;
-  recommendation: AggregatedPrediction['recommendation'];
-  consensus: number;
-  confidence: number;
-  sourceCount: number;
-  /** Score at entry — used for signal-flip stop comparison. */
-  entryScore: number;
-  openedAt: number;
-  /** Hard close time. We exit at most one master tick after open (5min). */
-  closeBy: number;
-  clientOrderId: string;
-  /**
-   * Highest favourable move (in signed bps) observed since entry.
-   * Ratchets upward only. Used to drive the trailing stop — see
-   * `computeEffectiveStopBps`. Optional for back-compat with rows
-   * written before this field existed.
-   */
-  highWaterBps?: number;
-  /**
-   * Number of times max-hold was deferred to avoid a fee-bleed close.
-   * Capped at MAX_DEFER_COUNT to prevent unbounded holds. Optional
-   * for back-compat with rows written before this field existed.
-   */
-  deferCount?: number;
-}
+// ActiveTrade type + state key extracted to lib/services/trading/active-trade.ts
+import type { ActiveTrade } from '@/lib/services/trading/active-trade';
+// Note: KEY_ACTIVE is declared alongside other KEY_* keys above and kept
+// as-is for now (short-name back-compat throughout the route body).
 
 interface EdgeStats {
   trades: number;
