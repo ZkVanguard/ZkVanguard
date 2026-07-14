@@ -475,14 +475,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         }
         if (priceExitReason) {
           logger.warn('[PolymarketEdge] Trailing-stop exit', { reason: priceExitReason, asset: active.asset });
-          const close = await closeWithRetry(bf, active.symbol);
-          const exitPrice = pickExitPrice(close, markPrice, active.entryPrice);
-          const fees = Number((close as { fees?: number }).fees) || 0;
-          const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
-          const newStats = await applyOutcome(safeStats, realized, active.asset);
-          const newDaily = await applyDaily(daily, realized);
-          const halted = await maybeHalt(newStats, newDaily, haltedUntil);
-          await setCronState(KEY_ACTIVE, null);
+          const { exitPrice, realized, newStats, newDaily, halted } =
+            await finalizeClosingExit({
+              bf,
+              active,
+              refPrice: markPrice,
+              safeStats,
+              daily,
+              haltedUntil,
+            });
           await notifyDiscord(
             `${effectiveStopBps > -STOP_LOSS_BPS ? 'Trailing-stop' : 'Stop-loss'} exit: ${priceExitReason.split(':').slice(1).join(':').trim()}. Realized $${realized.toFixed(2)}`,
             realized >= 0 ? 'TRADE' : 'WARN',
@@ -566,15 +567,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         }
 
         logger.warn('[PolymarketEdge] Signal-flip exit', { flipReason, asset: active.asset });
-        const close = await closeWithRetry(bf, active.symbol);
-        const exitPrice = pickExitPrice(close, livePos.markPrice, active.entryPrice);
-        const fees = Number((close as { fees?: number }).fees) || 0;
-        // dir is declared above (price-exit block) — reuse it here
-        const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
-        const newStats = await applyOutcome(safeStats, realized, active.asset);
-        const newDaily = await applyDaily(daily, realized);
-        const halted = await maybeHalt(newStats, newDaily, haltedUntil);
-        await setCronState(KEY_ACTIVE, null);
+        const { exitPrice, realized, newStats, newDaily, halted } =
+          await finalizeClosingExit({
+            bf,
+            active,
+            refPrice: Number(livePos.markPrice) || 0,
+            safeStats,
+            daily,
+            haltedUntil,
+          });
         await notifyDiscord(
           `Signal-flip exit: ${flipReason}. Realized $${realized.toFixed(2)}`,
           realized >= 0 ? 'TRADE' : 'WARN',
