@@ -643,19 +643,18 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         });
       }
 
-      // Hold expired → close.
-      const close = await closeWithRetry(bf, active.symbol);
-      const exitPrice = pickExitPrice(close, livePos.markPrice, active.entryPrice);
-      const fees = Number((close as { fees?: number }).fees) || 0;
-      // dir declared above (price-exit block) — reuse
-      const realized = (exitPrice - active.entryPrice) * active.size * dir - fees;
+      // Hold expired → close (via finalizeClosingExit helper).
+      const { exitPrice, fees, realized, newStats, newDaily, halted } =
+        await finalizeClosingExit({
+          bf,
+          active,
+          refPrice: Number(livePos.markPrice) || 0,
+          safeStats,
+          daily,
+          haltedUntil,
+        });
 
       const win = realized > 0;
-      const newStats = await applyOutcome(safeStats, realized, active.asset);
-      const newDaily = await applyDaily(daily, realized);
-      const halted = await maybeHalt(newStats, newDaily, haltedUntil);
-
-      await setCronState(KEY_ACTIVE, null);
       logger.info('[PolymarketEdge] Closed trade', {
         asset: active.asset,
         side: active.side,
@@ -1445,6 +1444,51 @@ async function applyDaily(prev: DailyStats, realizedUsd: number): Promise<DailyS
   };
   await setCronState(KEY_DAILY, next);
   return next;
+}
+
+/**
+ * Closing-exit helper. Consolidates the ~15-line pattern shared by all
+ * closing exit branches (trailing-stop, signal-flip, max-hold, slippage
+ * emergency close). NOT used by the "position vanished" branch because
+ * that path books a stake-cap loss without a real BluFin close.
+ *
+ * Returns the computed PnL + updated stats/daily/halt state.
+ * Caller is responsible for the branch-specific Discord message +
+ * NextResponse JSON, which vary in messaging + `action` field.
+ *
+ * Side effects performed (in order):
+ *   1. bf.closeHedge (via closeWithRetry)
+ *   2. applyOutcome (writes KEY_STATS)
+ *   3. applyDaily (writes KEY_DAILY)
+ *   4. maybeHalt (may write KEY_HALTED_UNTIL)
+ *   5. setCronState(KEY_ACTIVE, null) — always LAST so a retry after
+ *      partial failure still sees the active trade and re-attempts.
+ */
+async function finalizeClosingExit(args: {
+  bf: BluefinService;
+  active: ActiveTrade;
+  refPrice: number;
+  safeStats: EdgeStats;
+  daily: DailyStats;
+  haltedUntil: number;
+}): Promise<{
+  exitPrice: number;
+  fees: number;
+  realized: number;
+  newStats: EdgeStats;
+  newDaily: DailyStats;
+  halted: boolean;
+}> {
+  const close = await closeWithRetry(args.bf, args.active.symbol);
+  const exitPrice = pickExitPrice(close, args.refPrice, args.active.entryPrice);
+  const fees = Number((close as { fees?: number }).fees) || 0;
+  const dir = args.active.side === 'LONG' ? 1 : -1;
+  const realized = (exitPrice - args.active.entryPrice) * args.active.size * dir - fees;
+  const newStats = await applyOutcome(args.safeStats, realized, args.active.asset);
+  const newDaily = await applyDaily(args.daily, realized);
+  const halted = await maybeHalt(newStats, newDaily, args.haltedUntil);
+  await setCronState(KEY_ACTIVE, null);
+  return { exitPrice, fees, realized, newStats, newDaily, halted };
 }
 
 async function maybeHalt(
