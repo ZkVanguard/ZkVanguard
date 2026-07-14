@@ -85,7 +85,13 @@ export const maxDuration = 30;
 const MIN_CONFIDENCE = Number(process.env.POLYMARKET_EDGE_MIN_CONFIDENCE || 55);
 const MIN_CONSENSUS = Number(process.env.POLYMARKET_EDGE_MIN_CONSENSUS || 50);
 const MIN_FREE_COLLATERAL_USD = Number(process.env.POLYMARKET_EDGE_MIN_COLLATERAL || 15);
-const BASE_STAKE_USD = Number(process.env.POLYMARKET_EDGE_BASE_STAKE_USD || 5);
+// Base stake raised 5 -> 15 (2026-07-13, Lever A) to triple per-trade EV
+// after live-verified $0.028 per-trade EV over 24 trades. At $15 stake
+// on SOL (minQty $5 at $75 × 3× lev), we're within the 90% free-cap
+// and the trade math scales linearly. Max loss per trade grows to
+// ~$0.18 (from ~$0.06) — acceptable given the observed win rate.
+// Also unlocks ETH trades since ETH minQty stake ~$13.28 < $15.
+const BASE_STAKE_USD = Number(process.env.POLYMARKET_EDGE_BASE_STAKE_USD || 15);
 const MAX_STAKE_USD = Number(process.env.POLYMARKET_EDGE_MAX_STAKE_USD || 500);
 const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.10);
 const LEVERAGE = Number(process.env.POLYMARKET_EDGE_LEVERAGE || 3);
