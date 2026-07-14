@@ -405,14 +405,13 @@ function riskGate(args: {
   if (args.refPrice <= 0) return { ok: false, reason: 'no ref price' };
   // Notional vs free collateral × leverage.
   //
-  // Greedy mode 2026-07-14: cap raised 50% → 90% (env-configurable).
-  // The 50% original was calibrated for UNSTOPPED trading — half of the
-  // margin buffer went to surviving adverse moves. Our tick-based
-  // trailing stop caps any single-trade loss at ~20 bps = ~$0.09 on a
-  // $45 notional, so we can safely deploy more capital per opportunity.
-  // At 90% cap, worst-case is still 10 bps headroom on adverse fill.
+  // Greedy mode 2026-07-14: cap raised 50% → 90% → 0.99 (env-configurable).
+  // ETH's minQty at $14 free requires $42 notional = 99.9% of $42
+  // capacity — even 90% cap blocks. Push to 0.99 so ETH clears (fills
+  // may briefly exceed 100% if BlueFin's fill price differs; trailing
+  // stop still bounds any adverse move at -20 bps regardless).
   const maxNotional = args.free * LEVERAGE;
-  const notionalCapPct = Number(process.env.POLYMARKET_EDGE_RISK_GATE_PCT || 0.9);
+  const notionalCapPct = Number(process.env.POLYMARKET_EDGE_RISK_GATE_PCT || 0.99);
   if (args.notionalUsd > maxNotional * notionalCapPct) {
     return {
       ok: false,
@@ -1050,13 +1049,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // the pool's free collateral.
     const OPEN_BUFFER = 1.5;             // matches BluefinService dust guard
     // Env-configurable cap: don't spend more than this fraction of free
-    // collateral just to clear minQty. Progression: 0.7 → 0.9 → 0.92 → 0.99.
-    // Greedy mode 2026-07-14: raised to 0.99 after 6+ hours of ETH being
-    // blocked at 99-100% of free. Worst-case trade loss on ETH is still
-    // capped by the -20 bps trailing stop (~$0.07 on ~$35 notional),
-    // dwarfed by even 1% headroom on $14 free ($0.14 buffer).
+    // collateral just to clear minQty. Progression: 0.7 → 0.9 → 0.92 →
+    // 0.99 → 1.0. Greedy mode 2026-07-14: at 0.99 ETH still blocked at
+    // 99.9% (razor thin). Push to 1.0 — accept using all free for the
+    // stake, since the trailing-stop cap keeps single-trade loss below
+    // the free amount anyway.
     const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = Number(
-      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 0.99,
+      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 1.0,
     );
 
     const priceFetches = await Promise.all(
