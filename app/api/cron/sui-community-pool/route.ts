@@ -552,14 +552,8 @@ async function replenishAdminUsdc(
  * every match — root cause of the "preHoldings show $0 even though
  * wallet has $33 wBTC" bug on the first drift-rebalance test.
  */
-function canonicalizeCoinType(t: string): string {
-  if (!t) return t;
-  const parts = t.split('::');
-  if (parts.length !== 3) return t;
-  let addr = parts[0].replace(/^0x/, '').toLowerCase();
-  if (addr.length < 64) addr = addr.padStart(64, '0');
-  return `0x${addr}::${parts[1]}::${parts[2]}`;
-}
+// canonicalizeCoinType extracted to lib/services/sui/coin-type.ts
+import { canonicalizeCoinType } from '@/lib/services/sui/coin-type';
 
 /**
  * Read per-asset USD values held by the admin wallet (spot leg of the
