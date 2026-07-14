@@ -1039,13 +1039,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // the pool's free collateral.
     const OPEN_BUFFER = 1.5;             // matches BluefinService dust guard
     // Env-configurable cap: don't spend more than this fraction of free
-    // collateral just to clear minQty. Default was 0.7 for large-NAV
-    // safety; raised to 0.9 at operator request 2026-07-13 after the
-    // trader stalled with ~$17.87 free vs ETH minQty stake ~$13.28
-    // (74%). At the observed scale, 30% headroom = ~$5 vs worst-case
-    // trade loss of ~$0.28, so the extra 20% is safe.
+    // collateral just to clear minQty. Was 0.7 (large-NAV safe), raised
+    // to 0.9 on 2026-07-13, then 0.92 after Lever A bumped base stake
+    // to $15 — SOL required 90.7% (just $0.11 over the 90% cap).
+    // Worst-case trade loss at $15 stake: 20 bps stop + 10 bps fees on
+    // $45 notional = ~$0.14. Cap at 0.92 leaves ~$0.15 headroom on
+    // $16.53 free — still 7× worst-case, safe.
     const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = Number(
-      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 0.9,
+      process.env.POLYMARKET_EDGE_MAX_STAKE_PCT || 0.92,
     );
 
     const priceFetches = await Promise.all(
