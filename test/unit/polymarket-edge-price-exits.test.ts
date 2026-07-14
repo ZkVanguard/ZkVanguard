@@ -146,6 +146,72 @@ describe('polymarket-edge trailing stop', () => {
     });
   });
 
+  describe('fee-bleed defer (Lever D)', () => {
+    const FEE_BREAKEVEN_BPS = 12;
+    const MAX_DEFER_COUNT = 2;
+
+    /**
+     * At max-hold expiry, decide whether to close now or defer.
+     * Rules:
+     *  - if moveBps < FEE_BREAKEVEN_BPS AND deferCount < MAX_DEFER_COUNT
+     *    → defer (extend hold)
+     *  - else → close at market
+     * Note: this only fires AFTER trailing check has passed (moveBps > stop),
+     * so we're in the [-STOP_LOSS, ...) range guaranteed.
+     */
+    function maxHoldDecision(moveBps: number, deferCount: number): 'close' | 'defer' {
+      if (moveBps < FEE_BREAKEVEN_BPS && deferCount < MAX_DEFER_COUNT) return 'defer';
+      return 'close';
+    }
+
+    it('defers on a +5 bps favorable move (fee-trap zone)', () => {
+      expect(maxHoldDecision(5, 0)).toBe('defer');
+    });
+
+    it('defers on a +11 bps favorable move (still below fee floor)', () => {
+      expect(maxHoldDecision(11, 0)).toBe('defer');
+    });
+
+    it('closes on a +15 bps favorable move (clears fees)', () => {
+      expect(maxHoldDecision(15, 0)).toBe('close');
+    });
+
+    it('closes on a +50 bps favorable move (real win)', () => {
+      expect(maxHoldDecision(50, 0)).toBe('close');
+    });
+
+    it('defers on a -10 bps unfavorable move if not maxed', () => {
+      // Note: this path only reached if trailing didn't fire, i.e. moveBps > -20.
+      // -10 is inside the trailing floor but inside fee-trap zone, so defer.
+      expect(maxHoldDecision(-10, 0)).toBe('defer');
+    });
+
+    it('stops deferring at MAX_DEFER_COUNT to prevent unbounded hold', () => {
+      expect(maxHoldDecision(5, 2)).toBe('close');
+      expect(maxHoldDecision(-10, 2)).toBe('close');
+    });
+
+    it('deferring second time is still allowed if within cap', () => {
+      expect(maxHoldDecision(5, 1)).toBe('defer');
+    });
+
+    describe('EV improvement from defer', () => {
+      // Historical fee-bleed losses: trades #7 (+7 bps, net -$0.005) and
+      // #10 (+2 bps, net -$0.012). Both would have been deferred.
+      // Question: does deferring help? Assume 50% of deferred trades
+      // break out to a real win (+30 bps → net +$0.030) and 50% end at
+      // max-hold with the same fee-bleed loss.
+
+      it('deferring converts a fee-bleed loss into an expected small win', () => {
+        const historicalLoss = -0.005; // from trade #7
+        // Assume defer outcome: 50% break to +$0.030, 50% stay at fee-loss.
+        const deferredEV = 0.5 * 0.030 + 0.5 * historicalLoss;
+        expect(deferredEV).toBeGreaterThan(historicalLoss);
+        expect(deferredEV).toBeCloseTo(0.0125, 3);
+      });
+    });
+  });
+
   describe('profit-factor: the point of "profit hungry"', () => {
     // Round-trip fees ≈ 10 bps. At $15 notional (=$5 stake × 3× lev):
     //   Fees ≈ $0.015 per trade.

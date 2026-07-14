@@ -124,6 +124,23 @@ const TRAIL_LOCK_BPS      = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_BPS   
 const TRAIL_STEP_BPS      = Number(process.env.POLYMARKET_EDGE_TRAIL_STEP_BPS      || 15);
 const TRAIL_LOCK_STEP_BPS = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_STEP_BPS || 10);
 
+// ── Fee-bleed defer ────────────────────────────────────────────────────────
+// Round-trip taker fees are ~10 bps. If the max-hold expires with a
+// modest favorable move (0..+10 bps), closing at market realises a
+// net loss even though the trade was directionally correct. Observed
+// 2026-07-13: 2 of 3 losses (trades #7, #10) were fee-bleeds on
+// +7/+2 bps favorable moves.
+//
+// Instead of eating the fee-loss, extend closeBy by DEFER_EXTEND_MS
+// so the next tick either (a) sees the trade break out past
+// FEE_BREAKEVEN_BPS (real win), (b) sees the trailing stop fire
+// (bounded loss/lock), or (c) defers again up to MAX_DEFER_COUNT.
+// After max defers, close at market — accepting the fee-loss is
+// better than an unbounded hold.
+const FEE_BREAKEVEN_BPS = Number(process.env.POLYMARKET_EDGE_FEE_BREAKEVEN_BPS || 12);
+const MAX_DEFER_COUNT   = Number(process.env.POLYMARKET_EDGE_MAX_DEFER_COUNT   || 2);
+const DEFER_EXTEND_MS   = 5 * 60 * 1000;
+
 /**
  * Compute the effective stop given the initial floor, arm threshold, and
  * high-water mark. Pure function — easy to unit-test. Signed bps.
@@ -234,6 +251,12 @@ interface ActiveTrade {
    * written before this field existed.
    */
   highWaterBps?: number;
+  /**
+   * Number of times max-hold was deferred to avoid a fee-bleed close.
+   * Capped at MAX_DEFER_COUNT to prevent unbounded holds. Optional
+   * for back-compat with rows written before this field existed.
+   */
+  deferCount?: number;
 }
 
 interface EdgeStats {
@@ -647,6 +670,50 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           daily: newDaily,
           haltedUntil: halted ? haltedUntil + HALT_DURATION_MS : undefined,
           reason: flipReason,
+        });
+      }
+
+      // ── FEE-BLEED DEFER (Lever D) ──────────────────────────────────
+      // If the trade is in the fee-trap zone (moveBps > -STOP_LOSS_BPS
+      // — already true since trailing didn't fire — AND moveBps <
+      // FEE_BREAKEVEN_BPS), closing at market realises a net loss even
+      // though the trade was directionally correct. Defer the close by
+      // DEFER_EXTEND_MS and let the next tick decide: break out,
+      // trailing-stop trigger, or defer again (up to MAX_DEFER_COUNT).
+      const deferCount = active.deferCount ?? 0;
+      if (moveBps < FEE_BREAKEVEN_BPS && deferCount < MAX_DEFER_COUNT) {
+        const newCloseBy = active.closeBy + DEFER_EXTEND_MS;
+        await setCronState(KEY_ACTIVE, {
+          ...active,
+          closeBy: newCloseBy,
+          highWaterBps,
+          deferCount: deferCount + 1,
+        });
+        logger.info('[PolymarketEdge] Fee-bleed defer', {
+          asset: active.asset,
+          moveBps: moveBps.toFixed(1),
+          deferCount: deferCount + 1,
+          newCloseBy: new Date(newCloseBy).toISOString(),
+        });
+        return NextResponse.json({
+          success: true,
+          ranAt,
+          attempted: true,
+          action: 'idle',
+          trade: {
+            symbol: active.symbol,
+            asset: active.asset,
+            side: active.side,
+            size: active.size,
+            stakeUsd: active.stakeUsd,
+            consensus: active.consensus,
+            confidence: active.confidence,
+            sourceCount: active.sourceCount,
+            recommendation: active.recommendation,
+          },
+          stats: safeStats,
+          daily,
+          reason: `Fee-bleed defer #${deferCount + 1}: move ${moveBps.toFixed(1)}bps < ${FEE_BREAKEVEN_BPS}bps; extended by ${DEFER_EXTEND_MS / 60000}min`,
         });
       }
 
