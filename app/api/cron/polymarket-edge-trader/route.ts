@@ -112,63 +112,19 @@ const DAILY_LOSS_CAP_USD = Number(
   process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
 );
 
-// ── Asymmetric price exits + trailing stop ────────────────────────────────
-// The trader is designed to be "profit hungry all the time": winners must
-// be allowed to compound, losers must be cut at a hard floor.
-//
-// Rule set (per tick, on the LIVE mark price vs entry, in bps):
-//   1. Initial stop-loss: exit at -STOP_LOSS_BPS. Hard floor.
-//   2. Once high-water >= TRAIL_ARM_BPS, arm the trailing stop by moving
-//      the effective stop from -STOP_LOSS_BPS to +TRAIL_LOCK_BPS.
-//   3. For every TRAIL_STEP_BPS the high-water climbs beyond TRAIL_ARM_BPS,
-//      raise the effective stop by TRAIL_LOCK_STEP_BPS.
-//   4. Exit whenever moveBps <= effective stop. Retraces past a raised
-//      stop lock in profit; retraces past -STOP_LOSS_BPS cap the loss.
-//
-// Round-trip taker fees on BlueFin are ~10 bps, so TRAIL_LOCK_BPS = 10
-// guarantees at least breakeven-after-fees on any armed exit.
-//
-// Historical context (before this fix):
-//   19 trades, 58% win rate, net -$4.84. Wins averaged $0.18 vs losses
-//   $0.87 — a 10-min hold with only signal-flip/slippage exits let losers
-//   run to the max-hold cap while winners got closed at the same cap.
-//   Fixed take-profit at +30 bps was a partial fix but didn't beat fees.
-const STOP_LOSS_BPS       = Number(process.env.POLYMARKET_EDGE_STOP_LOSS_BPS       || 20);
-const TRAIL_ARM_BPS       = Number(process.env.POLYMARKET_EDGE_TRAIL_ARM_BPS       || 30);
-const TRAIL_LOCK_BPS      = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_BPS      || 10);
-const TRAIL_STEP_BPS      = Number(process.env.POLYMARKET_EDGE_TRAIL_STEP_BPS      || 15);
-const TRAIL_LOCK_STEP_BPS = Number(process.env.POLYMARKET_EDGE_TRAIL_LOCK_STEP_BPS || 10);
-
-// ── Fee-bleed defer ────────────────────────────────────────────────────────
-// Round-trip taker fees are ~10 bps. If the max-hold expires with a
-// modest favorable move (0..+10 bps), closing at market realises a
-// net loss even though the trade was directionally correct. Observed
-// 2026-07-13: 2 of 3 losses (trades #7, #10) were fee-bleeds on
-// +7/+2 bps favorable moves.
-//
-// Instead of eating the fee-loss, extend closeBy by DEFER_EXTEND_MS
-// so the next tick either (a) sees the trade break out past
-// FEE_BREAKEVEN_BPS (real win), (b) sees the trailing stop fire
-// (bounded loss/lock), or (c) defers again up to MAX_DEFER_COUNT.
-// After max defers, close at market — accepting the fee-loss is
-// better than an unbounded hold.
-const FEE_BREAKEVEN_BPS = Number(process.env.POLYMARKET_EDGE_FEE_BREAKEVEN_BPS || 12);
-// Greedy mode 2026-07-14: MAX_DEFER 2 → 3. One more chance for a
-// stalled trade to break past the fee floor before we accept the loss.
-// Each defer costs 5 min of hold; trailing stop still caps downside.
-const MAX_DEFER_COUNT   = Number(process.env.POLYMARKET_EDGE_MAX_DEFER_COUNT   || 3);
-const DEFER_EXTEND_MS   = 5 * 60 * 1000;
-
-/**
- * Compute the effective stop given the initial floor, arm threshold, and
- * high-water mark. Pure function — easy to unit-test. Signed bps.
- */
-function computeEffectiveStopBps(highWaterBps: number): number {
-  const floor = -STOP_LOSS_BPS;
-  if (highWaterBps < TRAIL_ARM_BPS) return floor;
-  const stepsAbove = Math.floor((highWaterBps - TRAIL_ARM_BPS) / TRAIL_STEP_BPS);
-  return TRAIL_LOCK_BPS + stepsAbove * TRAIL_LOCK_STEP_BPS;
-}
+// ── Asymmetric price exits + trailing stop + fee-bleed defer ────────────
+// Math extracted to lib/services/trading/trailing-stop.ts (see the module
+// docstring for the full rule set). This route just consumes the pure
+// helpers and the resolved config.
+import {
+  DEFAULT_TRAILING_STOP_CONFIG,
+  computeEffectiveStopBps,
+  shouldDeferMaxHold,
+} from '@/lib/services/trading/trailing-stop';
+const STOP_LOSS_BPS     = DEFAULT_TRAILING_STOP_CONFIG.stopLossBps;
+const FEE_BREAKEVEN_BPS = DEFAULT_TRAILING_STOP_CONFIG.feeBreakevenBps;
+const MAX_DEFER_COUNT   = DEFAULT_TRAILING_STOP_CONFIG.maxDeferCount;
+const DEFER_EXTEND_MS   = DEFAULT_TRAILING_STOP_CONFIG.deferExtendMs;
 // Signal-flip score-collapse threshold — was 50% (very lax; let losers run).
 // Tightened to 30% so signal degradation triggers exit sooner.
 const SIGNAL_FLIP_SCORE_COLLAPSE = Number(
@@ -201,37 +157,9 @@ const KEY_NOEDGE_STREAK = 'polymarket-edge:noedge-streak';
 
 // ── Adaptive gate relaxation ───────────────────────────────────────────────
 // If the trader has skipped with 'no-edge' for many consecutive ticks,
-// slowly lower the effective confidence/consensus thresholds. This
-// self-heals from operator misconfig (e.g. env vars set to 70/70 when
-// live signals peak at 65-70) without needing a redeploy or env change.
-// Bounded floor at 45/45 so we never trade on genuine noise.
-//
-// Cadence: first relaxation at 3 ticks (~15 min), then every 3 ticks
-// thereafter. Step size is 7 (aggressive enough to unlock trading
-// within 1 hour of a genuinely-blocked config). Floor at 45 means
-// we still refuse to trade on random noise.
-const RELAX_AFTER_N_SKIPS = 3;     // 15 min of stuck at 5-min cadence
-const RELAX_STEP_PER_HOUR = 7;     // lower by 7 per step
-const RELAX_FLOOR_CONFIDENCE = 45;
-const RELAX_FLOOR_CONSENSUS = 45;
-
-function effectiveGates(
-  configuredConf: number,
-  configuredCons: number,
-  noEdgeStreak: number,
-): { effectiveConf: number; effectiveCons: number; relaxSteps: number } {
-  if (noEdgeStreak < RELAX_AFTER_N_SKIPS) {
-    return { effectiveConf: configuredConf, effectiveCons: configuredCons, relaxSteps: 0 };
-  }
-  // Number of 12-tick "hours" past the initial patience period.
-  const relaxSteps = Math.floor((noEdgeStreak - RELAX_AFTER_N_SKIPS) / RELAX_AFTER_N_SKIPS) + 1;
-  const relaxAmount = relaxSteps * RELAX_STEP_PER_HOUR;
-  return {
-    effectiveConf: Math.max(RELAX_FLOOR_CONFIDENCE, configuredConf - relaxAmount),
-    effectiveCons: Math.max(RELAX_FLOOR_CONSENSUS, configuredCons - relaxAmount),
-    relaxSteps,
-  };
-}
+// Extracted to lib/services/trading/adaptive-gates.ts (see module for full
+// design notes). Route just imports the resolved function.
+import { effectiveGates } from '@/lib/services/trading/adaptive-gates';
 
 async function recordSkip(action: string, reason: string): Promise<void> {
   try {
@@ -706,7 +634,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       // DEFER_EXTEND_MS and let the next tick decide: break out,
       // trailing-stop trigger, or defer again (up to MAX_DEFER_COUNT).
       const deferCount = active.deferCount ?? 0;
-      if (moveBps < FEE_BREAKEVEN_BPS && deferCount < MAX_DEFER_COUNT) {
+      if (shouldDeferMaxHold(moveBps, deferCount)) {
         const newCloseBy = active.closeBy + DEFER_EXTEND_MS;
         await setCronState(KEY_ACTIVE, {
           ...active,

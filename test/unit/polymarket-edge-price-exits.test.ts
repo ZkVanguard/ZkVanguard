@@ -18,17 +18,20 @@
  * stop lock in profit at that level.
  */
 
+// Import the REAL production code so tests fail on regressions rather than
+// silently agreeing with a shadow copy.
+import { computeEffectiveStopBps as computeEffectiveStopBpsProd } from '@/lib/services/trading/trailing-stop';
+
 const STOP_LOSS_BPS = 20;
 const TRAIL_ARM_BPS = 30;
 const TRAIL_LOCK_BPS = 10;
 const TRAIL_STEP_BPS = 15;
 const TRAIL_LOCK_STEP_BPS = 10;
 
+// Wrapper so tests read naturally. The trailing-stop module reads env vars,
+// so as long as env is unset here, defaults match these constants.
 function computeEffectiveStopBps(highWaterBps: number): number {
-  const floor = -STOP_LOSS_BPS;
-  if (highWaterBps < TRAIL_ARM_BPS) return floor;
-  const stepsAbove = Math.floor((highWaterBps - TRAIL_ARM_BPS) / TRAIL_STEP_BPS);
-  return TRAIL_LOCK_BPS + stepsAbove * TRAIL_LOCK_STEP_BPS;
+  return computeEffectiveStopBpsProd(highWaterBps);
 }
 
 interface TickState {
