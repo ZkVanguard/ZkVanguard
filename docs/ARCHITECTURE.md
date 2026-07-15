@@ -2,7 +2,77 @@
 
 > ⚠ **PARTIALLY HISTORICAL.** This doc still describes the original Cronos-EVM
 > framing. The live product is an AI-managed Polymarket-alpha vault on Sui
-> mainnet — see [`CLAUDE.md`](../CLAUDE.md) for current authoritative architecture.
+> mainnet. For current authoritative architecture read [`CLAUDE.md`](../CLAUDE.md);
+> the compact summary below covers current state at a glance.
+
+## Current architecture (2026-07-15)
+
+**Live product:** AI-managed USDC vault on Sui mainnet (v0.2.0 + v0.3.0 defense system).
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  SIGNAL LAYER  (lib/services/market-data/)                        │
+│  Polymarket 5-min · Delphi/Polymarket · Manifold · BlueFin        │
+│  funding · Crypto.com momentum  →  PredictionAggregatorService    │
+└───────────────────────────┬───────────────────────────────────────┘
+                            │
+                            ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  7-AGENT ORCHESTRATOR  (agents/)                                  │
+│  Lead · Risk · Hedging · Settlement · Reporting · PriceMonitor    │
+│  · SuiPool  ·  SafeExecutionGuard (2/3 consensus > $100K)         │
+└──────────┬────────────────────────────────────────┬───────────────┘
+           │                                        │
+           ▼                                        ▼
+┌────────────────────────────────┐  ┌───────────────────────────────┐
+│ PORTFOLIODRIVER (v0.3.0)       │  │  ZK-STARK ATTESTATION         │
+│ + 8 autonomy gates             │  │  (Python, NIST P-521)         │
+│ lib/services/sui/              │  │  Trades > $1M (post-cap-lift) │
+│ PortfolioDriver.ts             │  │  zk/ + zkp/                   │
+└──────────┬─────────────────────┘  └───────────────────────────────┘
+           │
+           ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  EXECUTION  (lib/services/sui/)                                   │
+│  BluefinAggregatorService (6 DEXes: Cetus/DeepBook/Turbos/FlowX/  │
+│  Aftermath/BlueFin)  ·  BluefinService (V2 perps)                 │
+│  ·  BluefinTreasuryService  ·  SuiHedgeReconciler                 │
+└───────────────────────────┬───────────────────────────────────────┘
+                            │
+                            ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  SUI MAINNET  (contracts/sui/sources/)                            │
+│  community_pool_usdc.move  (USDC vault, on-chain fee accrual)     │
+│  hedge_executor.move · bluefin_bridge.move · zk_verifier.move     │
+│  · zk_hedge_commitment.move · zk_proxy_vault.move · payment_router│
+│  · rwa_custody_attestor.move · rwa_manager.move                   │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**8-gate autonomy defense** (shipped 2026-07-15, verified by `test/integration/pool-drawdown-defense.test.ts`):
+
+1. **PortfolioDriver** — corrective unwind of existing spot/perp holdings
+2. **Fill verifier** — post-open `getPositions()` cross-check
+3. **Hedgeability spot-cap** — force 0% spot when perp min-qty unopenable
+4. **Symmetric sell trigger** — mirror of buy trigger; opposing signal reduces
+5. **Stale-hedge detector** — age > 7d + ≥ 2 signal flips → force-close
+6. **Signal-flip drift-close** — both perp AND spot legs
+7. **AI regret weighting** — stake × [0.25, 1.0] based on rolling outcome
+8. **Alert response loop** — 3 KILL/hr → shrink; 24h profit-lock → unwind
+
+**Production infra:**
+- Frontend/API: Next.js 14 App Router (Vercel, region `sin1`)
+- Database: PostgreSQL on Aiven (Bangalore PG17, migrated from Neon 2026-05-28)
+- Crons: Upstash QStash → `app/api/cron/*` (13 active crons with heartbeats)
+- Cache/locks: Upstash Redis
+- LLM providers: Crypto.com AI SDK → ASI → OpenAI → Claude → Ollama (unified router in `lib/ai/llm-provider.ts`)
+- ZK prover: Python FastAPI (`zkp/api/server.py`) — NIST P-521, no trusted setup, CUDA-optional
+
+**Live status:** 46 days uptime, 2,234 NAV snapshots, 214 hedges lifetime, 3 members / $30.80 deposited (bounded by $10K TVL cap).
+
+---
+
+## Historical: Cronos-EVM architecture (v0.1.0 era)
 
 ## Overview
 ZkVanguard is a verifiable multi-agent AI swarm system for autonomous DeFi risk orchestration with Zero-Knowledge proofs. The system enables natural language strategy input and autonomous execution through specialized AI agents.

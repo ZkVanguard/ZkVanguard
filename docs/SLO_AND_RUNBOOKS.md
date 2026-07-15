@@ -2,6 +2,7 @@
 
 > Formal SLOs + step-by-step response for the highest-impact failure modes.
 > Written for a solo operator today; scales to on-call rotation later.
+> Extended 2026-07-15 with Runbooks 6-7 for the v0.3.0 defense system.
 
 ## Part 1 — Service Level Objectives
 
@@ -20,7 +21,7 @@
 |---|---|---|
 | API availability (95th %ile response < 2s) | 99.5% | 3.6 hours |
 | NAV freshness | 99.0% | 7.2 hours of stale > 45min |
-| Cron heartbeat (all 10 scheduled crons within 2× cadence) | 99.5% | 3.6 hours |
+| Cron heartbeat (all 13 scheduled crons within 2× cadence) | 99.5% | 3.6 hours |
 | Correct share price (deviation < 50 bps vs on-chain truth) | 99.9% | 43 minutes |
 | Trade execution success (openHedge fills within 10s of orderHash) | 95% | 36 hours |
 | Zero unauthorized state changes (admin actions signed by cap-holder only) | 100% | ZERO tolerance |
@@ -31,7 +32,7 @@
 - **100% consumed** → mandatory 24h freeze; only reliability fixes ship
 - **200% consumed** → escalate to external assistance (audit firm, on-call engineer)
 
-## Part 2 — Top-5 Incident Runbooks
+## Part 2 — Top-7 Incident Runbooks
 
 Each runbook has: **symptom** (what you'll see) → **diagnose** (what to check) → **mitigate** (immediate stop-bleed) → **fix** (root cause) → **verify**.
 
@@ -241,8 +242,84 @@ curl -sH "Authorization: Bearer $VERCEL_TOKEN" \
 - If routes 5xx: fix root cause per stack trace
 
 **Verify**
-- All 10 crons show `cron:lastRun:*` within 2× cadence
+- All 13 crons show `cron:lastRun:*` within 2× cadence
 - `/api/health/production` reports healthy
+
+---
+
+### Runbook 6 — Phantom hedge rate spike (v0.3.0)
+
+**Symptom**
+- Discord `KILL`: "phantom hedge rate X% > 1% threshold — exchange fills unreliable"
+- `alert-response-loop` cron auto-halts `polymarket-edge-trader` and `sui-community-pool` autohedge (if `ALERT_RESPONSE_EXECUTE_HALT=1`)
+- New `hedges` rows with `status='phantom'` appearing at accelerating rate
+
+**Diagnose**
+```bash
+# 1. Confirm phantom count in last hour
+psql -c "SELECT COUNT(*), status FROM hedges WHERE created_at > NOW() - INTERVAL '1 hour' GROUP BY status"
+
+# 2. BlueFin ground-truth check
+curl -s -H "Authorization: Bearer $CRON_SECRET" \
+  https://www.zkvanguard.xyz/api/admin/bluefin-debug | jq
+
+# 3. Check for known root causes:
+#    - Isolated-margin bug regression (BlueFin config change on their side)
+#    - Step-size mismatch (new symbol added without pair spec)
+#    - Free collateral < required for opens
+```
+
+**Mitigate**
+- Autohedge already halted by `alert-response-loop`. If not, set `SUI_AUTO_HEDGE_DISABLE=1` and redeploy
+- Set `PORTFOLIO_DRIVER_EXECUTE=` (empty) to prevent driver from opening more hedges
+
+**Fix**
+- Root cause almost always in `BluefinService.openHedge` invariant chain (see `DEPLOY_RUNBOOK.md` Appendix Y)
+- If step size changed at venue: update `BLUEFIN_PAIRS` in `BluefinService.ts`
+- If free collateral shortfall: increase `BLUEFIN_TARGET_MARGIN_USD` or top-up via `BLUEFIN_TOPUP_SWAP_FROM_SUI=1`
+
+**Verify**
+- Phantom count in last hour drops to 0
+- Test-open a single hedge via `POST /api/admin/bluefin-trace-order` — must show fill in `getPositions()` within 5s
+- Bulletproof test still green: `bun jest test/integration/pool-drawdown-defense.test.ts`
+
+---
+
+### Runbook 7 — Alert-response-loop misfires (v0.3.0)
+
+**Symptom**
+- Alert-response-loop takes actions that seem wrong: shrinks spot when NAV looks healthy, unwinds when no profit-lock, etc.
+- Discord shows repeated `🤖 Auto-response:` messages
+
+**Diagnose**
+```bash
+# 1. Inspect current alert log ring buffer
+psql -c "SELECT value FROM cron_state WHERE key='alert-log:ring-buffer'" | jq '.'
+
+# 2. Check profit-lock zero-since timestamp
+psql -c "SELECT value FROM cron_state WHERE key='profit-lock:zero-since'"
+
+# 3. Recent alert-response-loop runs
+psql -c "SELECT * FROM cron_state WHERE key='cron:lastRun:alert-response-loop' ORDER BY updated_at DESC LIMIT 5"
+```
+
+**Mitigate**
+- Set `ALERT_RESPONSE_EXECUTE=` (empty) — loop returns to log-only immediately
+- If HALT_TRADER / HALT_AUTOHEDGE fired incorrectly, clear the halt state:
+  ```sql
+  DELETE FROM cron_state WHERE key IN ('polymarket-edge-trader:halt', 'sui-community-pool:autohedge:halt');
+  ```
+
+**Fix**
+- Review `lib/services/alerting/alert-response-loop.ts` rule thresholds
+- Likely culprit: alert log accumulated stale entries (ring buffer > 200 old KILLs); clear via:
+  ```sql
+  UPDATE cron_state SET value='[]'::jsonb WHERE key='alert-log:ring-buffer';
+  ```
+
+**Verify**
+- No auto-response messages for 30 minutes after clearing
+- Re-flip `ALERT_RESPONSE_EXECUTE=1` only after root cause understood
 
 ---
 

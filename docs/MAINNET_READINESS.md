@@ -1,5 +1,35 @@
 # ZK Vanguard - Mainnet Readiness Documentation
 
+> **⚠ Partially historical.** This document was the pre-deploy readiness assessment that gated the 2026-06-12 v0.2.0 mainnet launch. Sections below reference the EVM-era Cronos/CRO framing and pre-launch test suites. For **current mainnet posture**, read the section immediately below.
+
+## Current mainnet status (as of 2026-07-15)
+
+**Live on Sui mainnet since 2026-06-12** — package `0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726`, USDC pool state `0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a`. See [`SUI_DEPLOYMENT.md`](./SUI_DEPLOYMENT.md).
+
+**Cap:** deliberately capped at $10K TVL by contract (`admin_set_tvl_cap`); lifts on external-audit close per [`ROADMAP.md`](./ROADMAP.md).
+
+**Defense posture:** 8-gate autonomy defense system shipped 2026-07-15 (v0.3.0). Verified by `test/integration/pool-drawdown-defense.test.ts` (10/10 green). See [`SECURITY.md`](./SECURITY.md).
+
+**Live metrics** (pulled 2026-07-15):
+- **46 days** running since first NAV snapshot (2026-05-29)
+- **2,234 NAV snapshots** recorded (≈48/day, matches 30-min cron cadence)
+- **214 hedges** executed lifetime across BTC / ETH / SUI / SOL PERPs
+- **13 active crons** with heartbeats — see `/api/health/production`
+- **3 members** / **$30.80 lifetime deposits** (bounded by $10K TVL cap)
+
+**Cap-lift criteria** (per Q3 2026 milestone):
+- External audit close (SUI Foundation grant Tranche 1 deliverable)
+- 30-day incident-free window
+- > $50K deposited across ≥ 20 members
+
+**External audit:** pending — grant deliverable. Bug bounty (see [`BUG_BOUNTY.md`](./BUG_BOUNTY.md)) unlocks post-audit.
+
+---
+
+## Historical: Pre-deploy readiness assessment
+
+The remainder of this document was the pre-launch readiness snapshot. Retained for provenance. Numeric configurations and asset lists (e.g. CRO, USDT-via-WDK) reflect the EVM-era and are superseded by CLAUDE.md.
+
 ## Executive Summary
 
 This document outlines the mainnet deployment readiness status for the ZK Vanguard Community Pool system. The smart contracts and infrastructure have passed all 50 critical mainnet readiness tests and are ready for production deployment pending operational setup tasks.

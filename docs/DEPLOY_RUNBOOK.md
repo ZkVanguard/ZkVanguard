@@ -508,3 +508,61 @@ Checklist:
 - Confirm the build guard (`prebuild` → `scripts/security-scan.cjs`) is present on every
   branch that can deploy, not just `main`.
 - Rotate any developer credentials (GitHub tokens, SSH keys) on the affected machine.
+
+---
+
+## Appendix X — v0.3.0 autonomy defense env gates (shipped 2026-07-15)
+
+The 8-gate autonomy defense system ships with every destructive action behind an env flag (default OFF) so operators can log-observe before flipping to live execution. Flip one at a time in Vercel env; watch Discord for 24h per gate before enabling the next.
+
+| Env var | Default | Effect when `=1` | Owning module |
+|---|---|---|---|
+| `PORTFOLIO_DRIVER_EXECUTE` | OFF | PortfolioDriver actually executes SELL/BUY/OPEN/CLOSE (currently log-only) | `lib/services/sui/PortfolioDriver.ts` |
+| `STALE_HEDGE_AUTO_CLOSE` | OFF | `sui-hedge-reconcile` force-closes stale hedges (age > 7d + ≥ 2 flips + contradicted side) | `lib/services/sui/StaleHedgeDetector.ts` |
+| `ALERT_RESPONSE_EXECUTE` | OFF | Alert-response-loop cron acts on rules (3 KILL/hr, 24h profit-lock, phantom > 1%) | `lib/services/alerting/alert-response-loop.ts` |
+| `ALERT_RESPONSE_EXECUTE_HALT` | OFF | Additionally allows HALT_TRADER and HALT_AUTOHEDGE responses | (same as above) |
+| `REGRET_TRACKER_DISABLE` | OFF (i.e. tracker is **ON** by default) | Disables the regret multiplier in `polymarket-edge-trader` stake calc | `lib/services/ai/regret-tracker.ts` |
+| `STALE_HEDGE_AGE_DAYS` | `7` | Age threshold (days) above which a hedge is candidate for stale-close | `lib/services/sui/StaleHedgeDetector.ts` |
+| `STALE_HEDGE_MIN_FLIPS` | `2` | Signal-flip count required in addition to age | (same) |
+| `PROFIT_LOCK_DRAWDOWN_START` | `5` | Drawdown-% at which profit-lock begins clamping | `lib/services/sui/cron/profit-lock-guard.ts` |
+| `PROFIT_LOCK_ZERO_RISK_AT` | `20` | Drawdown-% at which risk cap → 0 (100% USDC) | (same) |
+| `PROFIT_LOCK_DISABLE` | OFF | Emergency bypass — turns off profit-lock entirely | (same) |
+
+**Recommended rollout order:**
+
+1. **Deploy v0.3.0 to Vercel** — all gates default OFF; watch Discord for 24h to confirm log-only messages appear at expected trigger points
+2. Add QStash schedule for `/api/cron/alert-response-loop` (see below)
+3. Flip **`PORTFOLIO_DRIVER_EXECUTE=1`** — the big one; unwinds existing spot when profit-lock fires
+4. Flip **`STALE_HEDGE_AUTO_CLOSE=1`** — kills lingering positions that survive drift-close
+5. Flip **`ALERT_RESPONSE_EXECUTE=1`** — closed-loop remediation active
+6. Flip **`ALERT_RESPONSE_EXECUTE_HALT=1`** — allows the auto-halt responses (the most destructive)
+
+### New QStash schedule required
+
+The `alert-response-loop` route exists in code but has no schedule — Upstash-managed, not in `vercel.json`. Add via v2 API:
+
+```bash
+curl -X POST -H "Authorization: Bearer $QSTASH_TOKEN" \
+  -H "Upstash-Cron: */15 * * * *" -H "Upstash-Method: POST" \
+  -H "Upstash-Forward-Authorization: Bearer $CRON_SECRET_FALLBACK" \
+  -H "Upstash-Retries: 2" -d '{}' \
+  "$QSTASH_URL/v2/schedules/https://www.zkvanguard.xyz/api/cron/alert-response-loop"
+```
+
+### Verify from console
+
+```bash
+# Bulletproof drawdown-defense test — should stay 10/10 green after any change
+bun jest test/integration/pool-drawdown-defense.test.ts
+
+# Live smoke test — reads mainnet state, runs modules, prints what they'd do
+# (no writes — safe on real mainnet)
+bun run scripts/analyze-pool-pnl.ts
+
+# Signal-alignment check — flags any active hedge contradicted by current signal
+bun run scripts/check-hedge-signal-alignment.ts
+```
+
+### Emergency disable
+
+If a gate misbehaves in production, set its env flag to empty (not `0` — the check is `=== '1'`) and redeploy. Log-only mode kicks in immediately — no destructive actions until re-flipped.
