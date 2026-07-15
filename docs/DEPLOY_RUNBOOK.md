@@ -541,6 +541,9 @@ The 8-gate autonomy defense system ships with every destructive action behind an
 
 The `alert-response-loop` route exists in code but has no schedule — Upstash-managed, not in `vercel.json`. Add via v2 API:
 
+> **Known-stale heartbeat as of 2026-07-15 audit:** `cron:lastRun:health-monitor` is 13+ days stale in `cron_state`. The route code is fine (heartbeat write on line 56 fires before auth) — the QStash schedule itself is missing or disabled. **Re-add** with the snippet below (substitute `health-monitor` for `alert-response-loop`, cron `*/10 * * * *`). Both crons need scheduling.
+
+
 ```bash
 curl -X POST -H "Authorization: Bearer $QSTASH_TOKEN" \
   -H "Upstash-Cron: */15 * * * *" -H "Upstash-Method: POST" \

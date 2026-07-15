@@ -10,12 +10,13 @@
 
 **Defense posture:** 8-gate autonomy defense system shipped 2026-07-15 (v0.3.0). Verified by `test/integration/pool-drawdown-defense.test.ts` (10/10 green). See [`SECURITY.md`](./SECURITY.md).
 
-**Live metrics** (pulled 2026-07-15):
-- **46 days** running since first NAV snapshot (2026-05-29)
-- **2,234 NAV snapshots** recorded (≈48/day, matches 30-min cron cadence)
+**Live metrics** (snapshot 2026-07-15; rerun `scripts/analyze-pool-pnl.ts` for current numbers):
+- **46+ days** running since first NAV snapshot (2026-05-29)
+- **2,200+ NAV snapshots** recorded (≈48/day, matches 30-min cron cadence)
 - **214 hedges** executed lifetime across BTC / ETH / SUI / SOL PERPs
 - **13 active crons** with heartbeats — see `/api/health/production`
-- **3 members** / **$30.80 lifetime deposits** (bounded by $10K TVL cap)
+- **3 members** / **~$38 lifetime deposits** (bounded by $10K TVL cap)
+- **ATH share price:** $1.9668 on 2026-06-26 · currently in drawdown (~36% from ATH as of last snapshot; PortfolioDriver + hedgeability clamp actively defend when `PORTFOLIO_DRIVER_EXECUTE=1`)
 
 **Cap-lift criteria** (per Q3 2026 milestone):
 - External audit close (SUI Foundation grant Tranche 1 deliverable)

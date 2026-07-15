@@ -3,7 +3,7 @@
  * 
  * Invoked by Upstash QStash every 30 minutes to:
  * 1. Fetch SUI pool on-chain stats (USDC balance, shares, members)
- * 2. Record NAV snapshot with 4-asset allocation tracking
+ * 2. Record NAV snapshot with 3-asset allocation tracking (BTC/ETH/SUI)
  * 3. Sync member data from on-chain → DB
  * 4. Run AI allocation decision (BTC/ETH/SUI)
  * 5. Trigger auto-hedge via BlueFin when risk is elevated
@@ -1439,6 +1439,42 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           aiResult.allocations = lockDecision.cappedAllocations as typeof aiResult.allocations;
         }
 
+        // ── alert-response-loop force-cap override ─────────────────────
+        // If alert-response-loop set an emergency risk cap (SHRINK_SPOT
+        // or UNWIND_ALL_SPOT), apply the tighter of that + profit-lock.
+        try {
+          const override = await getCronStateOr<{ capPct: number; reason: string; expiresAtMs: number } | null>(
+            'alert-response:spot-target-risk-cap', null,
+          );
+          if (override && override.expiresAtMs > Date.now()) {
+            const currentRiskAlloc = ['BTC', 'ETH', 'SUI'].reduce((s, k) => s + (aiResult.allocations[k as keyof typeof aiResult.allocations] || 0), 0);
+            if (currentRiskAlloc > override.capPct) {
+              // Scale risk assets proportionally to hit override cap
+              const scale = override.capPct / currentRiskAlloc;
+              const capped: Record<string, number> = {};
+              let cappedRisk = 0;
+              for (const asset of Object.keys(aiResult.allocations)) {
+                if (asset.toUpperCase() === 'USDC') continue;
+                capped[asset] = Math.round((aiResult.allocations[asset as keyof typeof aiResult.allocations] || 0) * scale);
+                cappedRisk += capped[asset];
+              }
+              capped.USDC = Math.max(0, 100 - cappedRisk);
+              aiResult.allocations = capped as typeof aiResult.allocations;
+              logger.warn('[SUI Cron] alert-response override applied', {
+                capPct: override.capPct, reason: override.reason,
+                before: currentRiskAlloc, after: cappedRisk,
+              });
+              await notifyDiscord(
+                `🚨 alert-response force-cap: risk ${currentRiskAlloc}% → ${cappedRisk}% (${override.reason})`,
+                'WARN', { override, capped },
+              ).catch(() => {});
+            }
+          } else if (override) {
+            // Expired — clear it
+            await setCronState('alert-response:spot-target-risk-cap', null).catch(() => {});
+          }
+        } catch { /* best-effort */ }
+
         // Track continuous zero-risk-tier duration for alert-response-loop
         // Gap 8's UNWIND_ALL_SPOT rule triggers after > 24h at 0% risk cap.
         try {
@@ -1500,10 +1536,89 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 execute ? 'TRADE' : 'INFO',
                 { actions, execute },
               ).catch(() => {});
-              // Execution wiring: TODO — hook to BluefinAggregatorService for
-              // SELL_SPOT_TO_USDC/BUY_SPOT_FROM_USDC and BluefinService for
-              // OPEN_HEDGE/CLOSE_HEDGE. Actions above are the source of truth;
-              // this cron already has adminUsdc + swap paths later in the flow.
+
+              // Execution wiring — env-gated. Reuses existing capital paths:
+              //   SELL_SPOT_TO_USDC → replenishAdminUsdc (largest-first swap
+              //   of admin's non-USDC balances back to USDC via 7k aggregator)
+              //   CLOSE_HEDGE      → BluefinService.closeHedge({ symbol })
+              //   BUY_SPOT_FROM_USDC / OPEN_HEDGE → deferred to Step 7 in the
+              //   same cron cycle (which drives allocation-to-target swaps
+              //   from the possibly-just-topped-up admin USDC balance).
+              if (execute) {
+                const executionResults: Array<{ type: string; asset: string; ok: boolean; detail?: string }> = [];
+
+                // Batch SELL_SPOT_TO_USDC into a single replenish call summing
+                // the shortfalls. replenishAdminUsdc already picks the largest
+                // holdings first, so we only need to pass total USD to raise.
+                const sellSum = actions
+                  .filter(a => a.type === 'SELL_SPOT_TO_USDC')
+                  .reduce((s, a) => s + a.amountUsd, 0);
+                if (sellSum > 0.5) {
+                  try {
+                    const rep = await replenishAdminUsdc(network, sellSum, pricesUSD);
+                    executionResults.push({
+                      type: 'SELL_SPOT_TO_USDC',
+                      asset: '(batched)',
+                      ok: rep.swapped > 0,
+                      detail: `swapped $${rep.swapped.toFixed(2)} of $${sellSum.toFixed(2)} target`,
+                    });
+                  } catch (sellErr) {
+                    executionResults.push({
+                      type: 'SELL_SPOT_TO_USDC', asset: '(batched)', ok: false,
+                      detail: sellErr instanceof Error ? sellErr.message : String(sellErr),
+                    });
+                  }
+                }
+
+                // CLOSE_HEDGE actions — one call per hedge/symbol.
+                const closeActions = actions.filter(a => a.type === 'CLOSE_HEDGE');
+                if (closeActions.length > 0) {
+                  try {
+                    const bf = BluefinService.getInstance();
+                    await bf.initialize(
+                      (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim(),
+                      network === 'mainnet' ? 'mainnet' : 'testnet',
+                    ).catch(() => {});
+                    for (const a of closeActions) {
+                      const symbol = `${a.asset}-PERP`;
+                      try {
+                        const res = await bf.closeHedge({ symbol });
+                        executionResults.push({
+                          type: 'CLOSE_HEDGE', asset: a.asset, ok: res.success,
+                          detail: res.error || `closed ${symbol}`,
+                        });
+                      } catch (closeErr) {
+                        executionResults.push({
+                          type: 'CLOSE_HEDGE', asset: a.asset, ok: false,
+                          detail: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                        });
+                      }
+                    }
+                  } catch (bfErr) {
+                    executionResults.push({
+                      type: 'CLOSE_HEDGE', asset: '(init)', ok: false,
+                      detail: `BluefinService init failed: ${bfErr instanceof Error ? bfErr.message : String(bfErr)}`,
+                    });
+                  }
+                }
+
+                // BUY_SPOT / OPEN_HEDGE deferred: Step 7 rebalance already
+                // handles USDC → spot swap toward target allocation. We log
+                // the driver's intent so operators can correlate.
+                const deferredCount = actions.filter(
+                  a => a.type === 'BUY_SPOT_FROM_USDC' || a.type === 'OPEN_HEDGE',
+                ).length;
+
+                logger.warn('[SUI Cron] PortfolioDriver execution results', {
+                  attempted: executionResults.length, deferredToStep7: deferredCount,
+                  results: executionResults,
+                });
+                await notifyDiscord(
+                  `🎯 PortfolioDriver EXECUTED ${executionResults.filter(r => r.ok).length}/${executionResults.length} action(s)${deferredCount > 0 ? ` (${deferredCount} deferred to Step 7)` : ''}`,
+                  'TRADE',
+                  { executionResults, deferredCount },
+                ).catch(() => {});
+              }
             }
           }
         } catch (driverErr) {

@@ -170,8 +170,14 @@ async function handle(request: NextRequest): Promise<NextResponse> {
           spotDriverActions = actions.length;
           if (spotDriverActions > 0) {
             const execute = (process.env.PORTFOLIO_DRIVER_EXECUTE ?? '') === '1';
+            // Log-only by design — sui-community-pool cron owns execution
+            // (runs every 30 min; catches up on flip-triggered actions
+            // within the next tick). Duplicating swap execution here would
+            // race with the 30-min cron; drift-close above already handles
+            // the fast perp close via checkAndCloseDrifts. Documented intent.
             logger.warn('[AgentSignalTick] spot-driver actions on flip', {
               execute, count: spotDriverActions, actions,
+              note: 'log-only; sui-community-pool cron will execute within 30min',
             });
           }
         }

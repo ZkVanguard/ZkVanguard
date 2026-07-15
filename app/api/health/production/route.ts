@@ -66,6 +66,27 @@ async function checkCronAge(key: string, warnAfterMin: number, downAfterMin: num
   }
 }
 
+async function checkPhantomRate(): Promise<Component & { ratePct?: number; total?: number; phantoms?: number }> {
+  try {
+    const r = await query<{ total: string; phantoms: string }>(
+      `SELECT COUNT(*)::text as total,
+              SUM(CASE WHEN COALESCE(realized_pnl, 0) = 0 THEN 1 ELSE 0 END)::text as phantoms
+       FROM hedges
+       WHERE chain='sui' AND status='closed' AND notional_value >= 1
+         AND created_at > NOW() - INTERVAL '1 hour'`,
+    );
+    const total = Number(r[0]?.total ?? 0);
+    const phantoms = Number(r[0]?.phantoms ?? 0);
+    if (total === 0) return { status: 'ok', ratePct: 0, total: 0, phantoms: 0, detail: 'no hedges closed in last hour' };
+    const ratePct = (phantoms / total) * 100;
+    if (ratePct > 5) return { status: 'down', ratePct, total, phantoms, detail: `${ratePct.toFixed(1)}% of last-hour closes have $0 realized — exchange fills unreliable` };
+    if (ratePct > 1) return { status: 'warn', ratePct, total, phantoms, detail: `${ratePct.toFixed(1)}% phantom rate (> 1% threshold)` };
+    return { status: 'ok', ratePct, total, phantoms };
+  } catch (e: any) {
+    return { status: 'warn', error: e?.message?.slice(0, 100) || 'unknown' };
+  }
+}
+
 async function checkNavFreshness(): Promise<Component & { navUsd?: number }> {
   try {
     // Filter to chain='sui' — pool-nav-monitor also writes Cronos $0 snapshots
@@ -249,7 +270,13 @@ export async function GET(req: NextRequest) {
   const bluefinHealthCron = await checkCronAge('bluefin-health:consecutiveDegraded', 15, 30);
   const bluefinDbReconcileCron = await checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60);
 
-  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron };
+  // v0.3.0 defense: phantom hedge rate over last hour. Proxies via closed
+  // hedges with $0 realized_pnl and notional ≥ $1 — the same query the
+  // bulletproof drawdown test uses as its meta-invariant. > 1% warns;
+  // > 5% is down (exchange fills unreliable → auto-halt trader gate).
+  const phantomRate = await checkPhantomRate();
+
+  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate };
   const overall = worstStatus(Object.values(components));
 
   const body = {

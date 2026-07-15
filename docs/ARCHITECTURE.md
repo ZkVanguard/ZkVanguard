@@ -68,7 +68,7 @@
 - LLM providers: Crypto.com AI SDK → ASI → OpenAI → Claude → Ollama (unified router in `lib/ai/llm-provider.ts`)
 - ZK prover: Python FastAPI (`zkp/api/server.py`) — NIST P-521, no trusted setup, CUDA-optional
 
-**Live status:** 46 days uptime, 2,234 NAV snapshots, 214 hedges lifetime, 3 members / $30.80 deposited (bounded by $10K TVL cap).
+**Live status (snapshot 2026-07-15):** 46+ days uptime, 2,200+ NAV snapshots, 214 lifetime hedges, 3 members / ~$38 deposited (bounded by $10K TVL cap). Rerun `scripts/analyze-pool-pnl.ts` for current.
 
 ---
 

@@ -108,9 +108,25 @@ async function handle(request: NextRequest): Promise<NextResponse> {
             reason: 'alert-response-loop halt',
           }).catch(() => {});
         }
-        // SHRINK_SPOT / UNWIND_ALL_SPOT need PortfolioDriver execution
-        // wiring; today they log only. Enable via PORTFOLIO_DRIVER_EXECUTE
-        // once the driver's swap path is wired in sui-community-pool.
+        // SHRINK_SPOT / UNWIND_ALL_SPOT — write a target-risk-cap override
+        // to cron_state; sui-community-pool reads this AFTER profit-lock and
+        // uses the tighter cap (min of profit-lock and this). PortfolioDriver
+        // then unwinds existing spot to hit it (requires PORTFOLIO_DRIVER_EXECUTE=1
+        // in the sui-community-pool cron). TTL 6h so a stale override auto-clears.
+        if (r.type === 'SHRINK_SPOT') {
+          await setCronState('alert-response:spot-target-risk-cap', {
+            capPct: 20,
+            reason: r.reason,
+            expiresAtMs: now + 6 * 60 * 60 * 1000,
+          }).catch(() => {});
+        }
+        if (r.type === 'UNWIND_ALL_SPOT') {
+          await setCronState('alert-response:spot-target-risk-cap', {
+            capPct: 0,
+            reason: r.reason,
+            expiresAtMs: now + 6 * 60 * 60 * 1000,
+          }).catch(() => {});
+        }
       } catch (execErr) {
         logger.warn('[AlertResponseLoop] execute failed for response', {
           type: r.type, error: execErr instanceof Error ? execErr.message : String(execErr),

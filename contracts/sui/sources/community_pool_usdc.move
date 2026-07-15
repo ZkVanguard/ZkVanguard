@@ -1,11 +1,11 @@
 /// ZkVanguard Community Pool USDC Module for SUI
 /// AI-managed community investment pool accepting USDC deposits
-/// 4-Asset allocation: BTC, ETH, SUI, CRO managed by AI via QStash
+/// 3-Asset allocation: BTC, ETH, SUI managed by AI via QStash
 ///
 /// Features:
 /// - USDC deposits (6 decimal precision)
 /// - Share-based ownership with ERC-4626 inflation protection
-/// - 4-asset AI allocation tracking (BTC/ETH/SUI/CRO)
+/// - 3-asset AI allocation tracking (BTC/ETH/SUI)
 /// - Auto-hedge integration with BlueFin
 /// - QStash-driven AI management
 /// - High-water mark performance fees

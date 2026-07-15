@@ -77,12 +77,12 @@ Snapshot pulled from the Aiven Postgres replica against live Sui mainnet state. 
 
 | Metric | Value |
 |---|---|
-| Days running since first NAV snapshot | **46** (from 2026-05-29) |
-| NAV snapshots recorded | **2,234** (≈48/day, matches 30-min cron cadence) |
+| Days running since first NAV snapshot | **46+** (from 2026-05-29; live-computed) |
+| NAV snapshots recorded | **2,200+** (≈48/day, matches 30-min cron cadence) |
 | Hedges executed lifetime | **214** across BTC / ETH / SUI / SOL PERPs |
 | Active crons with heartbeats | **13** — see `/api/health/production` |
 | Active members | **3** (limited by $10K TVL cap) |
-| Lifetime USDC deposits | **$30.80** |
+| Lifetime USDC deposits | **~$38** (rerun `scripts/analyze-pool-pnl.ts` for live number) |
 | External auditors engaged | Pending (SUI Foundation grant Tranche 1 deliverable) |
 
 Small absolute numbers by design — the $10K cap is enforced by the contract. Operating metrics prove the engine works; audit + cap-lift unlock scale.
