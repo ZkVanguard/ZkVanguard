@@ -1,120 +1,74 @@
-# 📚 ZkVanguard Documentation
+# ZkVanguard Documentation
 
-Complete technical and operational documentation for the ZkVanguard platform.
+Living reference for the platform. **For the authoritative repo guide (architecture, env, gotchas, invariants), read [`CLAUDE.md`](../CLAUDE.md).** This directory contains supporting docs; many are point-in-time reports kept for provenance rather than daily reference.
 
----
+## Start here
 
-## 📖 Core Documentation
+- **[Main README](../README.md)** — product overview, safety, roadmap, FAQ
+- **[CLAUDE.md](../CLAUDE.md)** — authoritative technical guide (env, invariants, cron topology, gotchas)
 
-### 🚀 Getting Started
-- **[Setup Guide](./SETUP.md)** - Installation and configuration
-- **[Deployment Guide](./DEPLOYMENT.md)** - Deploy contracts and services
+## Living reference docs
 
-### 🏗️ Architecture & Design
-- **[Architecture Overview](./ARCHITECTURE.md)** - System design and tech stack
-- **[Scalability Guide](./SCALABILITY.md)** - Scalable architecture patterns ⭐
-- **[Working Features](./WORKING_FEATURES.md)** - Current implementation status
-- **[Known Issues](./KNOWN_ISSUES.md)** - Current limitations and workarounds
+| Doc | Purpose |
+|---|---|
+| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System design (partial-historical banner — see CLAUDE.md for current authoritative version) |
+| **[DEPLOY_RUNBOOK.md](./DEPLOY_RUNBOOK.md)** | Incident response, env presets, BlueFin invariants, admin endpoints |
+| **[MAINNET_READINESS.md](./MAINNET_READINESS.md)** | Current mainnet posture, cap-lift criteria |
+| **[SUI_DEPLOYMENT.md](./SUI_DEPLOYMENT.md)** | SUI-specific deploy runbook |
+| **[SECURITY.md](./SECURITY.md)** | Responsible disclosure, supported versions, defense posture |
+| **[ROADMAP.md](./ROADMAP.md)** | Cap-ratchet milestones (Q3 2026 → Q1 2027) |
+| **[CHANGELOG.md](./CHANGELOG.md)** | Versioned release history |
+| **[SLO_AND_RUNBOOKS.md](./SLO_AND_RUNBOOKS.md)** | Service objectives, cron runbooks |
+| **[SCALABILITY_ANALYSIS.md](./SCALABILITY_ANALYSIS.md)** | Hard walls at $50M / $500M / $1B TVL |
+| **[BUG_BOUNTY.md](./BUG_BOUNTY.md)** | Bounty tiers and scope |
+| **[CONTRIBUTING.md](./CONTRIBUTING.md)** | Contribution workflow |
+| **[SETUP.md](./SETUP.md)** | Local setup |
+| **[DEPLOYMENT.md](./DEPLOYMENT.md)** | Contract + service deployment |
 
-### ⚡ Gasless System
-- **[Gasless Final Solution](./GASLESS_FINAL_SOLUTION.md)** - Implementation details ⭐
-- **[Frontend Integration](./FRONTEND_GASLESS_INTEGRATION.md)** - Frontend gasless integration
+## Deploy records (historical, point-in-time)
 
-### 🧪 Testing & Validation
-- **[Test Guide](./TEST_GUIDE.md)** - Comprehensive testing instructions
-- **[ZK Cryptographic Proof](./ZK_CRYPTOGRAPHIC_PROOF.md)** - ZK-STARK validation evidence
+- **[DEPLOY_2026-06-12_v0.2.0.md](./DEPLOY_2026-06-12_v0.2.0.md)** — v0.2.0 mainnet deploy record
+- **[PRE_DEPLOY_AUDIT_2026-06-12.md](./PRE_DEPLOY_AUDIT_2026-06-12.md)** — pre-deploy audit
+- **[AUDIT_2026-06-04.md](./AUDIT_2026-06-04.md)** — Move contract audit (phases 1–14)
+- **[AUDIT_2026-06-12_phase15_offchain.md](./AUDIT_2026-06-12_phase15_offchain.md)** — off-chain TS audit (phase 15)
+- **[RELEASE_NOTES_v0.2.0.md](./RELEASE_NOTES_v0.2.0.md)** — v0.2.0 release notes
 
-### 📊 Project Management
-- **[Organization Summary](./ORGANIZATION_SUMMARY.md)** - Project structure and cleanup ⭐
-- **[Project Analysis](./PROJECT_ANALYSIS.md)** - Comprehensive codebase analysis ⭐
-- **[Pitch Deck](./PITCH_DECK.md)** - Project overview for investors
+## Product docs
 
----
+- **[PRICING_MODEL.md](./PRICING_MODEL.md)** — three revenue streams (cross-referenced to [`lib/config/pricing.ts`](../lib/config/pricing.ts))
+- **[CUSTODY_ATTESTATION_SPEC.md](./CUSTODY_ATTESTATION_SPEC.md)** — RWA custody attestation primitive
+- **[PRIVACY_HEDGE_ARCHITECTURE.md](./PRIVACY_HEDGE_ARCHITECTURE.md)** — private hedges via `zk_hedge_commitment.move`
+- **[ZK_HEDGE_PRIVACY.md](./ZK_HEDGE_PRIVACY.md)** — ZK privacy layer
+- **[FORMAL_STARK_VERIFICATION.md](./FORMAL_STARK_VERIFICATION.md)** — STARK protocol formal verification
 
-## 📂 Quick Navigation
+## Grants + business
 
-### For Developers
-```
-Start Here:
-1. SETUP.md - Get the project running
-2. ARCHITECTURE.md - Understand the system
-3. SCALABILITY.md - Learn patterns for expansion
-4. TEST_GUIDE.md - Run tests and validation
-```
+- **[VISION.md](./VISION.md)** — product vision
+- **[PROJECT_DESCRIPTION.md](./PROJECT_DESCRIPTION.md)** — one-pager
+- **[GO_TO_MARKET_PLAN.md](./GO_TO_MARKET_PLAN.md)** — GTM strategy
+- **[GRANT_SUBMISSION_PLAYBOOK.md](./GRANT_SUBMISSION_PLAYBOOK.md)** — grant application framework
+- **[GRANT_HONEST_ASSESSMENT.md](./GRANT_HONEST_ASSESSMENT.md)** — self-critical grant readiness
+- **[INVESTOR_PITCH_DECK.md](./INVESTOR_PITCH_DECK.md)** — investor deck
+- **[PITCH_DECK_ALLIANCE.md](./PITCH_DECK_ALLIANCE.md)** — partner pitch
 
-### For Reviewing Code
-```
-Check These:
-1. PROJECT_ANALYSIS.md - Comprehensive analysis
-2. ORGANIZATION_SUMMARY.md - Structure overview
-3. WORKING_FEATURES.md - What's implemented
-4. KNOWN_ISSUES.md - Current limitations
-```
+## Guides
 
-### For Deployment
-```
-Follow These:
-1. DEPLOYMENT.md - Deployment steps
-2. GASLESS_FINAL_SOLUTION.md - Gasless system
-3. FRONTEND_GASLESS_INTEGRATION.md - Frontend setup
-```
+- **[guides/DASHBOARD_USAGE_GUIDE.md](./guides/DASHBOARD_USAGE_GUIDE.md)** — dashboard walkthrough
+- **[guides/TESTNET_DEMO_GUIDE.md](./guides/TESTNET_DEMO_GUIDE.md)** — testnet demo flow
+- **[guides/X402_GASLESS_INTEGRATION.md](./guides/X402_GASLESS_INTEGRATION.md)** — gasless integration
+- **[guides/DEMO_WALKTHROUGH_GUIDE.md](./guides/DEMO_WALKTHROUGH_GUIDE.md)** — end-to-end demo
 
----
+## Test reports (historical)
 
-## 🎯 Key Documents
+- **[reports/COMPLETE_SYSTEM_TEST_REPORT.md](./reports/COMPLETE_SYSTEM_TEST_REPORT.md)**
+- **[reports/AUDIT_READY_REPORT.md](./reports/AUDIT_READY_REPORT.md)**
+- **[reports/ONCHAIN_TEST_REPORT.md](./reports/ONCHAIN_TEST_REPORT.md)**
+- **[E2E_TEST_REPORT.md](./E2E_TEST_REPORT.md)**
 
-### Production Essentials ⭐
-- **GASLESS_FINAL_SOLUTION.md** - 97%+ gasless coverage implementation
-- **SCALABILITY.md** - Architecture patterns for growth
-- **PROJECT_ANALYSIS.md** - Complete codebase health report
+## Weekly / monthly grant reports (root)
 
-### Technical Deep Dives
-- **ARCHITECTURE.md** - Full system design
-- **ZK_CRYPTOGRAPHIC_PROOF.md** - ZK-STARK proof system
-
-### Team Reference
-- **ORGANIZATION_SUMMARY.md** - How code is organized
-- **KNOWN_ISSUES.md** - What needs work
+Weekly and monthly submission reports live at the repo root (`week-*-submission.md`, `monthly-submission-*.md`) as SUI Foundation grant deliverables — read them for period-scoped shipped work.
 
 ---
 
-## 📋 Documentation Status
-
-| Document | Status | Last Updated |
-|----------|--------|--------------|
-| ARCHITECTURE.md | ✅ Current | Dec 2025 |
-| SCALABILITY.md | ✅ Current | Dec 2025 |
-| GASLESS_FINAL_SOLUTION.md | ✅ Current | Dec 2025 |
-| PROJECT_ANALYSIS.md | ✅ Current | Dec 2025 |
-| ORGANIZATION_SUMMARY.md | ✅ Current | Dec 2025 |
-| SETUP.md | ✅ Current | Dec 2025 |
-| TEST_GUIDE.md | ✅ Current | Dec 2025 |
-| DEPLOYMENT.md | ✅ Current | Dec 2025 |
-| WORKING_FEATURES.md | ✅ Current | Dec 2025 |
-| KNOWN_ISSUES.md | ✅ Current | Dec 2025 |
-
----
-
-## 🗂️ Archive
-
-Legacy documentation moved to `/archive/old-docs/`:
-- DEMO.md - Original demo documentation
-- PROOF_EVIDENCE.md - Early proof validation
-- PROJECT_SUMMARY.md - Outdated summary
-
----
-
-## 📝 Contributing to Docs
-
-When adding new documentation:
-1. Follow existing naming conventions (UPPERCASE_WITH_UNDERSCORES.md)
-2. Add entry to this README in appropriate section
-3. Include clear section headers and table of contents
-4. Mark important sections with ⭐
-5. Update "Last Updated" date
-
----
-
-**Last Updated**: December 16, 2025  
-**Documentation Version**: 2.0  
-**Project Status**: Production Ready
+Docs referenced in the previous index that don't exist (SCALABILITY.md, KNOWN_ISSUES.md, ORGANIZATION_SUMMARY.md, PROJECT_ANALYSIS.md, PITCH_DECK.md, FRONTEND_GASLESS_INTEGRATION.md, ZK_CRYPTOGRAPHIC_PROOF.md) were either never created or superseded. The living-reference set above is the source of truth.

@@ -1,438 +1,104 @@
-# ZkVanguard Project Roadmap
+# ZkVanguard Roadmap
 
-## Version 0.1.0 - Beta Release ✅
-**Status**: Complete  
-**Release Date**: January 2, 2026
-
-### Core Features Delivered
-- ✅ 5 specialized AI agents (Lead, Risk, Hedging, Settlement, Reporting)
-- ✅ ZK-STARK privacy layer with CUDA acceleration (521-bit security)
-- ✅ x402 gasless protocol integration (97.4% coverage)
-- ✅ Smart contract suite deployed on Cronos testnet
- - ✅ Modern dashboard with WDK self-custodial wallet
-- ✅ Comprehensive test suite (70/70 tests passing)
-- ✅ VVS Finance DEX integration for swaps
-- ✅ Moonlander perpetuals client integration
-- ✅ Crypto.com AI SDK integration
-- ✅ Multi-chain foundation (Cronos + SUI support)
-- ✅ Real-time portfolio monitoring with CoinGecko API
-- ✅ Delphi/ Polymarket prediction market data integration
-- ✅ Natural language command interface
-
-### Documentation
-- ✅ 15+ comprehensive technical docs
-- ✅ Architecture diagrams and guides
-- ✅ API documentation
-- ✅ Test reports and guides
+Canonical roadmap. Mirrors the [main README](../README.md#roadmap) but with more context. Cap ratchets are contract-gated via `admin_set_tvl_cap` and unlock only against a specific evidence bundle — not aspirational.
 
 ---
 
-## Version 0.1.5 - Current (In Progress) 🔨
-**Status**: In Development  
-**Target**: January 31, 2026
+## Shipped
 
-### Enhancements
-- 🔨 VVS gasless swap optimization with x402
-- 🔨 Enhanced ZK proof verification UI
-- 🔨 Agent activity feed improvements
-- 🔨 Performance optimizations
-- [ ] Production API keys for Moonlander
-- [ ] Additional test coverage for edge cases
+### v0.1.0 — Beta (2026-01-02)
+- 5 specialized AI agents (Lead / Risk / Hedging / Settlement / Reporting)
+- ZK-STARK privacy layer (Python STARK prover, NIST P-521, CUDA-optional)
+- x402 gasless protocol integration
+- Smart-contract suite on Cronos testnet
+- Dashboard with WDK self-custodial wallet
+- 70/70 tests passing
+- VVS Finance DEX integration
+- Multi-chain foundation (Cronos + SUI configured)
 
----
+### v0.2.0 — Sui Mainnet (2026-06-12)
+- Package `0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726` live
+- USDC pool state `0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a`
+- External NAV oracle (fixes prior share-math underpayment)
+- Strict mode `ON` — deposits/withdraws revert on stale oracle
+- TVL cap $10K (contract-enforced via `admin_set_tvl_cap`)
+- `close_hedge` funds-verify (drain prevention via AgentCap)
+- `zk_proxy_vault` cross-proxy + 4 ZK contracts ed25519 prover attestation
+- 15 internal audit phases (see `AUDIT_2026-06-04.md`, `AUDIT_2026-06-12_phase15_offchain.md`)
+- 7-agent orchestrator + `SafeExecutionGuard` (2-of-3 consensus, circuit breaker)
+- BluefinAggregator (6 DEXes on Sui: Cetus · DeepBook · Turbos · FlowX · Aftermath · BlueFin)
+- Prediction-market signal pipeline: Polymarket 5-min + Delphi/Polymarket + Manifold + Crypto.com + BlueFin funding
 
-## Version 0.2.0 - Enhanced Dashboard & Analytics 📊
-**Target**: February 2026  
-**Status**: Planned
+### v0.3.0 — 8-gate autonomy defense (2026-07-15)
+Shipped after a real drawdown revealed passive-only defenses. Each gate defends a specific failure mode; verified by `test/integration/pool-drawdown-defense.test.ts` (10/10 green).
 
-### Features
-- [ ] Real-time portfolio value tracking with WebSocket updates
-- [ ] Interactive chart visualizations (Chart.js)
-  - Line charts for portfolio performance
-  - Candlestick charts for asset prices
-  - Area charts for risk metrics
-- [ ] Historical performance analytics (7d, 30d, 90d, 1y, all-time)
-- [ ] Enhanced agent activity timeline with filters
-- [ ] ZK proof explorer with detailed verification data
-- [ ] Mobile-responsive dashboard improvements
-- [ ] Theme customization options
+- **PortfolioDriver** — corrective unwind of existing balance sheet when profit-lock fires
+- **Fill verifier** — post-open BlueFin `getPositions()` cross-check to catch silent-rejects
+- **Hedgeability spot-cap** — spot allocation forced to 0 when perp min-qty unopenable at NAV
+- **Symmetric sell trigger** — mirror of the buy trigger; opposing signal reduces allocation
+- **Stale-hedge detector** — age > 7d + ≥ 2 signal flips + contradicted side → force-close
+- **Signal-flip drift-close** — spot leg unwind on direction flip (not just perps)
+- **AI regret weighting** — confidence-weighted rolling outcome scales stake by [0.25, 1.0]
+- **Alert response loop** — 3 KILL/hr → shrink spot; 24h profit-lock → unwind; phantom rate > 1% → halt
 
-### Technical
-- [ ] WebSocket integration for real-time data
-- [ ] Chart.js library integration with custom themes
-- [ ] React.memo and lazy loading optimizations
-- [ ] Lighthouse performance score > 90
-- [ ] Improved error handling and loading states
-
----
-
-## Version 0.3.0 - SUI Mainnet Launch 🚀
-**Target**: March 2026  
-**Status**: Ready for Deployment
-
-### Multi-Chain Strategy Phase 1: Cronos → SUI
-After validating our platform on Cronos, SUI is our **second blockchain** before expanding to Ethereum L2s. This sequential approach allows us to:
-- Perfect cross-chain architecture with 2 chains first
-- Validate Move language integration (different from EVM)
-- Test non-EVM chain compatibility
-- Prove scalability before broader expansion
-
-### SUI Integration Features
-- [ ] SUI mainnet smart contract deployment
-  - Move-based portfolio management contracts
-  - Native SUI ZK verification module
-  - Sponsored transaction contracts
-- [ ] Cross-chain portfolio aggregation (Cronos + SUI)
-- [ ] SUI native asset support (SUI, USDC on SUI)
-- [ ] Dual-chain risk monitoring and analytics
-- [ ] SUI-native gasless transactions (sponsored tx)
-- [ ] Agent coordination across both chains
-
-### Technical
-- [ ] SUI TypeScript SDK integration complete
-- [ ] SUI wallet adapter (@mysten/dapp-kit)
-- [ ] Cross-chain state synchronization
-- [ ] Unified portfolio API for multi-chain data
-- [ ] SUI testnet validation (devnet/testnet)
-
-### Success Metrics
-- [ ] 10+ beta users managing portfolios on SUI
-- [ ] <500ms cross-chain data sync
-- [ ] 100% sponsored transaction success rate
-- [ ] Zero cross-chain bridge vulnerabilities
+Ships behind env flags (`PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `ALERT_RESPONSE_EXECUTE`) so operator can log-observe before flipping to live execution.
 
 ---
 
-## Version 0.4.0 - Advanced Risk Models & Analytics 📈
-**Target**: April-May 2026  
-**Status**: Research Phase
+## Roadmap
 
-### Risk Management Features
-- [ ] Monte Carlo simulation for portfolio risk
-  - 10,000+ simulation runs
-  - Confidence intervals and VaR calculations
-  - Stress testing scenarios
-- [ ] Advanced risk metrics
-  - Conditional VaR (CVaR) calculation
-  - Maximum drawdown analysis
-  - Correlation matrices between assets
-  - Beta and alpha calculations
-- [ ] Custom risk tolerance profiles
-  - Conservative, moderate, aggressive presets
-  - User-defined risk parameters
-  - Dynamic rebalancing triggers
-- [ ] Risk decomposition by asset class
-  - Sector exposure analysis
-  - Geographic risk distribution
-  - Liquidity risk assessment
+### Q3 2026 — External audit + Founding-100
 
-### Technical
-- [ ] Python risk engine integration
-- [ ] NumPy/SciPy for advanced calculations
-- [ ] Historical volatility analysis (1yr+ data)
-- [ ] Multi-factor risk models (Fama-French)
-- [ ] Real-time risk recalculation engine
-- [ ] Risk alert notification system
+- 🔨 External audit close (SUI Foundation grant Tranche 1 deliverable)
+- 🔨 TVL cap ratchet: **$10K → $100K**
+- 🔨 Founding-100 points program live (3× multiplier for retail cohort)
+- 🔨 `PORTFOLIO_DRIVER_EXECUTE=1` in production after log-observation window
+- 🔨 QStash schedule for `alert-response-loop` cron
+- 🔨 Dashboard: risk overview page enhancements + PnL time-series
 
----
+**Success criteria for cap ratchet:** external audit findings resolved · 30-day incident-free window · > $50K deposited across ≥ 20 members.
 
-## Version 0.5.0 - Perpetuals & Advanced Hedging 🎲
-**Target**: June 2026  
-**Status**: Planned
+### Q4 2026 — Institutional tier + first EVM expansion
 
-### Derivatives Features
-- [ ] Full Moonlander DEX integration (production keys)
-  - Perpetual futures (BTC, ETH, CRO)
-  - Leverage up to 100x
-  - Stop-loss and take-profit orders
-  - Funding rate optimization
-- [ ] VVS V3 concentrated liquidity positions
-- [ ] Options strategy builder (future: Deribit integration)
-- [ ] Position tracking dashboard
-  - Open positions with PnL
-  - Liquidation price calculator
-  - Margin usage visualization
-  - Historical performance
-- [ ] Advanced hedging strategies
-  - Delta-neutral strategies
-  - Basis arbitrage
-  - Funding rate arbitrage
-  - Volatility hedging
+- 🔨 TVL cap ratchet: **$100K → $1M**
+- 🔨 Institutional tier live via `rwa_custody_attestor.move` — $2.5K enrollment + $0.50/attestation
+- 🔨 First EVM chain deployment (target: chain with institutional partner demand)
+- 🔨 Multi-venue perp hedging (Hyperliquid / dYdX beyond BlueFin V2)
+- 🔨 Bug bounty program public (see `BUG_BOUNTY.md`)
 
-### Technical
-- [ ] Real-time order book data
-- [ ] Position size calculator with risk limits
-- [ ] Slippage optimization algorithms
-- [ ] Multi-leg order execution
-- [ ] Automated position rebalancing
+**Success criteria for cap ratchet:** > $500K deposited · zero drawdown-defense gate false-positives · custody attestor live with ≥ 1 institutional client.
+
+### Q1 2027 — Enterprise + TGE
+
+- 🔨 TVL cap ratchet: **$1M → $10M**
+- 🔨 Enterprise white-label API — Aladdin-as-a-Service tier
+- 🔨 TGE (utility token — governance over fee parameters, staking gates discounted vault fees)
+- 🔨 Points → token bridge for Founding-100 cohort
+- 🔨 Value capture: percentage of on-chain fees routes to staking rewards / buyback-burn (Pendle / GMX precedent)
+
+**Success criteria for cap ratchet:** > $5M deposited · sustained 30-day uptime > 99.5% · multi-chain expansion validated.
 
 ---
 
-## Version 0.6.0 - Ethereum L2 Expansion 🌐
-**Target**: August 2026  
-**Status**: Concept
+## Beyond Q1 2027 (directional, not committed)
 
-### Multi-Chain Strategy Phase 2: EVM L2 Expansion
-**Prerequisites**: Cronos + SUI successfully deployed and validated
+- **$100M TVL** — needs `NAV_SAFETY_CEILING_USDC` bump (currently $500M in cron; Move redeploy with u128 required beyond that)
+- **AdminCap MSafe migration** — `FeeManagerCap` already on MSafe; `AdminCap` still hot key
+- **OTC desk relationships** — for splits above DEX aggregator liquidity
+- **Insurance fund** — protocol-owned buffer against black-swan scenarios
+- **Multi-signal fusion expansion** — Kalshi, Manifold, custom on-chain oracles
 
-With proven cross-chain architecture from Cronos→SUI expansion, we now expand to Ethereum Layer 2 networks. This phase targets EVM-compatible chains to leverage existing smart contracts.
-
-### Ethereum L2 Integrations
-- [ ] **Hedera** (Hashgraph L1)
-  - Deploy smart contracts on Hedera
-  - VVS Finance V3 integration for concentrated liquidity
-  - VVS Finance V2 integration for swaps
-  - GMX perpetuals integration
-- [ ] **Optimism** (Second L2)
-  - Optimistic rollup support
-  - Velodrome DEX integration
-  - Synthetix perpetuals
-- [ ] **Base** (Third L2)
-  - Coinbase L2 support
-  - Aerodrome DEX integration
-- [ ] Unified multi-chain dashboard
-  - Portfolio aggregation across all 5 chains (Cronos, SUI, Hedera, Optimism, Base)
-  - Unified risk metrics across all chains
-  - Gas optimization per network
-  - Cross-chain rebalancing strategies
-
-### Technical Infrastructure
-- [ ] Bridge integration for asset transfers
-  - LayerZero or Axelar for cross-chain messaging
-  - Bridge security audits
-  - Slippage protection
-- [ ] Multi-chain RPC management
-  - Automatic failover
-  - Load balancing
-  - Rate limit handling
-- [ ] Chain-specific optimizations
-  - Gas price oracles per chain
-  - MEV protection strategies
-  - Transaction batching per network
+See [`SCALABILITY_ANALYSIS.md`](./SCALABILITY_ANALYSIS.md) for the hard walls that constrain each tier.
 
 ---
 
-## Version 0.7.0 - AI Agent Marketplace 🤖
-**Target**: October 2026  
-**Status**: Concept
+## Not on the roadmap (explicit non-goals)
 
-### Marketplace Features
-- [ ] Community-created AI agents
-  - Agent SDK for developers
-  - Template agents (trading, risk, analytics)
-  - Testing sandbox environment
-- [ ] Agent performance leaderboard
-  - Sharpe ratio rankings
-  - Win rate statistics
-  - Total AUM managed
-  - User ratings and reviews
-- [ ] Revenue sharing model
-  - 70/30 split (creator/platform)
-  - Performance-based bonuses
-  - Subscription vs usage-based pricing
-- [ ] Agent customization toolkit
-  - No-code agent builder
-  - Strategy backtesting platform
-  - Risk parameter configuration
-  - Custom data source integration
-
-### Technical
-- [ ] Smart contract for agent registry
-  - On-chain agent metadata
-  - Version control
-  - Access control
-- [ ] Agent SDK (TypeScript/Python)
-  - Standardized API
-  - Testing framework
-  - Documentation generator
-- [ ] Performance metrics API
-  - Real-time tracking
-  - Historical analytics
-  - Benchmark comparisons
+- **Own DEX or perp venue** — we route through BlueFin, Cetus, DeepBook et al. No plan to become a venue.
+- **Public sale / ICO** — TGE is utility-first, no fundraising via retail sale.
+- **KYC-gated retail deposits** — the vault is permissionless above the geo-block layer. Institutional tier is opt-in KYC via custody attestations.
+- **Cross-chain bridge protocol** — we deploy per-chain; no bridge in scope.
 
 ---
 
-## Version 0.8.0 - Institutional Features 🏛️
-**Target**: December 2026  
-**Status**: Concept
-
-### Enterprise Features
-- [ ] Multi-user account management
-  - Team workspaces
-  - Sub-accounts for clients
-  - Hierarchical permissions
-- [ ] Role-based access control (RBAC)
-  - Admin, trader, analyst, viewer roles
-  - Granular permissions per feature
-  - Audit trail for all actions
-- [ ] Compliance reporting
-  - Transaction history exports
-  - Tax reporting (capital gains/losses)
-  - Regulatory reporting templates
-  - Real-time compliance monitoring
-- [ ] Institutional-grade custody integration
-  - Fireblocks integration
-  - Multi-sig wallet support
-  - Hardware wallet compatibility
-- [ ] White-label solution
-  - Custom branding
-  - Dedicated infrastructure
-  - Custom domain support
-  - API-first architecture
-- [ ] Trading firm API access
-  - REST API for all features
-  - WebSocket for real-time data
-  - Rate limits and quotas
-  - API key management
-
-### Technical
-- [ ] PostgreSQL for institutional data
-  - High-availability setup
-  - Automated backups
-  - Data retention policies
-- [ ] Advanced authentication
-  - SSO (SAML, OAuth)
-  - Multi-factor authentication (2FA/hardware keys)
-  - Session management
-- [ ] Audit logging system
-  - Immutable audit trail
-  - Compliance-ready logs
-  - Real-time monitoring
-- [ ] High-availability deployment
-  - Load balancing
-  - Auto-scaling
-  - 99.9% uptime SLA
-  - Disaster recovery plan
-
----
-
-## Version 1.0.0 - Production Release 🚀
-**Target**: Q1 2027  
-**Status**: Planned
-
-### Production Readiness Requirements
-- [ ] Security & Compliance
-  - [ ] External security audit by Trail of Bits or similar
-  - [ ] Bug bounty program launched ($50K-$100K pool)
-  - [ ] Penetration testing completed
-  - [ ] Legal compliance review (securities, KYC/AML)
-  - [ ] Privacy policy and terms of service finalized
-  - [ ] GDPR and CCPA compliance
-- [ ] Infrastructure
-  - [ ] Cronos zkEVM mainnet deployment
-  - [ ] High-availability infrastructure (99.9% uptime)
-  - [ ] CDN for global performance
-  - [ ] Database replication and backups
-  - [ ] Monitoring and alerting (Datadog/New Relic)
-- [ ] Business Metrics
-  - [ ] >100 active users managing portfolios
-  - [ ] $50M+ TVL on mainnet
-  - [ ] Insurance coverage for smart contracts ($5M+)
-  - [ ] 24/7 customer support team
-  - [ ] Community of 10,000+ members
-- [ ] User Experience
-  - [ ] Mobile app (iOS & Android via React Native)
-  - [ ] Browser extension (MetaMask-like)
-  - [ ] Onboarding flow with tutorials
-  - [ ] Help center and documentation
-  - [ ] Multi-language support (EN, ES, ZH, KO, JP)
-
-### Marketing & Growth
-- [ ] Official launch event with partnerships
-- [ ] Press releases and media coverage
-- [ ] Ambassador program
-- [ ] Referral rewards system
-- [ ] Educational content (blog, YouTube, Twitter)
-- [ ] Conference presentations and demos
-
-### Post-Launch Support
-- [ ] Continuous monitoring and incident response
-- [ ] Regular security updates
-- [ ] Feature prioritization based on user feedback
-- [ ] Monthly product updates
-- [ ] Quarterly financial reports (for token holders)
-
----
-
-## Future Vision (2027+) 🔮
-
-### Advanced Features Under Research
-- [ ] **Machine Learning Models**
-  - Predictive analytics for market movements
-  - Sentiment analysis from social media
-  - Portfolio optimization using reinforcement learning
-  - Anomaly detection for suspicious activities
-
-- [ ] **DeFi Protocol Integration**
-  - Lending/borrowing (Aave, Compound)
-  - Yield farming strategies
-  - Liquid staking derivatives
-  - Real World Asset (RWA) tokenization partnerships
-
-- [ ] **Regulatory Technology (RegTech)**
-  - Automated KYC/AML screening
-  - Transaction monitoring for compliance
-  - Regulatory reporting automation
-  - Jurisdiction-specific compliance modules
-
-- [ ] **Quantum-Resistant Cryptography**
-  - Post-quantum ZK proofs
-  - Lattice-based signatures
-  - Future-proof security architecture
-
-- [ ] **DAO Governance**
-  - Community voting on features
-  - Treasury management
-  - Agent parameter tuning via governance
-  - Protocol upgrades through proposals
-
----
-
-## Release Philosophy
-
-### Development Principles
-1. **Security First**: Every feature undergoes security review before deployment
-2. **User-Centric**: Build what users need, not what's technically interesting
-3. **Incremental Delivery**: Ship small, test thoroughly, iterate quickly
-4. **Open Communication**: Regular updates and transparent roadmap changes
-
-### Version Naming Convention
-- **0.x.x**: Beta releases with breaking changes possible
-- **1.x.x**: Production releases with backward compatibility
-- **x.0.x**: Major feature releases
-- **x.x.x**: Bug fixes and minor improvements
-
-### Success Metrics Per Release
-- **Code Quality**: >90% test coverage, zero critical bugs
-- **Performance**: <2s page load, <500ms API response
-- **User Satisfaction**: >4.5/5 rating, <5% churn rate
-- **Financial**: Positive contribution margin per feature
-
----
-
-## How to Contribute
-
-Interested in shaping the future of ZkVanguard? Here's how you can help:
-
-1. **Developers**: Check our [GitHub Issues](https://github.com/ZkVanguard/ZkVanguard/issues) for open tasks
-2. **Users**: Share feedback via [Discord](https://discord.gg/zkvanguard) or feedback@zkvanguard.io
-3. **Researchers**: Propose new algorithms or risk models via GitHub Discussions
-4. **Investors**: Reach out to founders@zkvanguard.io for partnership opportunities
-
-### Priority Roadmap Items (Community Vote)
-Vote on what we should build next:
-- [ ] Mobile app
-- [ ] Additional chains beyond roadmap (Polygon, Avalanche, Solana)
-  - Note: Primary expansion path is Cronos → SUI → Hedera → Optimism → Base
-- [ ] Social trading features
-- [ ] Advanced charting tools
-- [ ] Voice/chat support with AI agents
-
----
-
-## Changelog & Updates
-
-For detailed release notes and bug fixes, see [CHANGELOG.md](./CHANGELOG.md)
-
-**Last Updated**: January 15, 2026  
-**Next Review**: February 1, 2026
+**Last updated:** 2026-07-15 · Cross-referenced against [`../README.md`](../README.md), [`CLAUDE.md`](../CLAUDE.md), and shipped code.
