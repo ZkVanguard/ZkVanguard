@@ -19,8 +19,8 @@ import { v4 as uuidv4 } from 'uuid';
 export interface ExecutionLimits {
   maxPositionSizeUSD: number;        // Max single position (default: $10M)
   maxDailyVolumeUSD: number;         // Max daily volume (default: $100M)
-  maxSlippageBps: number;            // Max slippage in basis points (default: 50 = 0.5%)
-  maxLeverage: number;               // Max leverage (default: 5x)
+  maxSlippageBps: number;            // Max slippage in basis points (default: 30 = 0.30%)
+  maxLeverage: number;               // Max leverage (default: 4x)
   minConfirmations: number;          // Min block confirmations (default: 3)
   cooldownMs: number;                // Cooldown between executions (default: 5000ms)
   maxConcurrentExecutions: number;   // Max parallel executions (default: 3)
