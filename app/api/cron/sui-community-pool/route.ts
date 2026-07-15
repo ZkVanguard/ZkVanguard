@@ -1412,10 +1412,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       try {
         const peakNavForLock = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
         const { applyProfitLock } = await import('@/lib/services/sui/cron/profit-lock-guard');
+
+        // Fetch 7-day-ago NAV so profit-lock can compute recovery momentum
+        // (avoid "sit in USDC through the rally" pattern).
+        let drawdownPct7dAgo: number | undefined;
+        try {
+          const { query } = await import('@/lib/db/postgres');
+          const rows = await query<{ dd_pct: string }>(
+            `SELECT ROUND((($1::float - AVG(total_nav))::numeric / $1::float) * 100, 2)::text as dd_pct
+             FROM community_pool_nav_history
+             WHERE chain='sui' AND timestamp BETWEEN NOW() - INTERVAL '7 days 6 hours' AND NOW() - INTERVAL '6 days 18 hours'`,
+            [peakNavForLock],
+          );
+          const parsed = Number(rows[0]?.dd_pct);
+          if (Number.isFinite(parsed) && parsed >= 0) drawdownPct7dAgo = parsed;
+        } catch { /* best-effort */ }
+
         const lockDecision = applyProfitLock(
           aiResult.allocations as Record<string, number>,
           navUsd,
           peakNavForLock,
+          { drawdownPct7dAgo },
         );
         if (lockDecision.active) {
           logger.warn('[SUI Cron] Profit-lock guard capped risk allocation', {

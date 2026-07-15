@@ -744,14 +744,56 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const priorNoEdgeStreak = await getCronStateOr<number>(KEY_NOEDGE_STREAK, 0);
     const noEdgeStreak = priorNoEdgeStreak + 1;
     await setCronState(KEY_NOEDGE_STREAK, noEdgeStreak).catch(() => {});
+
+    // Regret-weighted conviction gate (2026-07-15): dynamically raise
+    // the confidence bar when losing, keep it when winning. Adjusts the
+    // baseline MIN_CONFIDENCE before the streak-based relaxation kicks in.
+    // Env gate REGRET_CONVICTION_GATE_DISABLE=1 to keep static behavior.
+    let regretMultiplierEarly = 1;
+    try {
+      if ((process.env.REGRET_TRACKER_DISABLE ?? '') !== '1'
+        && (process.env.REGRET_CONVICTION_GATE_DISABLE ?? '') !== '1') {
+        const { computeSizeMultiplier } = await import('@/lib/services/ai/regret-tracker');
+        const { query } = await import('@/lib/db/postgres');
+        const rows = await query<{ open_confidence: number; realized_pnl: number; created_at: Date }>(
+          `SELECT COALESCE(open_confidence, 60) as open_confidence,
+                  COALESCE(realized_pnl, 0)::float as realized_pnl,
+                  created_at
+           FROM hedges
+           WHERE status='closed' AND created_at > NOW() - INTERVAL '30 days'
+           ORDER BY created_at DESC LIMIT 200`
+        ).catch(() => []);
+        if (rows.length > 0) {
+          regretMultiplierEarly = await computeSizeMultiplier({
+            recentDecisions: rows.map((r) => ({
+              openConfidence: Number(r.open_confidence),
+              realizedPnl: Number(r.realized_pnl),
+              openedAt: new Date(r.created_at),
+            })),
+          });
+        }
+      }
+    } catch { /* best-effort */ }
+
+    const convictionAdjustMax = Number(process.env.REGRET_CONVICTION_MAX_ADJ_PCT) || 15;
+    const regretAdjustedMinConf = Math.min(80,
+      MIN_CONFIDENCE + (1 - regretMultiplierEarly) * convictionAdjustMax);
+
     const { effectiveConf, effectiveCons, relaxSteps } = effectiveGates(
-      MIN_CONFIDENCE,
+      regretAdjustedMinConf,
       MIN_CONSENSUS,
       priorNoEdgeStreak,   // Use the value the previous tick set — this
                             // tick's increment is a "fingerprint" for future
                             // ticks. Prevents off-by-one where a fresh tick
                             // would see its own increment.
     );
+    if (regretAdjustedMinConf !== MIN_CONFIDENCE) {
+      logger.info('[EdgeTrader] regret-weighted conviction gate', {
+        baseMinConf: MIN_CONFIDENCE,
+        regretMultiplier: regretMultiplierEarly.toFixed(3),
+        regretAdjustedMinConf: regretAdjustedMinConf.toFixed(1),
+      });
+    }
     if (relaxSteps > 0) {
       logger.info('[PolymarketEdge] Gates relaxed due to prolonged no-edge streak', {
         priorNoEdgeStreak,
@@ -1000,43 +1042,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     let picked: (typeof rankedCandidates)[number] | null = null;
     const rejectedForMinQty: string[] = [];
 
-    // Gap 7: AI regret multiplier. Shrinks stake after a losing streak,
-    // recovers when AI starts winning. Pulls last 30 days of closed
-    // hedges from DB, weights outcomes by openConfidence, maps regret
-    // score → [0.25, 1.0]. Env gate REGRET_TRACKER_DISABLE=1 to bypass.
-    let regretMultiplier = 1;
-    try {
-      if ((process.env.REGRET_TRACKER_DISABLE ?? '') !== '1') {
-        const { computeSizeMultiplier } = await import('@/lib/services/ai/regret-tracker');
-        const { query } = await import('@/lib/db/postgres');
-        const decisionRows = await query<{ open_confidence: number; realized_pnl: number; created_at: Date }>(
-          `SELECT COALESCE(open_confidence, 60) as open_confidence,
-                  COALESCE(realized_pnl, 0)::float as realized_pnl,
-                  created_at
-           FROM hedges
-           WHERE status='closed' AND created_at > NOW() - INTERVAL '30 days'
-           ORDER BY created_at DESC
-           LIMIT 200`
-        ).catch(() => []);
-        if (decisionRows.length > 0) {
-          regretMultiplier = await computeSizeMultiplier({
-            recentDecisions: decisionRows.map((r) => ({
-              openConfidence: Number(r.open_confidence),
-              realizedPnl: Number(r.realized_pnl),
-              openedAt: new Date(r.created_at),
-            })),
-          });
-          if (regretMultiplier < 1) {
-            logger.warn('[EdgeTrader] regret multiplier applied', {
-              multiplier: regretMultiplier.toFixed(3),
-              decisions: decisionRows.length,
-            });
-          }
-        }
-      }
-    } catch (regErr) {
-      logger.warn('[EdgeTrader] regret tracker failed (non-critical)', {
-        error: regErr instanceof Error ? regErr.message : String(regErr),
+    // Gap 7 regret multiplier — same value computed earlier for conviction
+    // gate; reuse here for stake sizing (multiplied into sizeMultiplier).
+    const regretMultiplier = regretMultiplierEarly;
+    if (regretMultiplier < 1) {
+      logger.warn('[EdgeTrader] regret multiplier applied to stake sizing', {
+        multiplier: regretMultiplier.toFixed(3),
       });
     }
 

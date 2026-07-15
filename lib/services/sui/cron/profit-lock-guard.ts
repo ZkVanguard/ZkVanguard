@@ -95,6 +95,7 @@ export function applyProfitLock(
   allocations: Record<string, number>,
   currentNav: number,
   peakNav: number,
+  navHistory?: { drawdownPct7dAgo?: number },
 ): ProfitLockDecision {
   const orig = { ...allocations };
 
@@ -114,7 +115,27 @@ export function applyProfitLock(
   }
 
   const drawdownPct = Math.max(0, ((peakNav - currentNav) / peakNav) * 100);
-  const riskCap = computeRiskCap(drawdownPct);
+  const baseRiskCap = computeRiskCap(drawdownPct);
+
+  // Recovery re-engagement (2026-07-15): if drawdown IMPROVED vs 7 days
+  // ago by >= 5 ppts, add a momentum bonus to the risk cap so we don't
+  // sit in USDC through the whole recovery. Prevents "held all-cash
+  // through the rally" pattern. Bonus scales linearly from 0 → 30 ppts
+  // over a 5-15 ppt improvement window.
+  let recoveryBonus = 0;
+  let recoveryReason = '';
+  if ((process.env.RECOVERY_REENGAGE_DISABLE ?? '') !== '1' && navHistory?.drawdownPct7dAgo !== undefined) {
+    const improvement = navHistory.drawdownPct7dAgo - drawdownPct;
+    const minImp = Number(process.env.RECOVERY_REENGAGE_MIN_IMPROVEMENT_PCT) || 5;
+    const maxImp = Number(process.env.RECOVERY_REENGAGE_MAX_IMPROVEMENT_PCT) || 15;
+    const maxBonus = Number(process.env.RECOVERY_REENGAGE_MAX_BONUS_PCT) || 30;
+    if (improvement >= minImp) {
+      const clampedImp = Math.min(improvement, maxImp);
+      recoveryBonus = Math.round((clampedImp - minImp) / (maxImp - minImp) * maxBonus);
+      recoveryReason = ` + recovery bonus ${recoveryBonus}% (drawdown ${navHistory.drawdownPct7dAgo.toFixed(1)}% → ${drawdownPct.toFixed(1)}%)`;
+    }
+  }
+  const riskCap = Math.min(100, baseRiskCap + recoveryBonus);
 
   if (riskCap >= 100) {
     return {
@@ -163,6 +184,6 @@ export function applyProfitLock(
     active: true, drawdownPct, peakNav, currentNav,
     originalAllocations: orig, cappedAllocations: capped,
     riskAllocationCap: riskCap,
-    reason: `drawdown ${drawdownPct.toFixed(2)}% ≥ threshold — risk capped at ${riskCap}%, ${usdcAlloc}% held in USDC`,
+    reason: `drawdown ${drawdownPct.toFixed(2)}% ≥ threshold — risk capped at ${riskCap}%${recoveryReason}, ${usdcAlloc}% held in USDC`,
   };
 }
