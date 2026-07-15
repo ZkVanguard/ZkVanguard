@@ -114,3 +114,57 @@ export function generateAllocation(
     shouldRebalance,
   };
 }
+
+// ────────────────────────────────────────────────────────────────
+// Hedgeability clamp (Gap 4) — spot cap = 0 when perp unopenable
+// ────────────────────────────────────────────────────────────────
+// BlueFin per-symbol min-quantity means at small NAV, the perp leg
+// physically cannot be opened. Holding spot without a working perp
+// hedge is naked directional exposure — the exact reason the pool
+// took the full drawdown from Jun 26 → Jul 15.
+//
+// Rule: for each risk asset, target notional = NAV × allocation%.
+// If that is below perp minQty × spot × 1.5 (DUST5 buffer), force
+// the asset to 0% and redistribute to USDC.
+
+// mirrors BLUEFIN_PAIRS in BluefinService.ts — copied to avoid
+// pulling the heavy BluefinService init into pure allocation logic
+const PERP_MIN_QUANTITY: Record<string, number> = {
+  BTC: 0.001,
+  ETH: 0.01,
+  SUI: 1,
+  SOL: 0.1,
+};
+
+const DUST5_BUFFER = 1.5;
+
+export function applyHedgeabilityClamp(
+  allocations: Record<string, number>,
+  navUsd: number,
+  spotPrices: Record<string, number>,
+): Record<string, number> {
+  const clamped: Record<string, number> = { ...allocations };
+  let redirected = 0;
+
+  for (const asset of Object.keys(clamped)) {
+    if (asset.toUpperCase() === 'USDC') continue;
+    const pct = clamped[asset] || 0;
+    if (pct <= 0) continue;
+    const spot = spotPrices[asset.toUpperCase()];
+    const minQty = PERP_MIN_QUANTITY[asset.toUpperCase()];
+    if (!spot || !minQty) continue;
+
+    const targetNotional = navUsd * (pct / 100);
+    const minPerpNotional = spot * minQty * DUST5_BUFFER;
+
+    if (targetNotional < minPerpNotional) {
+      redirected += pct;
+      clamped[asset] = 0;
+    }
+  }
+
+  if (redirected > 0) {
+    clamped.USDC = (clamped.USDC || 0) + redirected;
+  }
+  return clamped;
+}
