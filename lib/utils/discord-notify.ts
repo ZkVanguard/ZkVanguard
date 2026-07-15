@@ -26,6 +26,13 @@ export async function notifyDiscord(
   level: NotifyLevel = 'INFO',
   context?: Record<string, unknown>,
 ): Promise<void> {
+  // Gap 8: also append to cron_state ring buffer so alert-response-loop
+  // can act on patterns (3 KILL/hr → auto-shrink spot). Fire-and-forget
+  // so a DB blip never breaks the Discord path or its caller.
+  if (level === 'KILL' || level === 'ERROR' || level === 'WARN') {
+    void appendAlertLog({ at: Date.now(), level, message }).catch(() => {});
+  }
+
   const url = (process.env.DISCORD_WEBHOOK_URL || '').trim();
   if (!url) return;
 
@@ -49,4 +56,25 @@ export async function notifyDiscord(
       error: e instanceof Error ? e.message : String(e),
     });
   }
+}
+
+const ALERT_LOG_KEY = 'alert-log:ring-buffer';
+const ALERT_LOG_MAX = 200;
+
+interface AlertLogEntry {
+  at: number;
+  level: NotifyLevel;
+  message: string;
+}
+
+async function appendAlertLog(entry: AlertLogEntry): Promise<void> {
+  const { getCronState, setCronState } = await import('@/lib/db/cron-state');
+  const existing = (await getCronState<AlertLogEntry[]>(ALERT_LOG_KEY).catch(() => null)) || [];
+  const trimmed = [...existing, entry].slice(-ALERT_LOG_MAX);
+  await setCronState(ALERT_LOG_KEY, trimmed);
+}
+
+export async function readAlertLog(): Promise<AlertLogEntry[]> {
+  const { getCronState } = await import('@/lib/db/cron-state');
+  return (await getCronState<AlertLogEntry[]>(ALERT_LOG_KEY).catch(() => null)) || [];
 }

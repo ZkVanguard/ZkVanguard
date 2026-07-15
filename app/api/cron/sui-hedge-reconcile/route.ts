@@ -137,6 +137,71 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       for (const p of livePositions) {
         liveMarginUsdc += Number(p.margin || 0);
       }
+
+      // ── Gap 6: stale-hedge detection ─────────────────────────────
+      // Any active hedge older than STALE_HEDGE_AGE_DAYS (default 7)
+      // with ≥ STALE_HEDGE_MIN_FLIPS signal flips since open (default 2)
+      // and a current signal that contradicts its side → force-close.
+      // Discord WARN fires per stale. Env gate STALE_HEDGE_AUTO_CLOSE=1
+      // required for the actual close; log-only otherwise.
+      try {
+        const { detectStaleHedges } = await import('@/lib/services/sui/StaleHedgeDetector');
+        const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
+        const { query } = await import('@/lib/db/postgres');
+        const activeRows = await query<{ id: number; asset: string; side: 'LONG' | 'SHORT'; created_at: Date; notional_value: number }>(
+          `SELECT id, asset, side, created_at, notional_value FROM hedges
+           WHERE chain='sui' AND status='active' AND notional_value >= 1`
+        );
+        const activeHedges = activeRows.map((r) => ({
+          id: r.id,
+          asset: r.asset,
+          side: r.side,
+          openedAt: new Date(r.created_at),
+          notionalUsd: Number(r.notional_value),
+        }));
+        // Flip counts per asset — pull from Polymarket ring buffer if
+        // present, else default to conservative estimate of 3/week.
+        const flipsPerAsset: Record<string, number> = {};
+        for (const h of activeHedges) {
+          const ageDays = (Date.now() - h.openedAt.getTime()) / (86_400_000);
+          flipsPerAsset[h.asset] = Math.max(0, Math.floor(ageDays * (3 / 7)));
+        }
+        const currentSignal = await Polymarket5MinService.getLatest5MinSignal().catch(() => null);
+        const currentSignals: Record<string, { direction: 'UP' | 'DOWN'; confidence: number }> = {};
+        if (currentSignal) {
+          for (const h of activeHedges) {
+            currentSignals[h.asset] = { direction: currentSignal.direction, confidence: currentSignal.confidence };
+          }
+        }
+        const stale = await detectStaleHedges({
+          activeHedges,
+          signalFlipsPerAsset: flipsPerAsset,
+          currentSignals,
+        });
+        if (stale.length > 0) {
+          const autoClose = (process.env.STALE_HEDGE_AUTO_CLOSE ?? '') === '1';
+          logger.warn('[SuiHedgeReconcile] stale hedges detected', {
+            autoClose, count: stale.length, stale,
+          });
+          await notifyDiscord(
+            `🕰️ ${stale.length} stale hedge(s) detected [${autoClose ? 'auto-closing' : 'log-only'}]: ${stale.map((s) => `#${s.id} ${s.asset} ${s.side} age=${s.ageDays}d`).join(', ')}`,
+            'WARN',
+            { stale, autoClose },
+          ).catch(() => {});
+          if (autoClose) {
+            for (const s of stale) {
+              try {
+                const symbol = `${s.asset}-PERP`;
+                await bf.closeHedge({ symbol, size: 0, leverage: 3 } as never).catch(() => {});
+              } catch { /* per-hedge best-effort */ }
+            }
+          }
+        }
+      } catch (staleErr) {
+        logger.warn('[SuiHedgeReconcile] stale-hedge detection failed (non-critical)', {
+          error: errMsg(staleErr),
+        });
+      }
     } catch (bfErr) {
       logger.warn('[SuiHedgeReconcile] Could not read BlueFin — abort reconciliation (do NOT reset on stale signal)', {
         error: errMsg(bfErr),

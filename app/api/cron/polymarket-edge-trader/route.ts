@@ -1000,6 +1000,46 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     let picked: (typeof rankedCandidates)[number] | null = null;
     const rejectedForMinQty: string[] = [];
 
+    // Gap 7: AI regret multiplier. Shrinks stake after a losing streak,
+    // recovers when AI starts winning. Pulls last 30 days of closed
+    // hedges from DB, weights outcomes by openConfidence, maps regret
+    // score → [0.25, 1.0]. Env gate REGRET_TRACKER_DISABLE=1 to bypass.
+    let regretMultiplier = 1;
+    try {
+      if ((process.env.REGRET_TRACKER_DISABLE ?? '') !== '1') {
+        const { computeSizeMultiplier } = await import('@/lib/services/ai/regret-tracker');
+        const { query } = await import('@/lib/db/postgres');
+        const decisionRows = await query<{ open_confidence: number; realized_pnl: number; created_at: Date }>(
+          `SELECT COALESCE(open_confidence, 60) as open_confidence,
+                  COALESCE(realized_pnl, 0)::float as realized_pnl,
+                  created_at
+           FROM hedges
+           WHERE status='closed' AND created_at > NOW() - INTERVAL '30 days'
+           ORDER BY created_at DESC
+           LIMIT 200`
+        ).catch(() => []);
+        if (decisionRows.length > 0) {
+          regretMultiplier = await computeSizeMultiplier({
+            recentDecisions: decisionRows.map((r) => ({
+              openConfidence: Number(r.open_confidence),
+              realizedPnl: Number(r.realized_pnl),
+              openedAt: new Date(r.created_at),
+            })),
+          });
+          if (regretMultiplier < 1) {
+            logger.warn('[EdgeTrader] regret multiplier applied', {
+              multiplier: regretMultiplier.toFixed(3),
+              decisions: decisionRows.length,
+            });
+          }
+        }
+      }
+    } catch (regErr) {
+      logger.warn('[EdgeTrader] regret tracker failed (non-critical)', {
+        error: regErr instanceof Error ? regErr.message : String(regErr),
+      });
+    }
+
     for (const c of rankedCandidates) {
       // Fast alert filter: if PriceMonitor has an active threshold
       // alert on this asset, downstream agent-guard will block it.
@@ -1017,7 +1057,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       const cStake = computeEdgeStake({
         baseStakeUsd: BASE_STAKE_USD,
         totalPnlUsd: safeStats.totalPnlUsd,
-        sizeMultiplier: c.prediction.sizeMultiplier,
+        // Compose signal-strength multiplier with regret multiplier so
+        // recent losses shrink stake, wins restore it.
+        sizeMultiplier: c.prediction.sizeMultiplier * regretMultiplier,
         freeCollateral: free,
         stakePctOfFree: STAKE_PCT_OF_FREE,
         maxStakeUsd: MAX_STAKE_USD,
