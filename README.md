@@ -2,9 +2,9 @@
 
 # ZkVanguard
 
-**The AI-managed crypto vault that lets anyone ride Polymarket alpha.**
+**An AI-managed USDC vault on Sui — deposit once, autonomous agents allocate & hedge for you.**
 
-Deposit USDC · 7 AI agents allocate using prediction-market signals · Auto-hedged on BlueFin perps · ZK-attested on-chain · Live on Sui mainnet.
+Fuses Polymarket prediction signals with BlueFin perpetual hedging. Every capital move is ZK-attested on-chain, verified against 3 independent reconcilers, and defended by 8 layered autonomy gates. Live on Sui mainnet.
 
 [![Sui Mainnet](https://img.shields.io/badge/Sui-Mainnet%20Live-4ca3ff?style=flat-square)](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 [![Status](https://img.shields.io/badge/Status-Pre--audit%20%C2%B7%20TVL%20capped%20%2410K-orange?style=flat-square)](#status)
@@ -12,241 +12,123 @@ Deposit USDC · 7 AI agents allocate using prediction-market signals · Auto-hed
 [![Health API](https://img.shields.io/badge/Health-API%20live-blue?style=flat-square)](https://www.zkvanguard.xyz/api/health/production)
 [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey?style=flat-square)](LICENSE)
 
-[Website](https://www.zkvanguard.xyz) · [Live signals](https://www.zkvanguard.xyz/api/predictions/per-asset) · [System health](https://www.zkvanguard.xyz/api/health/production) · [Suiscan](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726) · [Docs](./CLAUDE.md)
+[Deposit](https://www.zkvanguard.xyz) · [Live PnL](https://www.zkvanguard.xyz/dashboard/overview) · [Risk overview](https://www.zkvanguard.xyz/dashboard/risk) · [Suiscan proof](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 
 </div>
 
 ---
 
+## What your USDC does
+
+1. **AI allocates it across BTC / ETH / SUI / CRO.** Seven agents fuse Polymarket 5-min binaries, Delphi/Polymarket category markets, Manifold, BlueFin funding rates, and Crypto.com momentum into one directional signal per asset. Rebalances every 30 minutes only when conviction ≥ 65%.
+2. **Hedges the downside on BlueFin V2 perps.** Spot leg on a 7-DEX Sui aggregator, directional perp overlay on BlueFin. When AI turns bearish, the perp shorts. When perps are physically unopenable at small NAV, spot cap → 0 for that asset.
+3. **Attests every meaningful decision on-chain.** Post-quantum ZK-STARK proofs (Python, NIST P-521, no trusted setup) on trades > $1M. On-chain hedge state reconciled against BlueFin and Postgres every 15 min.
+
+**Fees:** 50 bps annual mgmt + 10% performance. Both charged by the Move contract itself and routed to an MSafe multisig — public, auditable, no operator custody.
+
+## Verify in 60 seconds
+
+```bash
+# No clone required — hits live production endpoints
+curl -s https://www.zkvanguard.xyz/api/health/production | jq
+curl -s https://www.zkvanguard.xyz/api/predictions/per-asset | jq
+
+# With clone — canonical "is the pool in profit?" script
+bun run scripts/analyze-pool-pnl.ts
+bun run scripts/check-hedge-signal-alignment.ts
+```
+
+Or inspect the pool object directly on Suiscan:
+
+- Package: [`0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726`](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
+- USDC pool state: `0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a`
+- Deployed 2026-06-12 · [deploy record](./docs/DEPLOY_2026-06-12_v0.2.0.md)
+
+## Safety — the 8-gate autonomy defense system
+
+Shipped July 2026 after a real drawdown revealed passive-only defenses. Each gate defends a specific failure mode; the full stack is verified by an integration test that replays the historical scenario and asserts max NAV loss ≤ 15%.
+
+| Gate | Defends against |
+|---|---|
+| **PortfolioDriver** | Existing spot never unwound when profit-lock fires — corrective actions actively reshape the balance sheet |
+| **Fill verifier** | BlueFin "silent-reject" — orders returning orderHash but never landing on the exchange |
+| **Hedgeability spot-cap** | At small NAV, perp minQty makes hedging impossible — spot cap for that asset forced to 0 |
+| **Symmetric sell trigger** | Rebalance was one-sided (bought on 65% conviction, never sold on 65% opposing) — now symmetric |
+| **Stale-hedge detector** | Positions > 7d old with ≥ 2 signal flips force-close on contradiction |
+| **Signal-flip drift-close** | On direction flip, both perp and spot legs unwind — not just perps |
+| **AI regret weighting** | Position size shrinks after losing streaks, recovers on wins — prevents AI-euphoria buying tops |
+| **Alert response loop** | 3 KILL alerts/hr auto-shrinks spot; 24h profit-lock auto-unwinds; phantom hedge rate > 1% halts trader |
+
+Verify: `bun jest test/integration/pool-drawdown-defense.test.ts` (10/10 green).
+
+**Always-on structural guards:** 2-of-3 agent consensus on trades > $100K · 10% peak-NAV drawdown halt · circuit breaker after 3 failures · 3-way reconciliation (Move ↔ BlueFin ↔ Postgres) · OFAC geo-block (KP/IR/SY/CU/RU/BY) · strict NAV-oracle mode (deposits/withdrawals revert when cron oracle > 2h stale).
+
 ## Status
 
-Live on Sui mainnet (v0.2.0, deployed 2026-06-12). **Pre-external-audit**, with TVL **deliberately capped at $10K by contract** (strict NAV-oracle mode `ON` in `community_pool_usdc.move`). Cap lifts after the external audit closes. The constraint is intentional — operational proof, not a TVL claim.
+Live on Sui mainnet (v0.2.0, deployed 2026-06-12). **Pre-external-audit**, TVL **deliberately capped at $10K by contract**. Cap lifts after external audit closes — the constraint is intentional operational proof, not a TVL claim.
 
-15 internal audit phases completed before mainnet. Engine has been running unattended since June 2026 with continuous on-chain NAV snapshots, every active position currently signal-aligned, and zero unhandled production incidents.
-
-## Why ZkVanguard
-
-Polymarket prints **$20B+ per month** in alpha-bearing signal. Riding it consistently requires bots, capital, and 24/7 attention — table stakes for hedge funds, impossible for retail. ZkVanguard collapses that workflow into a one-click USDC vault: seven AI agents fuse prediction-market data with funding rates and price momentum, allocate across BTC / ETH / SUI / CRO, auto-hedge on BlueFin perpetuals, and ZK-attest every meaningful decision on-chain.
-
-## Products
-
-The Vault is the lead product. The same ZK + agent rails power three additional primitives that share the codebase.
-
-| Product | Description | Status |
-|---|---|---|
-| **The Vault** | USDC vault, AI-allocated across BTC / ETH / SUI / CRO from fused prediction-market signals, auto-hedged on BlueFin perps. | Live on Sui mainnet |
-| **Private Hedges** | Confidential perp positions for funds and whales — stealth addresses + commitment hashes; asset, side, size, and PnL stay off-chain. | Live primitive |
-| **Private Portfolio Creator** | Wizard-style custom portfolios via [`zk_proxy_vault`](./contracts/sui/sources/zk_proxy_vault.move) (727 LOC); time-locked withdrawals, ZK ownership proofs. | Live primitive |
+15 internal audit phases completed pre-mainnet. Engine has been running unattended since June 2026 with continuous on-chain NAV snapshots and zero unhandled production incidents.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    PM["Polymarket binaries<br/>(5-min + category)"] --> SF
-    DP["Manifold + Delphi<br/>(broader markets)"] --> SF
-    BF["BlueFin funding<br/>(rate proxy)"] --> SF
-    CDC["Crypto.com momentum<br/>(24h ticker)"] --> SF
-    SF["Signal fusion<br/>10 sources per asset<br/>synthetic-STRONG layer"] --> AG
+    PM["Polymarket + Manifold + Delphi<br/>(10 signal sources)"] --> SF
+    BF["BlueFin funding rates"] --> SF
+    CDC["Crypto.com 24h momentum"] --> SF
+    SF["Signal fusion +<br/>synthetic-STRONG layer"] --> AG
     AG["7 AI agents<br/>2-of-3 consensus<br/>SafeExecutionGuard"] --> VA
-    AG --> ZK["ZK attestation<br/>STARK on-chain<br/>(trades > $1M)"]
-    VA["USDC vault<br/>BTC · ETH · SUI · CRO"] --> PERP["BlueFin V2 perps<br/>auto-hedge"]
+    AG --> ZK["ZK-STARK attestation<br/>(trades > $1M)"]
+    VA["USDC vault<br/>BTC · ETH · SUI · CRO"] --> PERP["BlueFin V2 perps<br/>+ 7-DEX aggregator"]
+    PERP --> PD["PortfolioDriver<br/>corrective unwinds"]
+    ZK --> PD
 ```
 
-Every trade-impacting execution flows through `SafeExecutionGuard`: position caps, slippage limits, **2-of-3 agent consensus on trades > $100K**, ZK proof attestation on any notional > $1M, drawdown halt at 10% from peak NAV, and a circuit breaker that trips after 3 consecutive failures.
+## Revenue model
 
-## Live mainnet
+**Live today:** 50 bps annual mgmt + 10% performance fee on vault deposits — charged automatically by `community_pool_usdc.move`, routed to `FeeManagerCap` on MSafe.
 
-| Component | Reference |
-|---|---|
-| Mainnet package (v0.2.0) | [`0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726`](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726) |
-| USDC pool state object | `0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a` |
-| Deployed | 2026-06-12 ([deploy record](./docs/DEPLOY_2026-06-12_v0.2.0.md)) |
-| Perp venue | BlueFin V2 mainnet — BTC-PERP · ETH-PERP · SUI-PERP |
-| Live health | [`/api/health/production`](https://www.zkvanguard.xyz/api/health/production) |
-| Live signals | [`/api/predictions/per-asset`](https://www.zkvanguard.xyz/api/predictions/per-asset) |
+**Post-audit (all mapped to shipped code in [`lib/config/pricing.ts`](./lib/config/pricing.ts)):**
 
-> Prior v0.1.0 package `0x9ccb…cd83e598c88` is dormant; pool state was preserved through the v0.1 → v0.2 upgrade. See the [deploy record](./docs/DEPLOY_2026-06-12_v0.2.0.md).
+- Per-use fees: private hedges ($5 / 25 bps), private portfolios ($100 + 50 bps), custody attestation ($2.5K enrollment + $0.50/submission)
+- Subscription tiers: Retail $99 → Pro $499 → Institutional $2,499 → Enterprise
+- Per-trade fees on the autonomous perp trader
 
-## Verify in 60 seconds
+**Token:** utility-first, designed not launched. Governance over fee parameters, staking gates discounted vault fees. TGE targeted Month 9–12 post-audit.
 
-Every claim above is reproducible.
+## Quickstart (contributors)
+
+Node 20+, Bun, Python 3.11+, PostgreSQL.
 
 ```bash
-# Reproduce live pool PnL — read-only, ~5s, hits Sui mainnet RPC + DB read replica
-bun run scripts/analyze-pool-pnl.ts
-
-# Check hedge ↔ prediction-signal alignment for every active position
-bun run scripts/check-hedge-signal-alignment.ts
-
-# Sanity-check mainnet config + cron heartbeats
-bun run scripts/check-sui-mainnet-readiness.ts
-```
-
-Or skip the clone:
-
-```bash
-curl -s https://www.zkvanguard.xyz/api/health/production | jq
-curl -s https://www.zkvanguard.xyz/api/predictions/per-asset | jq
-```
-
-## Quickstart
-
-**Prerequisites:** Node 20+, Bun, Python 3.11+ (ZK prover), PostgreSQL connection string.
-
-```bash
-git clone https://github.com/ZkVanguard/ZkVanguard.git
-cd ZkVanguard
-
-# Install — --legacy-peer-deps is required (Next.js 14 + react-three peer-dep mismatch)
+git clone https://github.com/ZkVanguard/ZkVanguard.git && cd ZkVanguard
 bun install --legacy-peer-deps
 
-# Terminal 1 — Python ZK-STARK prover (FastAPI on :8000)
+# Terminal 1 — ZK-STARK prover
 python -m pip install -r zkp/requirements.txt
 python zkp/api/server.py
 
-# Terminal 2 — Next.js dev server (:3000)
+# Terminal 2 — Next.js
 bun run dev
 
-# Pre-commit hygiene
-bun run typecheck
-bun run lint
+# Pre-commit
+bun run typecheck && bun run lint && bun jest
 ```
 
-Required environment keys and conventions (CRLF-trim, sponsored-gas, BlueFin invariants) are documented in [`CLAUDE.md`](./CLAUDE.md) — the authoritative repo guide.
+Full architecture, env conventions, BlueFin invariants, and reconciliation topology: **[CLAUDE.md](./CLAUDE.md)** (authoritative repo guide).
 
-## Architecture
+## Documentation & disclosure
 
-```
-app/                      Next.js 14 frontend + API + cron handlers
-agents/                   7-agent orchestrator + SafeExecutionGuard + MessageBus
-contracts/sui/sources/    10 Move contracts (deployed to Sui mainnet)
-contracts/core/           Solidity stack (EVM deployment-ready, 6 chains configured)
-lib/services/sui/         Sui pool, BlueFin aggregator, hedge reconciler
-lib/services/market-data/ Prediction-market signal pipeline + unified price provider
-lib/ai/llm-provider.ts    Unified LLM router with provider failover
-lib/db/                   PostgreSQL helpers (Aiven)
-lib/security/             Production guards, rate limits, price circuit breakers
-zk/                       TypeScript ZK-proof client
-zkp/                      Python FastAPI ZK-STARK prover (NIST P-521, no trusted setup)
-scripts/                  Operations + diagnostic scripts (analyze, reconcile, deploy)
-messages/                 12-locale next-intl translations
-```
+- **[CLAUDE.md](./CLAUDE.md)** — architecture, env, gotchas, invariants
+- **[docs/DEPLOY_RUNBOOK.md](./docs/DEPLOY_RUNBOOK.md)** — incident response, admin endpoints
+- **[docs/DEPLOY_2026-06-12_v0.2.0.md](./docs/DEPLOY_2026-06-12_v0.2.0.md)** — v0.2.0 mainnet deploy record
+- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** · **[docs/SUI_DEPLOYMENT.md](./docs/SUI_DEPLOYMENT.md)** · **[docs/MAINNET_READINESS.md](./docs/MAINNET_READINESS.md)**
 
-### Agents
-
-| Agent | Role |
-|---|---|
-| `LeadAgent` | Parses intent, delegates, drives consensus, enforces `SafeExecutionGuard` |
-| `RiskAgent` | Multi-timeframe streak, correlation, cascade analysis |
-| `HedgingAgent` | BlueFin perp hedging (BTC / ETH / SUI), SL/TP enforcement |
-| `SettlementAgent` | Gasless settlement, batch processing |
-| `ReportingAgent` | Audit, compliance, ZK proof references |
-| `PriceMonitorAgent` | Threshold price watcher, 5-min ticker subscription |
-| `SuiPoolAgent` | 4-asset vault allocation, drives BlueFin Aggregator swaps |
-
-## Production infrastructure
-
-All crons run on Upstash QStash, hit `app/api/cron/*` routes, verify the QStash signature (or `CRON_SECRET` fallback), and idempotency-claim a slot in `cron_state` before acting.
-
-### Trading and execution
-
-| Route | Cadence | Purpose |
-|---|---|---|
-| `polymarket-edge-trader` | 5 min | Autonomous BlueFin perp trader (Kelly-fractional sizing, 24h kill switch) |
-| `bluefin-health` | 5 min | 3-strike venue de-risk → close-all on degradation |
-| `liquidation-guard` | 10 min | Liquidation-distance alerts and emergency close |
-
-### Monitoring
-
-| Route | Cadence | Purpose |
-|---|---|---|
-| `health-monitor` | 10 min | Hits `/api/health/production`, Discord alert on degradation |
-| `pool-nav-monitor` | 15 min | NAV snapshot independent of allocation logic |
-| `hedge-monitor` | 15 min | Hedge-state monitoring |
-
-### Reconciliation
-
-| Route | Cadence | Purpose |
-|---|---|---|
-| `bluefin-db-reconcile` | 15 min | DB ↔ BlueFin drift repair, orphan re-adoption |
-| `sui-hedge-reconcile` | hourly | On-chain Move ↔ BlueFin reconcile |
-
-### Vault operations
-
-| Route | Cadence | Purpose |
-|---|---|---|
-| `sui-community-pool` | 30 min | NAV, AI allocation, rebalance swaps, auto-hedge trigger |
-| `sui-collect-fees` | daily | Management + performance fee sweep to treasury |
-
-## Tech stack
-
-- **Frontend & API** — Next.js 14 (App Router), TypeScript, TailwindCSS, next-intl (12 locales)
-- **Blockchain** — Sui (Move) on mainnet; Solidity for Cronos, Oasis, Hedera, Sepolia, Ethereum (configured; EVM expansion is a deployment step)
-- **Zero-knowledge** — Python FastAPI server running a STARK system over NIST P-521 (no trusted setup, CUDA-accelerated when available)
-- **Database** — PostgreSQL on Aiven (migrated from Neon, May 2026)
-- **Cron, cache, locks** — Upstash QStash + Redis
-- **Trading venues** — BlueFin V2 mainnet perps + BlueFin Aggregator (7 DEXes on Sui: Cetus, DeepBook, Turbos, FlowX, Aftermath, BlueFin, NAVI)
-- **AI providers** — Unified router with failover: Crypto.com AI Agent SDK → ASI → OpenAI → Anthropic → Ollama
-- **Hosting** — Vercel (region `sin1`)
-
-## Revenue and token model
-
-### Live revenue (today)
-
-- **50 bps annual management fee + 10% performance fee** on every USDC vault deposit
-- Fees route to `FeeManagerCap` on an MSafe multisig — on-chain, public, auditable
-
-### Planned (post-audit)
-
-- **Three revenue streams, all mapped to shipped code** (see [`lib/config/pricing.ts`](./lib/config/pricing.ts)):
-  - **Pool fees (passive):** 50 bps mgmt + 10% perf on community-pool TVL, automatic via `community_pool_usdc.move`
-  - **Per-use product fees:** private hedges ($5/25bps), private portfolio creator ($100 + 50bps), custody attestation ($2.5K enrollment + $0.50 per submission)
-  - **Subscriptions:** Free (public APIs) · Retail $99 (private hedges) · Pro $499 (private portfolios + write APIs) · Institutional $2,499 (custody requests + dedicated support) · Enterprise (white-label)
-- **Per-trade fees** on the autonomous perp trader
-
-### Token mechanic (designed, not launched)
-
-- **Utility-first:** governance over fee parameters and protocol upgrades; staking gates discounted vault fees and early access to new signal universes
-- **Points → token bridge** for the Founding-100 retail cohort (3× multiplier from day one)
-- **Value capture:** percentage of on-chain fees routes to staking rewards / buyback-burn (Pendle / GMX precedent)
-- **Launch posture:** no public sale; utility-token classification target; **TGE targeted Month 9–12** post-audit close
-
-## Tests
-
-```bash
-bun run test                              # Full Jest suite
-bun run test:agents                       # Agent system
-bun run test:integration                  # ZK STARK + signal pipeline (start Python server first)
-bun run test:contracts                    # Hardhat / Solidity
-bun run scripts/test-sui-services-e2e.ts  # 9 Sui service suites
-bun run test-bulletproof-e2e.ts           # 13 sections / 28 production-readiness checks
-```
-
-## Security
-
-ZkVanguard is **pre-external-audit**. Mainnet TVL is capped at $10K by contract to bound blast radius until the audit closes. Mitigations in place today:
-
-- 15 internal audit phases completed before mainnet deploy
-- Strict NAV-oracle mode `ON` (deposits/withdrawals revert when cron oracle attestation is > 2h stale)
-- 2-of-3 agent consensus for trades > $100K
-- ZK proof attestation infrastructure for any notional > $1M (triggers at scale)
-- 10% drawdown halt from peak NAV (auto-pauses the vault)
-- 3-way reconciliation topology (on-chain Move ↔ BlueFin ↔ Postgres)
-- OFAC geo-block middleware (KP, IR, SY, CU, RU, BY)
-- 10 production crons with idempotency-claim locks in `cron_state`
-
-**Responsible disclosure.** Please report security issues privately to `ashishregmi2017@gmail.com`. Do not file public issues for active vulnerabilities.
-
-## Documentation
-
-- [`CLAUDE.md`](./CLAUDE.md) — authoritative repo guide (architecture, env, gotchas, BlueFin invariants, reconciliation topology)
-- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) · [`docs/SUI_DEPLOYMENT.md`](./docs/SUI_DEPLOYMENT.md) · [`docs/MAINNET_READINESS.md`](./docs/MAINNET_READINESS.md)
-- [`docs/DEPLOY_RUNBOOK.md`](./docs/DEPLOY_RUNBOOK.md) — incident response, env presets, BlueFin invariants, admin endpoints
-- [`docs/DEPLOY_2026-06-12_v0.2.0.md`](./docs/DEPLOY_2026-06-12_v0.2.0.md) — v0.2.0 mainnet deploy record
+Responsible disclosure: report security issues privately to `ashishregmi2017@gmail.com`. Do not file public issues for active vulnerabilities.
 
 ## Acknowledgments
 
-Built on the shoulders of [Sui](https://sui.io), [BlueFin V2](https://bluefin.io), [Polymarket](https://polymarket.com), [Manifold](https://manifold.markets), [Crypto.com](https://crypto.com), [Aiven](https://aiven.io), [Upstash](https://upstash.com), [Vercel](https://vercel.com), and the [Tether WDK](https://github.com/tetherto/wdk) ecosystem.
+Built on [Sui](https://sui.io), [BlueFin V2](https://bluefin.io), [Polymarket](https://polymarket.com), [Manifold](https://manifold.markets), [Crypto.com](https://crypto.com), [Aiven](https://aiven.io), [Upstash](https://upstash.com), [Vercel](https://vercel.com), and the [Tether WDK](https://github.com/tetherto/wdk) ecosystem.
 
 ## License
 
