@@ -808,18 +808,14 @@ export default function DashboardPage() {
         
       case 'insights':
         return (
-          <PredictionInsights 
+          <PredictionInsights
             onOpenHedge={handleOpenHedge}
             onTriggerAgentAnalysis={handleAgentAnalysis}
             onCreateRecommendedHedge={handleCreateRecommendedHedge}
             assets={portfolioAssets}
           />
         );
-        
-      case 'history':
-      case 'zk-proofs':
-        return null;
-        
+
       case 'community':
         return (
           <Card>

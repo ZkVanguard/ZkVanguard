@@ -488,12 +488,13 @@ export function ManualHedgeModal({
   };
 
   // ── Handle approve confirmed for gasless mode ─────────────────
+  // handleGaslessOpen intentionally excluded from deps: it captures
+  // per-render state and re-including it would loop on every render.
   useEffect(() => {
     if (isApproveConfirmed && txStep === 'approve-confirming' && useGasless) {
       logger.info('Approval confirmed, proceeding to gasless open', { component: 'ManualHedgeModal' });
       handleGaslessOpen();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isApproveConfirmed, txStep, useGasless]);
 
   // ── Main create handler ───────────────────────────────────────

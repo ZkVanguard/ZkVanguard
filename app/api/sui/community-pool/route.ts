@@ -154,7 +154,7 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
 
     // Cache spot prices once per request so each hedge doesn't re-fetch.
     const spotPriceCache: Record<string, number> = {};
-    async function getSpotPrice(asset: string): Promise<number> {
+    const getSpotPrice = async (asset: string): Promise<number> => {
       const key = asset.toUpperCase();
       if (spotPriceCache[key] !== undefined) return spotPriceCache[key];
       try {
@@ -170,7 +170,7 @@ async function fetchActivePoolHedges(): Promise<PoolHedge[]> {
         spotPriceCache[key] = 0;
         return 0;
       }
-    }
+    };
 
     const overlaid: PoolHedge[] = [];
     for (const r of baseRows) {

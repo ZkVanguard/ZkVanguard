@@ -7,7 +7,7 @@ import { useWallet } from '@/lib/hooks/useWallet';
 import { formatUnits, parseUnits } from 'viem';
 import { CHAIN_IDS, getUsdcAddress, isTestnet as checkIsTestnet, getExplorerUrl } from '@/lib/utils/network';
 
-// âš ï¸ TESTNET ONLY - Testnet USDC with public mint() function
+// TESTNET ONLY - Testnet USDC with public mint() function
 // This component should ONLY be rendered on testnet (chainId 338)
 // On mainnet, users must acquire real USDC through exchanges
 
@@ -68,7 +68,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
   const [selectedAmount, setSelectedAmount] = useState('10000');
   const [mintSuccess, setMintSuccess] = useState(false);
 
-  // âš ï¸ MAINNET GUARD - This faucet only works on testnet
+  // MAINNET GUARD - This faucet only works on testnet
   if (!isTestnet) {
     return (
       <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 shadow-sm">
