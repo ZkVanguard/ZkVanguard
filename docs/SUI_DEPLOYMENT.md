@@ -71,7 +71,7 @@ Full env vars reference: [CLAUDE.md](../CLAUDE.md) SUI section.
 ### Prerequisites
 1. **Sui CLI installed** — matches or exceeds the mainnet protocol version. Check via `sui client active-env`.
 2. **Admin key locally available** — needed for `sui client publish`/`sui client upgrade`. Prefer a fresh terminal with `SUI_POOL_ADMIN_KEY` unset in shell; import via `sui keytool` and forget.
-3. **UpgradeCap held** — for v0.2.0 → v0.3.0 (or beyond), the `UpgradeCap` object must be owned by the deploy signer. Check: `sui client object <upgradecap-id>`.
+3. **UpgradeCap held** — for any future Move upgrade beyond v0.2.0, the `UpgradeCap` object must be owned by the deploy signer. Check: `sui client object <upgradecap-id>`. (v0.3.0 was off-chain only — no Move contract change; the next Move upgrade is likely a post-external-audit ratchet.)
 
 ### Build
 ```bash
@@ -79,7 +79,7 @@ cd contracts/sui
 sui move build
 ```
 
-**Move.lock trap:** `sui move build` wipes the `[env]` block every time. Re-append the mainnet env block before `sui client upgrade` — see `PRE_DEPLOY_AUDIT_2026-06-12.md` for the exact template.
+**Move.lock trap:** `sui move build` wipes the `[env]` block every time. Re-append the mainnet env block before `sui client upgrade` — see [`PRE_DEPLOY_AUDIT_2026-06-12.md`](./PRE_DEPLOY_AUDIT_2026-06-12.md) for the exact template.
 
 ### Upgrade (mainnet)
 ```bash
@@ -113,7 +113,7 @@ Shipped with 15 internal audit phases (Move + off-chain TS) — see [`AUDIT_2026
 
 **Key security features:**
 - **Strict mode ON** — `admin_set_external_nav_required(true)`. Deposits/withdrawals revert with `E_EXTERNAL_NAV_STALE` if cron oracle attestation > 2h stale.
-- **TVL cap $10K** — `admin_set_tvl_cap` gated; ratchets per `ROADMAP.md`.
+- **TVL cap $10K** — `admin_set_tvl_cap` gated; ratchets per [`ROADMAP.md`](./ROADMAP.md).
 - **`close_hedge` funds-verify** — AgentCap must be present; prevents drain scenarios.
 - **`zk_proxy_vault`** — cross-proxy PDA + 4 ZK contracts with ed25519 prover attestation.
 - **Withdrawals non-custodial** — Move contract computes payouts against on-chain state (including off-chain wBTC/wETH/SUI market value via NAV oracle).

@@ -60,14 +60,14 @@ Verified by `bun jest test/integration/pool-drawdown-defense.test.ts` (10/10 gre
 
 ### Move contract security
 
-- 15 internal audit phases completed pre-mainnet (see `AUDIT_2026-06-04.md`, `AUDIT_2026-06-12_phase15_offchain.md`)
+- 15 internal audit phases completed pre-mainnet (see [`AUDIT_2026-06-04.md`](./AUDIT_2026-06-04.md), [`AUDIT_2026-06-12_phase15_offchain.md`](./AUDIT_2026-06-12_phase15_offchain.md))
 - External audit: SUI Foundation grant Tranche 1 deliverable (pending)
 - `zk_proxy_vault` cross-proxy + 4 ZK contracts with ed25519 prover attestation
 - `admin_set_external_nav_required(true)` — strict oracle mode ON
 
 ### BlueFin invariants (silent-reject prevention)
 
-Every open/close must follow — see `DEPLOY_RUNBOOK.md` Appendix Y:
+Every open/close must follow — see [`DEPLOY_RUNBOOK.md`](./DEPLOY_RUNBOOK.md) Appendix Y:
 1. Snap quantity to per-symbol step size before signing
 2. Close at position's leverage (not 1×)
 3. Never `reduceOnly: true` (deprecated, API rejects)

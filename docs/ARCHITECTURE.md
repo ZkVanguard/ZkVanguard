@@ -44,8 +44,8 @@
 │  SUI MAINNET  (contracts/sui/sources/)                            │
 │  community_pool_usdc.move  (USDC vault, on-chain fee accrual)     │
 │  hedge_executor.move · bluefin_bridge.move · zk_verifier.move     │
-│  · zk_hedge_commitment.move · zk_proxy_vault.move · payment_router│
-│  · rwa_custody_attestor.move · rwa_manager.move                   │
+│  zk_hedge_commitment.move · zk_proxy_vault.move                   │
+│  payment_router.move · rwa_manager.move · rwa_custody_attestor    │
 └───────────────────────────────────────────────────────────────────┘
 ```
 

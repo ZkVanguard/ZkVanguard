@@ -24,7 +24,7 @@ Canonical roadmap. Mirrors the [main README](../README.md#roadmap) but with more
 - TVL cap $10K (contract-enforced via `admin_set_tvl_cap`)
 - `close_hedge` funds-verify (drain prevention via AgentCap)
 - `zk_proxy_vault` cross-proxy + 4 ZK contracts ed25519 prover attestation
-- 15 internal audit phases (see `AUDIT_2026-06-04.md`, `AUDIT_2026-06-12_phase15_offchain.md`)
+- 15 internal audit phases (see [`AUDIT_2026-06-04.md`](./AUDIT_2026-06-04.md), [`AUDIT_2026-06-12_phase15_offchain.md`](./AUDIT_2026-06-12_phase15_offchain.md))
 - 7-agent orchestrator + `SafeExecutionGuard` (2-of-3 consensus, circuit breaker)
 - BluefinAggregator (6 DEXes on Sui: Cetus · DeepBook · Turbos · FlowX · Aftermath · BlueFin)
 - Prediction-market signal pipeline: Polymarket 5-min + Delphi/Polymarket + Manifold + Crypto.com + BlueFin funding
@@ -64,7 +64,7 @@ Ships behind env flags (`PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `A
 - 🔨 Institutional tier live via `rwa_custody_attestor.move` — $2.5K enrollment + $0.50/attestation
 - 🔨 First EVM chain deployment (target: chain with institutional partner demand)
 - 🔨 Multi-venue perp hedging (Hyperliquid / dYdX beyond BlueFin V2)
-- 🔨 Bug bounty program public (see `BUG_BOUNTY.md`)
+- 🔨 Bug bounty program public (see [`BUG_BOUNTY.md`](./BUG_BOUNTY.md))
 
 **Success criteria for cap ratchet:** > $500K deposited · zero drawdown-defense gate false-positives · custody attestor live with ≥ 1 institutional client.
 
@@ -86,7 +86,7 @@ Ships behind env flags (`PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `A
 - **AdminCap MSafe migration** — `FeeManagerCap` already on MSafe; `AdminCap` still hot key
 - **OTC desk relationships** — for splits above DEX aggregator liquidity
 - **Insurance fund** — protocol-owned buffer against black-swan scenarios
-- **Multi-signal fusion expansion** — Kalshi, Manifold, custom on-chain oracles
+- **Multi-signal fusion expansion** — Kalshi (once API stabilises), custom on-chain oracles, additional per-asset binary markets (Polymarket + Manifold already live)
 
 See [`SCALABILITY_ANALYSIS.md`](./SCALABILITY_ANALYSIS.md) for the hard walls that constrain each tier.
 

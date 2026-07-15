@@ -1439,6 +1439,19 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           aiResult.allocations = lockDecision.cappedAllocations as typeof aiResult.allocations;
         }
 
+        // Track continuous zero-risk-tier duration for alert-response-loop
+        // Gap 8's UNWIND_ALL_SPOT rule triggers after > 24h at 0% risk cap.
+        try {
+          if (lockDecision.active && lockDecision.riskAllocationCap === 0) {
+            const existing = await getCronStateOr<number | null>('profit-lock:zero-since', null);
+            if (!existing) {
+              await setCronState('profit-lock:zero-since', Date.now()).catch(() => {});
+            }
+          } else {
+            await setCronState('profit-lock:zero-since', null).catch(() => {});
+          }
+        } catch { /* best-effort */ }
+
         // ── PortfolioDriver — corrective unwind (Gaps 1, 2, 5) ─────
         // Profit-lock caps FUTURE allocations. PortfolioDriver actively
         // reshapes existing holdings toward the cap. Env-gated so the

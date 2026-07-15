@@ -1,4 +1,4 @@
-# Service Level Objectives + Top-5 Incident Runbooks
+# Service Level Objectives + Top-7 Incident Runbooks
 
 > Formal SLOs + step-by-step response for the highest-impact failure modes.
 > Written for a solo operator today; scales to on-call rotation later.
@@ -274,7 +274,7 @@ curl -s -H "Authorization: Bearer $CRON_SECRET" \
 - Set `PORTFOLIO_DRIVER_EXECUTE=` (empty) to prevent driver from opening more hedges
 
 **Fix**
-- Root cause almost always in `BluefinService.openHedge` invariant chain (see `DEPLOY_RUNBOOK.md` Appendix Y)
+- Root cause almost always in `BluefinService.openHedge` invariant chain (see [`DEPLOY_RUNBOOK.md`](./DEPLOY_RUNBOOK.md) Appendix Y)
 - If step size changed at venue: update `BLUEFIN_PAIRS` in `BluefinService.ts`
 - If free collateral shortfall: increase `BLUEFIN_TARGET_MARGIN_USD` or top-up via `BLUEFIN_TOPUP_SWAP_FROM_SUI=1`
 

@@ -76,7 +76,7 @@ The `/api/cron/alert-response-loop` route needs an Upstash schedule (every 15 mi
 - u64 overflow guard (`lib/services/sui/safe-bigint.ts`) — NAV up to `NAV_SAFETY_CEILING_USDC=500_000_000`
 
 ### Security
-- 15 internal audit phases completed (see `AUDIT_2026-06-04.md`, `AUDIT_2026-06-12_phase15_offchain.md`)
+- 15 internal audit phases completed (see [`AUDIT_2026-06-04.md`](./AUDIT_2026-06-04.md), [`AUDIT_2026-06-12_phase15_offchain.md`](./AUDIT_2026-06-12_phase15_offchain.md))
 - OFAC geo-block middleware (KP, IR, SY, CU, RU, BY)
 - Strict NAV-oracle mode ON
 
