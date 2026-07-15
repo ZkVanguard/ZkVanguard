@@ -47,9 +47,9 @@ Living reference for the platform. **For the authoritative repo guide (architect
 - **[PROJECT_DESCRIPTION.md](./PROJECT_DESCRIPTION.md)** — one-pager
 - **[GO_TO_MARKET_PLAN.md](./GO_TO_MARKET_PLAN.md)** — GTM strategy
 - **[GRANT_SUBMISSION_PLAYBOOK.md](./GRANT_SUBMISSION_PLAYBOOK.md)** — grant application framework
-- **[GRANT_HONEST_ASSESSMENT.md](./GRANT_HONEST_ASSESSMENT.md)** — self-critical grant readiness
 - **[INVESTOR_PITCH_DECK.md](./INVESTOR_PITCH_DECK.md)** — investor deck
-- **[PITCH_DECK_ALLIANCE.md](./PITCH_DECK_ALLIANCE.md)** — partner pitch
+
+*(Some strategic/pitch docs kept private — not in this repo. Grant reviewers can request access.)*
 
 ## Guides
 
@@ -65,9 +65,9 @@ Living reference for the platform. **For the authoritative repo guide (architect
 - **[reports/ONCHAIN_TEST_REPORT.md](./reports/ONCHAIN_TEST_REPORT.md)**
 - **[E2E_TEST_REPORT.md](./E2E_TEST_REPORT.md)**
 
-## Weekly / monthly grant reports (root)
+## Weekly / monthly grant reports
 
-Weekly and monthly submission reports live at the repo root (`week-*-submission.md`, `monthly-submission-*.md`) as SUI Foundation grant deliverables — read them for period-scoped shipped work.
+Moved to [`docs/history/`](./history/) — SUI Foundation grant deliverables (12 weekly + 3 monthly submissions + `sui-directory-submission-final.md`) kept for provenance. Read for period-scoped shipped work.
 
 ---
 

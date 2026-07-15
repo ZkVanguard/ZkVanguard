@@ -131,6 +131,7 @@ git-status.txt
 deploy-out.txt
 deploy-v2-output.txt
 deploy-final.txt
+deploy-output.json
 deploy-to-vercel.ps1
 test-deposit-output.txt
 test-mainnet-output.txt
@@ -150,6 +151,10 @@ bf-test-out*.txt
 bluefin-test-results.txt
 server-probe.txt
 sui-swap-test.txt
+env_val.tmp
+temp_env.txt
+# Accidental literal tilde folder (from mistyped `mkdir ~`)
+/~/
 
 # -------------------------------------------
 # Testing
@@ -387,22 +392,12 @@ VERCEL_DEPLOYMENT_READY.md
 VERCEL_FREE_TIER_GUIDE.md
 VERCEL_CLI_SETUP.md
 TEST_COMPLETE.md
-march-2026-monthly-report.md
-week-23-27-march-submission.md
-monthly-submission-april-2026.md
-week-27-1st-may-submission.md
-week-8-10-may-submission.md
 CLAUDE.md
 
 # -------------------------------------------
 # Claude Code local settings
 # -------------------------------------------
 .claude/settings.local.json
-scripts/analyze-pool-pnl.ts
-scripts/check-hedge-signal-alignment.ts
-scripts/analyze-pool-pnl.ts
-week-11-submission.md
-week-18-22-submission.md
 
 # Operational snapshot artifacts (debug only)
 scripts/.neon-snapshot.json
