@@ -71,7 +71,7 @@ Data already exists (ReportingAgent generates it). Phase 2 is the UI layer.
 
 `community_pool_usdc.move` is already template-shaped. Deploy N instances with different mandates served by the same 7-agent orchestrator:
 
-- **Core Allocation Fund** (today's pool) — balanced BTC/ETH/SUI/CRO
+- **Core Allocation Fund** (today's pool) — balanced BTC/ETH/SUI
 - **High-Yield Vault** — aggressive Polymarket alpha
 - **Conservative Vault** — majority stables, small directional exposure
 - **Sector vaults** — DeFi-only, L1-only

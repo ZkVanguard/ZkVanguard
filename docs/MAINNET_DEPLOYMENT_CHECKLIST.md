@@ -259,7 +259,7 @@ Completed on Cronos Testnet (2024):
 
 Test coverage:
 - ✅ Oracle health verification
-- ✅ Price retrieval (BTC, ETH, SUI, CRO)
+- ✅ Price retrieval (BTC, ETH, SUI)
 - ✅ Deposit flow with NAV calculation
 - ✅ Withdrawal flow with slippage protection
 - ✅ Member position tracking

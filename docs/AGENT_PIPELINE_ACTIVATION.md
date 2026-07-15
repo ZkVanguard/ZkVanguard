@@ -56,7 +56,7 @@ curl -s https://www.zkvanguard.xyz/api/platform/risk-overview \
 
 Expected output:
 - `cycle.ageMinutes`: under 35 (refreshed every 30 min by sui-community-pool)
-- `directives`: 4 entries (BTC, ETH, SUI, CRO) each with `recommendedSide`, `confidence`, `shouldHedge`
+- `directives`: 3 entries (BTC, ETH, SUI) each with `recommendedSide`, `confidence`, `shouldHedge`
 - `scorecard`: rows starting from the first cron tick after deploy
 
 If `directives` is empty or `cycle.ageMinutes` is null, the orchestrator
