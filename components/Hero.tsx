@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from 'react';
-import Link from 'next/link';
+import { Link } from '@/i18n/routing';
 import { ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import { useTranslations } from 'next-intl';
 

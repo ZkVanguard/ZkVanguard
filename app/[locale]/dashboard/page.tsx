@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import nextDynamic from 'next/dynamic';
-import Link from 'next/link';
+import { Link } from '@/i18n/routing';
 import { useAccount, useBalance } from '@/lib/wdk/wdk-hooks';
 import {
   Bot, Shield, Briefcase, TrendingUp,

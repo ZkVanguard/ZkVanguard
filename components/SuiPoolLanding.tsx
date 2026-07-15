@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from '@/i18n/routing';
 import {
   ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon,
   SparklesIcon, CubeTransparentIcon, LockClosedIcon,

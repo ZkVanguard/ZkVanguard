@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { PricingSection } from '@/components/PricingSection';
-import Link from 'next/link';
+import { Link } from '@/i18n/routing';
 import { REVENUE_STREAMS, POOL_ECONOMICS, PREMIUM_PRODUCT_FEES } from '@/lib/config/pricing';
 
 export const metadata: Metadata = {
