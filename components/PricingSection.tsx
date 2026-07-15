@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CheckIcon, SparklesIcon, ShieldCheckIcon, BoltIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { useRouter } from '@/i18n/routing';
 import {
   PRICING_TIERS,
   getAnnualSavings,
@@ -167,12 +168,15 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
 
 export function PricingSection() {
   const [isAnnual, setIsAnnual] = useState(true);
+  const router = useRouter();
 
   const handleSelect = (tier: SubscriptionTier) => {
     if (tier === 'enterprise') {
-      window.location.href = '/contact';
+      // No /contact route exists; matches the mailto: pattern used elsewhere
+      // (see dashboard/custody/page.tsx enterprise CTA).
+      window.location.href = 'mailto:ashishregmi2017@gmail.com?subject=ZkVanguard%20Enterprise%20plan%20inquiry';
     } else {
-      window.location.href = `/subscribe?tier=${tier}&billing=${isAnnual ? 'annual' : 'monthly'}`;
+      router.push(`/subscribe?tier=${tier}&billing=${isAnnual ? 'annual' : 'monthly'}`);
     }
   };
 
