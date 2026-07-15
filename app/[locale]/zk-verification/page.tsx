@@ -1,2 +1,5 @@
-import { redirect } from 'next/navigation';
-export default function Page() { redirect('/zk/verification'); }
+import { redirect } from '@/i18n/routing';
+
+export default function Page({ params }: { params: { locale: string } }) {
+  redirect({ href: '/zk/verification', locale: params.locale });
+}
