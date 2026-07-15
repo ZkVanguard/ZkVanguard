@@ -2,7 +2,7 @@
 
 > ⚠ **HISTORICAL SUBMISSION** (Cronos x402 hackathon). The product has since
 > pivoted to an AI-managed Polymarket-alpha vault on Sui mainnet. See current
-> framing in [`README.md`](../../README.md) and [`CLAUDE.md`](../../CLAUDE.md).
+> framing in [`README.md`](../../README.md) and [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 **Hackathon**: Cronos x402 Paytech Hackathon  
 **Submission URL**: https://dorahacks.io/hackathon/cronos-x402/detail  

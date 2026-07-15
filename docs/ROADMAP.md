@@ -101,4 +101,4 @@ See [`SCALABILITY_ANALYSIS.md`](./SCALABILITY_ANALYSIS.md) for the hard walls th
 
 ---
 
-**Last updated:** 2026-07-15 · Cross-referenced against [`../README.md`](../README.md), [`CLAUDE.md`](../CLAUDE.md), and shipped code.
+**Last updated:** 2026-07-15 · Cross-referenced against [`../README.md`](../README.md) and shipped code.

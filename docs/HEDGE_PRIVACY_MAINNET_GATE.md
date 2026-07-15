@@ -76,7 +76,7 @@ mainnet: {
 }
 ```
 
-Privacy contracts (`zk_hedge_commitment.move`, `zk_verifier.move`, `zk_proxy_vault.move`) are deployed to **testnet only** at `0xb1442796...283a`. The mainnet pool package (`0x107292...7b726`) does **not** include them. CLAUDE.md's contract list shows them in `contracts/sui/sources/` but no mainnet deploy doc exists.
+Privacy contracts (`zk_hedge_commitment.move`, `zk_verifier.move`, `zk_proxy_vault.move`) are deployed to **testnet only** at `0xb1442796...283a`. The mainnet pool package (`0x107292...7b726`) does **not** include them. They exist in `contracts/sui/sources/` but no mainnet deploy doc exists.
 
 **Fix path:**
 - Build + publish to mainnet as a separate package (independent UpgradeCap).

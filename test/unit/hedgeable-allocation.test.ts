@@ -6,7 +6,7 @@
  * their share to assets whose perp leg can clear BlueFin's minQty.
  * Regression risk: future refactors that "simplify" the redistribute
  * math could silently produce naked-long exposure at small NAV — the
- * exact bug class CLAUDE.md flags as a production hazard.
+ * exact bug class flagged as a production hazard (naked spot at small NAV).
  */
 import { describe, it, expect } from '@jest/globals';
 import {
@@ -14,7 +14,7 @@ import {
   clampAllocationsToHedgeable,
 } from '@/lib/services/sui/cron/hedgeable-allocation';
 
-// BlueFin minQty / stepSize per CLAUDE.md and BLUEFIN_PAIRS.
+// BlueFin minQty / stepSize per BLUEFIN_PAIRS in BluefinService.ts.
 const SPECS = {
   BTC: { minQuantity: 0.001, stepSize: 0.001 },
   ETH: { minQuantity: 0.01,  stepSize: 0.01  },
@@ -73,7 +73,7 @@ describe('clampAllocationsToHedgeable — passthrough when everything fits', () 
 
 describe('clampAllocationsToHedgeable — small-NAV drops + redistribution', () => {
   it('drops BTC at $50 NAV and redistributes to ETH + SUI', () => {
-    // The canonical $50 case from the CLAUDE.md "BTC minQty problem"
+    // The canonical $50 case for the "BTC minQty problem"
     // example. With BTC 45% at $50 NAV and 5x leverage:
     //   $50 × 0.45 × 1.0 × 5 / $75k = 0.0015 BTC, floors to 0.001 — clears!
     // Actually let's use a NAV where BTC genuinely can't clear:

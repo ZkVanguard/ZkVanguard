@@ -19,7 +19,7 @@ If this key is compromised the attacker can:
 - Change fee params to 100% (fee rate breach caught by `E_FEE_TOO_HIGH` but still griefing)
 - Ratchet TVL cap up + drain via a coordinated deposit
 
-The **FeeManagerCap** already moved to MSafe (recorded in CLAUDE.md).
+The **FeeManagerCap** already moved to MSafe.
 AdminCap did NOT. This runbook completes the pattern.
 
 ## Prerequisites
@@ -119,4 +119,4 @@ Requires m-of-n signatures per the MSafe threshold. Typical: 2 hours.
 ## Related
 
 - `docs/HEDGE_PRIVACY_MAINNET_DEPLOY.md` — similar pattern for prover pubkey
-- CLAUDE.md § Scale-readiness walls (AdminCap on hot key)
+- [SCALABILITY_ANALYSIS.md](./SCALABILITY_ANALYSIS.md) — AdminCap on hot key is a listed scale wall

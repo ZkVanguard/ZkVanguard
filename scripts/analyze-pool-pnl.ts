@@ -132,7 +132,7 @@ async function main() {
 
   // ── 2. Hedge PnL — realised + unrealised ──────────────────────
   console.log('\n── 2. HEDGE PnL (BlueFin perps, SUI chain) ──');
-  // Filter out operational <$1 microhedges (see CLAUDE.md "Real risk hedges vs operational microhedges")
+  // Filter out operational <$1 microhedges (transport-only entries used to move USDC, not directional bets)
   const hedgeAgg = await safeQuery(pg, `
     SELECT
       status,

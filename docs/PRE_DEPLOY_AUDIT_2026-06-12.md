@@ -125,8 +125,7 @@ preconditions.
 
 - `scripts/deploy-2026-06-04.md` — step-by-step runbook (now with
   correct 0.7 SUI gas budget)
-- `docs/DEPLOY_RUNBOOK.md` — operator runbook (appendices Y, W, V
-  referenced from CLAUDE.md)
+- `docs/DEPLOY_RUNBOOK.md` — operator runbook (appendices Y, W, V)
 - `docs/DEPLOY_SAFETY_NET.md` — failure modes per step + recovery
 - `docs/AUDIT_E2E_VERIFICATION.md` — arithmetic walkthrough against
   live state

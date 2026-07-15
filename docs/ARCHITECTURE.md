@@ -2,8 +2,8 @@
 
 > ⚠ **PARTIALLY HISTORICAL.** This doc still describes the original Cronos-EVM
 > framing. The live product is an AI-managed Polymarket-alpha vault on Sui
-> mainnet. For current authoritative architecture read [`CLAUDE.md`](../CLAUDE.md);
-> the compact summary below covers current state at a glance.
+> mainnet — the compact "Current architecture" section below covers current
+> state; the sections below that are retained for provenance.
 
 ## Current architecture (2026-07-15)
 

@@ -87,7 +87,7 @@ Each audit firm should receive at engagement time:
 2. **Existing internal audit reports** — `docs/AUDIT_*.md` (the 15 internal phases)
 3. **Deployment runbook** — `docs/DEPLOY_2026-06-12_v0.2.0.md`
 4. **Test suite** — `test/integration/zk-stark.test.ts` + relevant `test/*.cjs` hardhat tests
-5. **Operational documentation** — `CLAUDE.md` (the canonical architecture doc)
+5. **Operational documentation** — internal repo guide (canonical architecture)
 6. **Threat model** — short doc enumerating: drain vectors, replay attacks, oracle manipulation, capability theft, MEV exposure. To be drafted in `docs/THREAT_MODEL.md` before engagement.
 
 ## Budget allocation (within Tranche 1 = $18K)

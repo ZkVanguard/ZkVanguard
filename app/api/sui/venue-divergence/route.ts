@@ -41,7 +41,7 @@ export async function GET(): Promise<NextResponse> {
   // operations from a single request can tip the pool into "remaining
   // connection slots reserved for SUPERUSER" while other lambdas are
   // mid-query. Sequential adds ~600ms total but never causes the 500
-  // we hit on first deploy. See CLAUDE.md "Aiven plan-wide pool".
+  // we hit on first deploy (Aiven plan-wide pool limit).
   let dbRows: Array<{
     id: number; market: string; side: string;
     size: string | number; notional_value: string | number;

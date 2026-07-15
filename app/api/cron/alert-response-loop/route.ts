@@ -11,7 +11,7 @@
  * ## Cadence
  *
  * Runs every 15 min via QStash (create schedule via `curl` against the
- * v2 API — see CLAUDE.md). Cost: 1 DB read + 1 Discord post per tick
+ * v2 API — see DEPLOY_RUNBOOK Appendix X). Cost: 1 DB read + 1 Discord post per tick
  * when no action; extra RPC only when a rule fires.
  *
  * ## Env gates

@@ -2,7 +2,7 @@
 
 > ⚠ **HISTORICAL SUBMISSION** (Dec 2025). The product has since pivoted to an
 > AI-managed Polymarket-alpha vault on Sui mainnet. See current framing in
-> [`README.md`](../../README.md) and [`CLAUDE.md`](../../CLAUDE.md).
+> [`README.md`](../../README.md) and [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ## 📋 Executive Summary
 

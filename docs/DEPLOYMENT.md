@@ -60,7 +60,7 @@ NEXT_PUBLIC_ZK_VERIFIER_ADDRESS=0x46A497cDa0e2eB61455B7cAD60940a563f3b7FD8
 #### SUI Contract Addresses (Move) — mainnet v0.2.0
 ```env
 # Current SUI mainnet (deployed 2026-06-12)
-# For full env reference, see docs/SUI_DEPLOYMENT.md and CLAUDE.md
+# For full env reference, see docs/SUI_DEPLOYMENT.md
 SUI_NETWORK=mainnet
 NEXT_PUBLIC_SUI_NETWORK=mainnet
 NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID=0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726

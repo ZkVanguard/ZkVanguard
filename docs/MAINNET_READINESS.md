@@ -28,7 +28,7 @@
 
 ## Historical: Pre-deploy readiness assessment
 
-The remainder of this document was the pre-launch readiness snapshot. Retained for provenance. Numeric configurations and asset lists (e.g. CRO, USDT-via-WDK) reflect the EVM-era and are superseded by CLAUDE.md.
+The remainder of this document was the pre-launch readiness snapshot. Retained for provenance. Numeric configurations and asset lists (e.g. CRO, USDT-via-WDK) reflect the EVM-era and are superseded by the current mainnet architecture in [ARCHITECTURE.md](./ARCHITECTURE.md) and [SUI_DEPLOYMENT.md](./SUI_DEPLOYMENT.md).
 
 ## Executive Summary
 

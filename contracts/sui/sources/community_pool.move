@@ -592,8 +592,8 @@ module zkvanguard::community_pool {
 
     /// Deposit SUI and receive shares.
     ///
-    /// AUDIT 2026-06-07 phase 9/10 NOTE: this pool is DEPRECATED per
-    /// CLAUDE.md (production uses community_pool_usdc). Originally
+    /// AUDIT 2026-06-07 phase 9/10 NOTE: this pool is DEPRECATED
+    /// (production uses community_pool_usdc). Originally
     /// phase 9 tried to abort the body to seal off deposits, but that
     /// broke 14 of 28 existing tests, so we kept the original code
     /// and protect the path operationally instead.

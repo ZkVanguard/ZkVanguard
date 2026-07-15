@@ -142,7 +142,7 @@ The exposed signers:
 
 These keys do **not** themselves hold the pool's authority — the on-chain **caps** do
 (`SUI_ADMIN_CAP_ID`, `SUI_AGENT_CAP_ID`, `SUI_FEE_MANAGER_CAP_ID`, the last currently
-held by the MSafe per CLAUDE.md). Rotation = move the caps + gas + collateral to a new
+held by the MSafe). Rotation = move the caps + gas + collateral to a new
 address, then swap the env value.
 
 Migration steps:
@@ -206,7 +206,7 @@ Manual checks:
 - **Re-enable hedging:** remove `SUI_AUTO_HEDGE_DISABLE`, un-pause QStash schedules,
   redeploy. Watch the first `sui-community-pool` and `polymarket-edge-trader` ticks.
 
-> Do **not** trust `scripts/check-sui-mainnet-readiness.ts` as the gate — per CLAUDE.md
+> Do **not** trust `scripts/check-sui-mainnet-readiness.ts` as the gate —
 > it checks legacy env names and doesn't load `.env.local`, so it reports false
 > "blockers" for an already-deployed mainnet. Trust on-chain state + the two scripts above.
 
@@ -483,7 +483,7 @@ Not secret (on-chain object IDs — authority, not credentials; migrate objects,
 `SUI_ADMIN_CAP_ID`, `SUI_AGENT_CAP_ID`, `SUI_FEE_MANAGER_CAP_ID`, the
 `NEXT_PUBLIC_SUI_MAINNET_*` package/state IDs.
 
-Reminder (CLAUDE.md): every SUI env read must `.trim()` — Vercel values carry trailing
+Reminder: every SUI env read must `.trim()` — Vercel values carry trailing
 `\r\n`. Never log or hardcode a private key.
 
 ## Appendix B — audit the dev machine (because it reinfected once)

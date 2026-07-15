@@ -2,7 +2,7 @@
 
 > ⚠ **HISTORICAL SCRIPT** (pre-pivot era). Reflects the old "RWA risk management"
 > framing. Current product: AI-managed Polymarket-alpha vault on Sui mainnet —
-> see [`README.md`](../README.md) and [`CLAUDE.md`](../CLAUDE.md).
+> see [`README.md`](../README.md) and [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 **Total Duration:** 4 minutes (240 seconds)  
 **Tone:** Professional, confident, visionary  

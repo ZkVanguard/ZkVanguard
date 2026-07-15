@@ -38,7 +38,7 @@ sui move test rwa_custody    # expect 11/11 PASS
 # Identify the UpgradeCap object on operator wallet
 sui client objects --json `
   | jq '.[] | select(.data.type | test("UpgradeCap"))'
-# Expected: the existing v0.2.0 UpgradeCap (per CLAUDE.md / DEPLOY_2026-06-12_v0.2.0.md)
+# Expected: the existing v0.2.0 UpgradeCap (per DEPLOY_2026-06-12_v0.2.0.md)
 
 # Upgrade
 sui client upgrade `

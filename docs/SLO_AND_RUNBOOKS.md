@@ -383,4 +383,4 @@ Runbook 4 (key compromise) is drilled tabletop, never actually — the recovery 
 - `docs/AGENT_PIPELINE_ACTIVATION.md` — normal-operation flow
 - `docs/ADMINCAP_MSAFE_MIGRATION.md` — hardens against Runbook 4
 - `docs/HEDGE_PRIVACY_MAINNET_DEPLOY.md` — hardens against Runbook 4
-- CLAUDE.md § Scale-readiness walls — future work
+- [SCALABILITY_ANALYSIS.md](./SCALABILITY_ANALYSIS.md) — scale-readiness walls for future work

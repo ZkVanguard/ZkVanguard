@@ -1,17 +1,18 @@
 # ZkVanguard Documentation
 
-Living reference for the platform. **For the authoritative repo guide (architecture, env, gotchas, invariants), read [`CLAUDE.md`](../CLAUDE.md).** This directory contains supporting docs; many are point-in-time reports kept for provenance rather than daily reference.
+Living reference for the platform. Many docs here are point-in-time reports kept for provenance rather than daily reference; the "Living reference docs" table below lists the ones under active maintenance.
 
 ## Start here
 
 - **[Main README](../README.md)** — product overview, safety, roadmap, FAQ
-- **[CLAUDE.md](../CLAUDE.md)** — authoritative technical guide (env, invariants, cron topology, gotchas)
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — system design overview
+- **[DEPLOY_RUNBOOK.md](./DEPLOY_RUNBOOK.md)** — env conventions, invariants, admin endpoints, incident response
 
 ## Living reference docs
 
 | Doc | Purpose |
 |---|---|
-| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System design (partial-historical banner — see CLAUDE.md for current authoritative version) |
+| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | System design (partial-historical banner; current state summarised at top) |
 | **[DEPLOY_RUNBOOK.md](./DEPLOY_RUNBOOK.md)** | Incident response, env presets, BlueFin invariants, admin endpoints |
 | **[MAINNET_READINESS.md](./MAINNET_READINESS.md)** | Current mainnet posture, cap-lift criteria |
 | **[SUI_DEPLOYMENT.md](./SUI_DEPLOYMENT.md)** | SUI-specific deploy runbook |

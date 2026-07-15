@@ -64,7 +64,7 @@ SUI_MSAFE_ADDRESS=<MSafe multisig address>
 
 **CRLF trap:** Vercel env values often carry trailing `\r\n`. Every SUI env read must `.trim()`. `instrumentation.ts` sanitises on cold start; service code should still trim defensively.
 
-Full env vars reference: [CLAUDE.md](../CLAUDE.md) SUI section.
+Full env vars reference: see the "Required env vars" section above and [DEPLOY_RUNBOOK.md](./DEPLOY_RUNBOOK.md) for env presets + rotation guidance.
 
 ## Deploy / upgrade runbook
 

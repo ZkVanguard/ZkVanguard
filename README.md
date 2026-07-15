@@ -69,7 +69,7 @@ Verify: `bun jest test/integration/pool-drawdown-defense.test.ts` (10/10 green).
 
 Live on Sui mainnet (v0.2.0, deployed 2026-06-12). **Pre-external-audit**, TVL **deliberately capped at $10K by contract**. Cap lifts after external audit closes — the constraint is intentional operational proof, not a TVL claim.
 
-15 internal audit phases completed pre-mainnet. Engine has been running autonomously since June 2026 with continuous on-chain NAV snapshots; every production incident to date has been caught, remediated, and documented in the deploy record and [`CLAUDE.md`](./CLAUDE.md).
+15 internal audit phases completed pre-mainnet. Engine has been running autonomously since June 2026 with continuous on-chain NAV snapshots; every production incident to date has been caught, remediated, and documented in the [deploy record](./docs/DEPLOY_2026-06-12_v0.2.0.md) and [`docs/DEPLOY_RUNBOOK.md`](./docs/DEPLOY_RUNBOOK.md).
 
 ## Live metrics
 
@@ -150,7 +150,7 @@ bun run dev
 bun run typecheck && bun run lint && bun jest
 ```
 
-Full architecture, env conventions, BlueFin invariants, and reconciliation topology: **[CLAUDE.md](./CLAUDE.md)** (authoritative repo guide).
+Full architecture, env conventions, BlueFin invariants, and reconciliation topology: see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md), [`docs/DEPLOY_RUNBOOK.md`](./docs/DEPLOY_RUNBOOK.md), and [`docs/SUI_DEPLOYMENT.md`](./docs/SUI_DEPLOYMENT.md).
 
 ## FAQ
 
@@ -174,8 +174,8 @@ Ethena is delta-neutral USDe backed by ETH shorts. GMX is a perp DEX. Aave GHO i
 
 ## Documentation & disclosure
 
-- **[CLAUDE.md](./CLAUDE.md)** — architecture, env, gotchas, invariants
-- **[docs/DEPLOY_RUNBOOK.md](./docs/DEPLOY_RUNBOOK.md)** — incident response, admin endpoints
+- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** — system design overview
+- **[docs/DEPLOY_RUNBOOK.md](./docs/DEPLOY_RUNBOOK.md)** — incident response, admin endpoints, env presets, BlueFin invariants
 - **[docs/DEPLOY_2026-06-12_v0.2.0.md](./docs/DEPLOY_2026-06-12_v0.2.0.md)** — v0.2.0 mainnet deploy record
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** · **[docs/SUI_DEPLOYMENT.md](./docs/SUI_DEPLOYMENT.md)** · **[docs/MAINNET_READINESS.md](./docs/MAINNET_READINESS.md)**
 

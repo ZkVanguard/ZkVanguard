@@ -25,7 +25,7 @@ const PKG = (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_PACKAGE_ID
   || process.env.NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID
   || '0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726').trim();
 const USDC = '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
-// AdminCap ID: from CLAUDE.md deploy notes 2026-06-12
+// AdminCap ID: from deploy notes 2026-06-12 (see docs/DEPLOY_2026-06-12_v0.2.0.md)
 const ADMIN_CAP = '0x8109e15aec55e5ad22e0f91641eda16398b6541d0c0472b113f35b1b59431d78';
 const RPC = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
 

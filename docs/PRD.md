@@ -5,9 +5,8 @@
 > The current product is an **AI-managed Polymarket-alpha crypto vault on Sui
 > mainnet**. For accurate, current product framing see:
 > - [`README.md`](../README.md)
-> - [`CLAUDE.md`](../CLAUDE.md) — authoritative repo guide
-> - [`docs/GRANT_HONEST_ASSESSMENT.md`](./GRANT_HONEST_ASSESSMENT.md)
-> - [`docs/GRANT_PITCH_DECK_v2.md`](./GRANT_PITCH_DECK_v2.md)
+> - [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md)
+> - [`docs/ROADMAP.md`](./ROADMAP.md)
 >
 > The metrics, audience, deployment chain, and tier targets below are stale.
 

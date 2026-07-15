@@ -139,7 +139,7 @@ Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I
 
 ## 5 · Known limitations (things audit should VALIDATE we've documented, not fix)
 
-- **NAV oracle single-source.** The `admin_set_external_nav` attestation is fed by the cron polling Crypto.com prices + BlueFin position values. There's no Pyth or Chainlink cross-check today. Documented as Tranche B work. (See CLAUDE.md § Move contract invariants.)
+- **NAV oracle single-source.** The `admin_set_external_nav` attestation is fed by the cron polling Crypto.com prices + BlueFin position values. There's no Pyth or Chainlink cross-check today. Documented as Tranche B work.
 - **BlueFin as sole perp venue.** Multi-venue router (TA2) has adapter stubs for Hyperliquid + dYdX but no keys yet. Real hedging still 100% BlueFin.
 - **Hot-key AdminCap.** Documented in TA5 runbook. Not yet executed.
 - **Privacy contracts on testnet only.** `zk_hedge_commitment`, `zk_proxy_vault`, `zk_verifier` are deployed on testnet at `0xb1442796...`. Mainnet deploy pending per `docs/HEDGE_PRIVACY_MAINNET_DEPLOY.md`.
@@ -219,4 +219,4 @@ Any audit engagement starts with a disclosure of known issues. Ours:
 - `docs/AGENT_PIPELINE_ACTIVATION.md` — agent activation flow
 - `docs/SLO_AND_RUNBOOKS.md` — SLO + top-5 incident runbooks
 - `docs/HEDGE_PRIVACY_MAINNET_GATE.md` — privacy gate matrix
-- CLAUDE.md § Scale-readiness walls — future work
+- [SCALABILITY_ANALYSIS.md](./SCALABILITY_ANALYSIS.md) — scale-readiness walls (future work)
