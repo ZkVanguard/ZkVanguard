@@ -77,6 +77,7 @@ export async function ensureHedgesTable(): Promise<void> {
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS current_price DECIMAL(24, 10);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS price_source VARCHAR(50);
       ALTER TABLE hedges ADD COLUMN IF NOT EXISTS price_updated_at TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE hedges ADD COLUMN IF NOT EXISTS close_reason VARCHAR(64);
     `);
     // Indexes — including compound indexes for multi-user query patterns
     await query(`

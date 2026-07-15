@@ -399,13 +399,23 @@ export async function reconcileSuiHedges(): Promise<ReconcileResult> {
 
       // Tag every reconciler-driven close (including 0-PnL ones) so
       // downstream analytics can bucket them separately from BlueFin-
-      // confirmed fills.
-      await query(
-        `UPDATE hedges
-         SET close_reason = 'reconciler-estimate', price_source = $2
-         WHERE (hedge_id_onchain = $1 OR order_id = $1) AND close_reason IS NULL`,
-        [dbHedge.hedge_id_onchain || dbHedge.order_id, priceProvenance],
-      );
+      // confirmed fills. Wrapped in its own try/catch: the core close
+      // above already committed, and a schema drift here (e.g. close_reason
+      // column missing on an older DB) shouldn't unwind result.closed++
+      // via the outer catch — that was booking successful closes as errors.
+      try {
+        await query(
+          `UPDATE hedges
+           SET close_reason = 'reconciler-estimate', price_source = $2
+           WHERE (hedge_id_onchain = $1 OR order_id = $1) AND close_reason IS NULL`,
+          [dbHedge.hedge_id_onchain || dbHedge.order_id, priceProvenance],
+        );
+      } catch (tagErr) {
+        logger.debug('[HedgeReconciler] close-tag write failed (non-fatal)', {
+          hedgeId: dbHedge.hedge_id_onchain || dbHedge.order_id,
+          error: tagErr instanceof Error ? tagErr.message : String(tagErr),
+        });
+      }
 
       if (priceProvenance === 'reconciler-unknown') {
         logger.warn('[HedgeReconciler] Closed hedge with no exit price', {
