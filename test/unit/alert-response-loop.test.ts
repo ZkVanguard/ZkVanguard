@@ -1,0 +1,165 @@
+/**
+ * Unit tests for evaluateAutoResponse — Gap 8 pure logic.
+ *
+ * The cron wrapper (app/api/cron/alert-response-loop/route.ts) reads
+ * from cron_state; the pure function evaluated here is what decides
+ * what to do given the state. Locks the three rules:
+ *   - 3 KILL alerts in 60 min → SHRINK_SPOT
+ *   - profit-lock zero-tier > 24h → UNWIND_ALL_SPOT
+ *   - phantom rate > 1% → HALT_TRADER + HALT_AUTOHEDGE
+ *
+ * Regression risk: threshold drift on any of these rules changes the
+ * production auto-response cadence; the alert-response cron ships live.
+ */
+import { describe, it, expect } from '@jest/globals';
+import type { AlertLevel } from '@/lib/services/alerting/alert-response-loop';
+import { evaluateAutoResponse } from '@/lib/services/alerting/alert-response-loop';
+
+const NOW = Date.now();
+const min = (n: number) => NOW - n * 60 * 1000;
+
+function kill(atMinAgo: number, message = 'test'): { at: number; level: AlertLevel; message: string } {
+  return { at: min(atMinAgo), level: 'KILL', message };
+}
+function warn(atMinAgo: number, message = 'test'): { at: number; level: AlertLevel; message: string } {
+  return { at: min(atMinAgo), level: 'WARN', message };
+}
+
+describe('evaluateAutoResponse — SHRINK_SPOT rule (3 KILL in 60min)', () => {
+  it('fires when exactly 3 KILL alerts in last 60 min', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [kill(45), kill(20), kill(5)],
+      now: NOW,
+    });
+    const shrinks = responses.filter(r => r.type === 'SHRINK_SPOT');
+    expect(shrinks).toHaveLength(1);
+    expect(shrinks[0].triggeredBy).toHaveLength(3);
+  });
+
+  it('does NOT fire on only 2 KILL alerts', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [kill(45), kill(20)],
+      now: NOW,
+    });
+    const shrinks = responses.filter(r => r.type === 'SHRINK_SPOT');
+    expect(shrinks).toHaveLength(0);
+  });
+
+  it('excludes KILL alerts older than 60 min', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [kill(90), kill(80), kill(70), kill(30)], // 3 old + 1 recent
+      now: NOW,
+    });
+    expect(responses.filter(r => r.type === 'SHRINK_SPOT')).toHaveLength(0);
+  });
+
+  it('ignores non-KILL alerts in the count', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [kill(45), warn(30), warn(20), warn(10)],
+      now: NOW,
+    });
+    expect(responses.filter(r => r.type === 'SHRINK_SPOT')).toHaveLength(0);
+  });
+});
+
+describe('evaluateAutoResponse — UNWIND_ALL_SPOT rule (24h profit-lock)', () => {
+  it('fires when profit-lock zero-tier has been > 24h', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      profitLockZeroSinceMs: NOW - 25 * 60 * 60 * 1000, // 25h ago
+    });
+    expect(responses.filter(r => r.type === 'UNWIND_ALL_SPOT')).toHaveLength(1);
+  });
+
+  it('does NOT fire when profit-lock zero-tier is exactly 24h', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      profitLockZeroSinceMs: NOW - 24 * 60 * 60 * 1000, // exactly 24h
+    });
+    expect(responses.filter(r => r.type === 'UNWIND_ALL_SPOT')).toHaveLength(0);
+  });
+
+  it('does NOT fire when profitLockZeroSinceMs is undefined', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+    });
+    expect(responses.filter(r => r.type === 'UNWIND_ALL_SPOT')).toHaveLength(0);
+  });
+});
+
+describe('evaluateAutoResponse — phantom rate rule', () => {
+  it('fires HALT_TRADER + HALT_AUTOHEDGE when rate > 1%', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      phantomRatePctLastHour: 2.5,
+    });
+    expect(responses.filter(r => r.type === 'HALT_TRADER')).toHaveLength(1);
+    expect(responses.filter(r => r.type === 'HALT_AUTOHEDGE')).toHaveLength(1);
+  });
+
+  it('does NOT fire at exactly 1%', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      phantomRatePctLastHour: 1.0,
+    });
+    expect(responses.filter(r => r.type === 'HALT_TRADER')).toHaveLength(0);
+  });
+
+  it('does NOT fire at 0% (healthy)', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      phantomRatePctLastHour: 0,
+    });
+    expect(responses).toEqual([]);
+  });
+
+  it('does NOT fire when phantomRatePctLastHour is undefined', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+    });
+    expect(responses).toEqual([]);
+  });
+});
+
+describe('evaluateAutoResponse — composition', () => {
+  it('emits multiple responses when multiple rules trigger', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [kill(45), kill(20), kill(5)],
+      now: NOW,
+      profitLockZeroSinceMs: NOW - 26 * 60 * 60 * 1000,
+      phantomRatePctLastHour: 3,
+    });
+    // SHRINK_SPOT + UNWIND_ALL_SPOT + HALT_TRADER + HALT_AUTOHEDGE = 4
+    expect(responses).toHaveLength(4);
+    const types = responses.map(r => r.type).sort();
+    expect(types).toEqual(['HALT_AUTOHEDGE', 'HALT_TRADER', 'SHRINK_SPOT', 'UNWIND_ALL_SPOT'].sort());
+  });
+
+  it('emits empty array on baseline healthy state', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+    });
+    expect(responses).toEqual([]);
+  });
+
+  it('every response has non-empty reason string', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [kill(45), kill(20), kill(5)],
+      now: NOW,
+      profitLockZeroSinceMs: NOW - 26 * 60 * 60 * 1000,
+      phantomRatePctLastHour: 3,
+    });
+    for (const r of responses) {
+      expect(r.reason).toBeTruthy();
+      expect(r.reason.length).toBeGreaterThan(5);
+    }
+  });
+});
