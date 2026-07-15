@@ -38,7 +38,26 @@ The `/api/cron/alert-response-loop` route needs an Upstash schedule (every 15 mi
 
 ### Tests
 - New: `test/integration/pool-drawdown-defense.test.ts` — 10 tests, live-read/sandbox-write drawdown replay
+- New: `test/unit/portfolio-driver.test.ts` — 10 unit tests locking Gap 1/2/5 invariants
+- New: `test/unit/hedge-fill-verifier.test.ts` — 11 unit tests for `verifyFill` polling + `computePhantomRate`
 - Regression: 412 pre-existing tests still green
+
+### Post-ship follow-ups landed (2026-07-15 audit)
+Deep audit surfaced 8 gaps between the log-only defense and actual execution — all closed:
+
+- **PortfolioDriver execution wired** in `app/api/cron/sui-community-pool/route.ts`. When `PORTFOLIO_DRIVER_EXECUTE=1`:
+  - `SELL_SPOT_TO_USDC` actions batched into `replenishAdminUsdc` (reuses existing admin-asset → USDC swap path via BluefinAggregator)
+  - `CLOSE_HEDGE` actions call `BluefinService.closeHedge({ symbol })` per hedge
+  - `BUY_SPOT_FROM_USDC` / `OPEN_HEDGE` deferred to Step 7 allocation-driven swap (no double execution)
+  - Discord posts EXECUTED N/M ratio; failures logged per-action
+- **Alert-response `SHRINK_SPOT` / `UNWIND_ALL_SPOT` now execute** — write to `cron_state` key `alert-response:spot-target-risk-cap` (6h TTL). `sui-community-pool` reads this after profit-lock and applies the tighter cap (min of profit-lock + override), then PortfolioDriver unwinds to hit it.
+- **Phantom hedge rate on `/api/health/production`** — new `checkPhantomRate()` component uses the bulletproof test's meta-invariant query (closed hedges, notional ≥ $1, `realized_pnl = 0` in last hour). Warn > 1%, down > 5%. Alert-response-loop's phantom-halt rule now has a real data feed.
+- **SafeExecutionGuard interface comments** corrected: 30 bps / 4× (matches runtime defaults on lines 85-86).
+- **3-asset comments** in `community_pool_usdc.move` header + `sui-community-pool/route.ts` header (last stale "4-asset / CRO" references in shipped code).
+
+### Known follow-ups (documented, operator action)
+- QStash schedules for `alert-response-loop` and re-add of `health-monitor` — Upstash-managed; see `DEPLOY_RUNBOOK.md` Appendix X for the `curl` snippet.
+- `PORTFOLIO_DRIVER_EXECUTE=1` flip in Vercel env after log-observe window (recommended: 24h of `[log-only]` Discord messages first).
 
 ---
 

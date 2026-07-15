@@ -150,7 +150,9 @@ export async function runPortfolioDriverTick(input: DriverInput): Promise<Correc
           ? `profit-lock ${profitLock.drawdownPct.toFixed(1)}% dd → risk cap ${profitLock.riskAllocationCap}%`
           : input.signalFlipped
           ? `signal flip ${signal.direction} conf=${signal.confidence}% — unwind ${asset}`
-          : `opposing signal ${signal.direction} conf=${signal.confidence}% — reduce ${asset}`,
+          : signal.confidence >= 65 && signal.direction === 'DOWN'
+          ? `opposing signal ${signal.direction} conf=${signal.confidence}% — reduce ${asset}`
+          : `allocation drift — ${asset} spot ${currentUsd.toFixed(2)} vs target ${targetUsd.toFixed(2)}`,
       });
     } else if (delta < -0.5 && sandbox.idleUsdc > 1) {
       actions.push({
