@@ -90,7 +90,6 @@ export async function runPortfolioDriverTick(input: DriverInput): Promise<Correc
   }
 
   // Derive "before" allocation from actual holdings (or use aiAllocation if provided)
-  const totalRiskUsd = Object.values(spotUsdByAsset).reduce((s, v) => s + v, 0);
   const startingAllocation: Record<string, number> = {};
   if (input.aiAllocation) {
     Object.assign(startingAllocation, input.aiAllocation);
