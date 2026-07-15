@@ -126,6 +126,62 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       });
     }
 
+    // Gap 2: spot-leg unwind on flip. checkAndCloseDrifts only touches
+    // BlueFin perp positions — the pool's spot wBTC/wETH/SUI on the admin
+    // wallet is a directional exposure the drift-monitor never sees.
+    // PortfolioDriver reads current holdings and emits SELL_SPOT_TO_USDC
+    // actions when spot contradicts the freshly flipped signal.
+    let spotDriverActions: number = 0;
+    try {
+      if (directionFlipped) {
+        const { getSuiCommunityPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
+        const { runPortfolioDriverTick } = await import('@/lib/services/sui/PortfolioDriver');
+        const { getCronStateOr } = await import('@/lib/db/cron-state');
+        const { CronKeys } = await import('@/lib/db/cron-state');
+        const pool = getSuiCommunityPoolService();
+        const stats = (await pool.getPoolStats()) as unknown as { totalNAVUsd?: number; allocation?: { BTC?: number; ETH?: number; SUI?: number } };
+        const navUsd = stats.totalNAVUsd || 0;
+        if (navUsd > 0) {
+          const alloc = stats.allocation ?? { BTC: 0, ETH: 0, SUI: 0 };
+          const spotUsd: Record<string, number> = {
+            wBTC: navUsd * ((alloc.BTC || 0) / 100),
+            wETH: navUsd * ((alloc.ETH || 0) / 100),
+            SUI:  navUsd * ((alloc.SUI || 0) / 100),
+          };
+          const spotSum = Object.values(spotUsd).reduce((s, v) => s + v, 0);
+          const peakNav = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+          const snapshot = {
+            idleUsdc: Math.max(0, navUsd - spotSum),
+            spot: spotUsd,
+            hedges: [] as Array<{ asset: string; side: 'LONG' | 'SHORT'; notionalUsd: number }>,
+            getNav: () => navUsd,
+          };
+          const actions = await runPortfolioDriverTick({
+            sandbox: snapshot,
+            signal: {
+              direction: current.direction,
+              confidence: current.confidence,
+              observedAt: now,
+            },
+            nowMs: now,
+            peakNavUsd: peakNav,
+            signalFlipped: true,
+          });
+          spotDriverActions = actions.length;
+          if (spotDriverActions > 0) {
+            const execute = (process.env.PORTFOLIO_DRIVER_EXECUTE ?? '') === '1';
+            logger.warn('[AgentSignalTick] spot-driver actions on flip', {
+              execute, count: spotDriverActions, actions,
+            });
+          }
+        }
+      }
+    } catch (spotErr) {
+      logger.warn('[AgentSignalTick] spot-driver on flip failed (non-critical)', {
+        error: spotErr instanceof Error ? spotErr.message : String(spotErr),
+      });
+    }
+
     // Discord ping — operators want to see the signal-driven refresh
     try {
       const { notifyDiscord } = await import('@/lib/utils/discord-notify');

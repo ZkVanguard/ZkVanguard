@@ -1438,6 +1438,66 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
           ).catch(() => {});
           aiResult.allocations = lockDecision.cappedAllocations as typeof aiResult.allocations;
         }
+
+        // ── PortfolioDriver — corrective unwind (Gaps 1, 2, 5) ─────
+        // Profit-lock caps FUTURE allocations. PortfolioDriver actively
+        // reshapes existing holdings toward the cap. Env-gated so the
+        // first few days after deploy are log-only — operator watches
+        // Discord for what it WOULD do before flipping execute on.
+        try {
+          const { runPortfolioDriverTick } = await import('@/lib/services/sui/PortfolioDriver');
+          const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
+          const currentSignal = await Polymarket5MinService.getLatest5MinSignal().catch(() => null);
+          if (currentSignal) {
+            // Build a sandbox-like snapshot from real holdings for the pure driver.
+            // Derive per-asset spot USD from the live allocation × NAV. poolStats
+            // is already available in this scope from the earlier getPoolStats call.
+            const liveAlloc = poolStats.allocation ?? { BTC: 0, ETH: 0, SUI: 0 };
+            const spotUsd: Record<string, number> = {
+              wBTC: navUsd * ((liveAlloc.BTC || 0) / 100),
+              wETH: navUsd * ((liveAlloc.ETH || 0) / 100),
+              SUI:  navUsd * ((liveAlloc.SUI || 0) / 100),
+            };
+            const spotSum = Object.values(spotUsd).reduce((s, v) => s + v, 0);
+            const snapshot = {
+              idleUsdc: Math.max(0, navUsd - spotSum),
+              spot: spotUsd,
+              hedges: [] as Array<{ asset: string; side: 'LONG' | 'SHORT'; notionalUsd: number }>,
+              getNav: () => navUsd,
+            };
+            const actions = await runPortfolioDriverTick({
+              sandbox: snapshot,
+              signal: {
+                direction: currentSignal.direction,
+                confidence: currentSignal.confidence,
+                observedAt: Date.now(),
+              },
+              nowMs: Date.now(),
+              peakNavUsd: peakNavForLock,
+              aiAllocation: aiResult.allocations as Record<string, number>,
+              spotPrices: pricesUSD,
+            });
+            if (actions.length > 0) {
+              const execute = (process.env.PORTFOLIO_DRIVER_EXECUTE ?? '') === '1';
+              logger.warn('[SUI Cron] PortfolioDriver suggests corrective actions', {
+                execute, count: actions.length, actions,
+              });
+              await notifyDiscord(
+                `🎯 PortfolioDriver: ${actions.length} corrective action(s) [${execute ? 'EXECUTING' : 'log-only'}]. ${actions.map(a => `${a.type}:${a.asset} $${a.amountUsd}`).join(', ')}`,
+                execute ? 'TRADE' : 'INFO',
+                { actions, execute },
+              ).catch(() => {});
+              // Execution wiring: TODO — hook to BluefinAggregatorService for
+              // SELL_SPOT_TO_USDC/BUY_SPOT_FROM_USDC and BluefinService for
+              // OPEN_HEDGE/CLOSE_HEDGE. Actions above are the source of truth;
+              // this cron already has adminUsdc + swap paths later in the flow.
+            }
+          }
+        } catch (driverErr) {
+          logger.warn('[SUI Cron] PortfolioDriver threw (non-critical)', {
+            error: driverErr instanceof Error ? driverErr.message : String(driverErr),
+          });
+        }
       } catch (lockErr) {
         logger.warn('[SUI Cron] Profit-lock guard threw (non-critical)', {
           error: lockErr instanceof Error ? lockErr.message : String(lockErr),
