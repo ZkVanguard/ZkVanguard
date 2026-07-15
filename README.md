@@ -18,6 +18,8 @@ Prediction markets print billions per month in alpha-bearing signal. Riding it c
 
 ---
 
+**Contents** — [What your USDC does](#what-your-usdc-does) · [Verify in 60s](#verify-in-60-seconds) · [Safety](#safety--the-8-gate-autonomy-defense-system) · [Status](#status) · [Live metrics](#live-metrics) · [Roadmap](#roadmap) · [Built by](#built-by) · [How it works](#how-it-works) · [Revenue](#revenue-model) · [FAQ](#faq) · [Quickstart](#quickstart-contributors) · [Docs](#documentation--disclosure)
+
 ## What your USDC does
 
 1. **AI allocates it across BTC / ETH / SUI.** Seven agents fuse Polymarket 5-min binaries, Delphi/Polymarket category markets, Manifold, BlueFin funding rates, and Crypto.com momentum into one directional signal per asset. Rebalances every 30 minutes only when conviction ≥ 65%.
@@ -68,6 +70,22 @@ Verify: `bun jest test/integration/pool-drawdown-defense.test.ts` (10/10 green).
 Live on Sui mainnet (v0.2.0, deployed 2026-06-12). **Pre-external-audit**, TVL **deliberately capped at $10K by contract**. Cap lifts after external audit closes — the constraint is intentional operational proof, not a TVL claim.
 
 15 internal audit phases completed pre-mainnet. Engine has been running autonomously since June 2026 with continuous on-chain NAV snapshots; every production incident to date has been caught, remediated, and documented in the deploy record and [`CLAUDE.md`](./CLAUDE.md).
+
+## Live metrics
+
+Snapshot pulled from the Aiven Postgres replica against live Sui mainnet state. Rerun `bun run scripts/analyze-pool-pnl.ts` any time.
+
+| Metric | Value |
+|---|---|
+| Days running since first NAV snapshot | **46** (from 2026-05-29) |
+| NAV snapshots recorded | **2,234** (≈48/day, matches 30-min cron cadence) |
+| Hedges executed lifetime | **214** across BTC / ETH / SUI / SOL PERPs |
+| Active crons with heartbeats | **13** — see `/api/health/production` |
+| Active members | **3** (limited by $10K TVL cap) |
+| Lifetime USDC deposits | **$30.80** |
+| External auditors engaged | Pending (SUI Foundation grant Tranche 1 deliverable) |
+
+Small absolute numbers by design — the $10K cap is enforced by the contract. Operating metrics prove the engine works; audit + cap-lift unlock scale.
 
 ## Roadmap
 
@@ -133,6 +151,26 @@ bun run typecheck && bun run lint && bun jest
 ```
 
 Full architecture, env conventions, BlueFin invariants, and reconciliation topology: **[CLAUDE.md](./CLAUDE.md)** (authoritative repo guide).
+
+## FAQ
+
+**How do I deposit and withdraw?**
+Connect a Sui wallet at [zkvanguard.xyz](https://www.zkvanguard.xyz), approve USDC, deposit. Withdrawals are always open — the Move contract computes your USDC share of NAV (idle pool + admin wallet + BlueFin margin) and pays out atomically. Strict NAV-oracle mode adds a safety: if the cron oracle attestation is > 2h stale, both deposits and withdrawals revert to prevent bad pricing.
+
+**What if the AI is wrong?**
+Every trade > $100K needs 2-of-3 agent consensus. The [8-gate autonomy defense](#safety--the-8-gate-autonomy-defense-system) catches most failure modes automatically. Drawdown > 10% from peak NAV auto-halts new hedges. AI regret weighting shrinks position sizes after losing streaks. Beyond that, you can withdraw at any time.
+
+**What if the operator disappears?**
+Withdrawals are non-custodial — the Move contract holds pool USDC and computes payouts against the on-chain state. Fees route to a MSafe multisig, not a hot wallet. Off-chain BlueFin margin is the one operational dependency; the `sui-hedge-reconcile` cron sweeps it back to the pool address every hour, and `close_hedge` funds-verify (via AgentCap) prevents drain scenarios.
+
+**Why is TVL capped at $10K?**
+Deliberate. The cap is enforced by the Move contract itself (`admin_set_tvl_cap`) and lifts only after external audit closes. Operating publicly at a bounded size is proof — same code, same crons, same defense stack, capital-constrained until reviewers sign off.
+
+**How is this different from Ethena / GMX / Aave GHO?**
+Ethena is delta-neutral USDe backed by ETH shorts. GMX is a perp DEX. Aave GHO is over-collateralized. ZkVanguard is none of these — it's an AI-directional vault that uses **prediction markets as its alpha source** and perps only to hedge, not to yield-farm. Closest analog is a Yearn v3 strategy vault, but with signal-driven allocation instead of yield harvesting.
+
+**What if BlueFin has an outage?**
+`bluefin-health` cron runs a 3-strike de-risk (close-all reduceOnly on venue degradation). `bluefin-db-reconcile` (every 15 min) and `sui-hedge-reconcile` (hourly) sweep any orphaned positions when the venue recovers. The vault continues to accept deposits/withdrawals against on-chain NAV throughout.
 
 ## Documentation & disclosure
 
