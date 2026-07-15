@@ -4,7 +4,7 @@
 
 **An AI-managed USDC vault on Sui — deposit once, autonomous agents allocate & hedge for you.**
 
-Fuses Polymarket prediction signals with BlueFin perpetual hedging. Every capital move is ZK-attested on-chain, verified against 3 independent reconcilers, and defended by 8 layered autonomy gates. Live on Sui mainnet.
+Fuses Polymarket prediction signals with BlueFin perpetual hedging. All positions verified against 3 independent reconcilers, defended by 8 layered autonomy gates, and ZK-STARK-attested for trades > $1M once the audit-gated cap lifts. Live on Sui mainnet.
 
 [![Sui Mainnet](https://img.shields.io/badge/Sui-Mainnet%20Live-4ca3ff?style=flat-square)](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 [![Status](https://img.shields.io/badge/Status-Pre--audit%20%C2%B7%20TVL%20capped%20%2410K-orange?style=flat-square)](#status)
@@ -20,9 +20,9 @@ Fuses Polymarket prediction signals with BlueFin perpetual hedging. Every capita
 
 ## What your USDC does
 
-1. **AI allocates it across BTC / ETH / SUI / CRO.** Seven agents fuse Polymarket 5-min binaries, Delphi/Polymarket category markets, Manifold, BlueFin funding rates, and Crypto.com momentum into one directional signal per asset. Rebalances every 30 minutes only when conviction ≥ 65%.
-2. **Hedges the downside on BlueFin V2 perps.** Spot leg on a 7-DEX Sui aggregator, directional perp overlay on BlueFin. When AI turns bearish, the perp shorts. When perps are physically unopenable at small NAV, spot cap → 0 for that asset.
-3. **Attests every meaningful decision on-chain.** Post-quantum ZK-STARK proofs (Python, NIST P-521, no trusted setup) on trades > $1M. On-chain hedge state reconciled against BlueFin and Postgres every 15 min.
+1. **AI allocates it across BTC / ETH / SUI.** Seven agents fuse Polymarket 5-min binaries, Delphi/Polymarket category markets, Manifold, BlueFin funding rates, and Crypto.com momentum into one directional signal per asset. Rebalances every 30 minutes only when conviction ≥ 65%.
+2. **Hedges the downside on BlueFin V2 perps.** Spot leg routed via BlueFin 7k aggregator (Cetus · DeepBook · Turbos · FlowX · Aftermath · BlueFin), directional perp overlay on BlueFin. When AI turns bearish, the perp shorts. When perps are physically unopenable at small NAV, spot cap → 0 for that asset.
+3. **Attests decisions on-chain with post-quantum ZK-STARKs.** Python STARK prover (NIST P-521, no trusted setup) is live and unit-tested; configured to attest any trade > $1M. Activation waits on the audit-gated cap lift. On-chain hedge state is reconciled against BlueFin and Postgres every 15 min.
 
 **Fees:** 50 bps annual mgmt + 10% performance. Both charged by the Move contract itself and routed to an MSafe multisig — public, auditable, no operator custody.
 
@@ -67,21 +67,20 @@ Verify: `bun jest test/integration/pool-drawdown-defense.test.ts` (10/10 green).
 
 Live on Sui mainnet (v0.2.0, deployed 2026-06-12). **Pre-external-audit**, TVL **deliberately capped at $10K by contract**. Cap lifts after external audit closes — the constraint is intentional operational proof, not a TVL claim.
 
-15 internal audit phases completed pre-mainnet. Engine has been running unattended since June 2026 with continuous on-chain NAV snapshots and zero unhandled production incidents.
+15 internal audit phases completed pre-mainnet. Engine has been running autonomously since June 2026 with continuous on-chain NAV snapshots; every production incident to date has been caught, remediated, and documented in the deploy record and [`CLAUDE.md`](./CLAUDE.md).
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    PM["Polymarket + Manifold + Delphi<br/>(10 signal sources)"] --> SF
+    PM["Polymarket + Manifold + Delphi<br/>(prediction markets)"] --> SF
     BF["BlueFin funding rates"] --> SF
     CDC["Crypto.com 24h momentum"] --> SF
     SF["Signal fusion +<br/>synthetic-STRONG layer"] --> AG
-    AG["7 AI agents<br/>2-of-3 consensus<br/>SafeExecutionGuard"] --> VA
+    AG["7 AI agents<br/>2-of-3 consensus<br/>SafeExecutionGuard"] --> PD
     AG --> ZK["ZK-STARK attestation<br/>(trades > $1M)"]
-    VA["USDC vault<br/>BTC · ETH · SUI · CRO"] --> PERP["BlueFin V2 perps<br/>+ 7-DEX aggregator"]
-    PERP --> PD["PortfolioDriver<br/>corrective unwinds"]
-    ZK --> PD
+    PD["PortfolioDriver<br/>+ 8 autonomy gates"] --> VA["USDC vault<br/>BTC · ETH · SUI"]
+    PD --> PERP["BlueFin V2 perps<br/>+ 7k aggregator (6 DEXes)"]
 ```
 
 ## Revenue model
@@ -98,7 +97,7 @@ flowchart LR
 
 ## Quickstart (contributors)
 
-Node 20+, Bun, Python 3.11+, PostgreSQL.
+Node 18+, Bun, Python 3.11+, PostgreSQL.
 
 ```bash
 git clone https://github.com/ZkVanguard/ZkVanguard.git && cd ZkVanguard
