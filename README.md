@@ -4,7 +4,7 @@
 
 **An AI-managed USDC vault on Sui — deposit once, autonomous agents allocate & hedge for you.**
 
-Fuses Polymarket prediction signals with BlueFin perpetual hedging. All positions verified against 3 independent reconcilers, defended by 8 layered autonomy gates, and ZK-STARK-attested for trades > $1M once the audit-gated cap lifts. Live on Sui mainnet.
+Prediction markets print billions per month in alpha-bearing signal. Riding it consistently needs bots, capital, and 24/7 attention — table stakes for hedge funds, impossible for retail. ZkVanguard collapses that workflow into a one-click USDC vault: 7 AI agents, BlueFin V2 perp hedging, 3-way reconciliation, 8-gate autonomy defense, ZK-STARK-attested at scale. Live on Sui mainnet.
 
 [![Sui Mainnet](https://img.shields.io/badge/Sui-Mainnet%20Live-4ca3ff?style=flat-square)](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 [![Status](https://img.shields.io/badge/Status-Pre--audit%20%C2%B7%20TVL%20capped%20%2410K-orange?style=flat-square)](#status)
@@ -68,6 +68,24 @@ Verify: `bun jest test/integration/pool-drawdown-defense.test.ts` (10/10 green).
 Live on Sui mainnet (v0.2.0, deployed 2026-06-12). **Pre-external-audit**, TVL **deliberately capped at $10K by contract**. Cap lifts after external audit closes — the constraint is intentional operational proof, not a TVL claim.
 
 15 internal audit phases completed pre-mainnet. Engine has been running autonomously since June 2026 with continuous on-chain NAV snapshots; every production incident to date has been caught, remediated, and documented in the deploy record and [`CLAUDE.md`](./CLAUDE.md).
+
+## Roadmap
+
+| Quarter | Milestone |
+|---|---|
+| **Q3 2026** | External audit close · TVL cap ratchet $10K → $100K · Founding-100 points program live |
+| **Q4 2026** | TVL cap ratchet to $1M · Institutional tier live (custody attestations via [`rwa_custody_attestor.move`](./contracts/sui/sources/rwa_custody_attestor.move)) · first EVM chain expansion |
+| **Q1 2027** | TVL cap ratchet to $10M · Enterprise white-label API · TGE (utility token, governance + fee-share) |
+
+Cap ratchets are contract-gated via `admin_set_tvl_cap` and gated on each milestone's success criteria (audit pass, incident-free operating window, TVL sustained). Not aspirational — each unlock is a specific contract call after a specific evidence bundle.
+
+**Multi-chain posture.** SUI is the lead chain by design and gets new features first. Cronos, Oasis, Hedera, and Sepolia contracts are compiled, tested, and configured in `hardhat.config.cjs`; deployment triggers on institutional demand from that chain, not a race.
+
+## Built by
+
+**Ashish Regmi** ([@HarveReg](https://x.com/HarveReg)) — CS, Cryptography + AI majors. Formerly senior engineer at multiple Fortune 500 companies. Multi-chain hackathon winner across EVM, Aptos, and ICP. Upstream contributor to the [Tether WDK EVM wallet](./patches/PR_wdk-wallet-evm-memzero-fix.md) (accepted PR). Solo builder — open to core contributors and institutional partners.
+
+Contact: `ashishregmi2017@gmail.com` · Telegram [@anstemple](https://t.me/anstemple)
 
 ## How it works
 
