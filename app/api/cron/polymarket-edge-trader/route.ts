@@ -211,7 +211,10 @@ interface EdgeResult {
     | 'signal-flip-exit'
     | 'slippage-exit'
     | 'daily-cap'
-    | 'skip-asset-too-small-nav';
+    | 'skip-asset-too-small-nav'
+    | 'regret-halt'
+    | 'funding-headwind'
+    | 'exposure-cap';
   trade?: {
     symbol: string;
     asset: SupportedAsset;
@@ -745,15 +748,16 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     const noEdgeStreak = priorNoEdgeStreak + 1;
     await setCronState(KEY_NOEDGE_STREAK, noEdgeStreak).catch(() => {});
 
-    // Regret-weighted conviction gate (2026-07-15): dynamically raise
-    // the confidence bar when losing, keep it when winning. Adjusts the
-    // baseline MIN_CONFIDENCE before the streak-based relaxation kicks in.
-    // Env gate REGRET_CONVICTION_GATE_DISABLE=1 to keep static behavior.
+    // Regret-weighted conviction gate + full halt (2026-07-15).
+    // Two independent uses of regret data:
+    //   1. Multiplier (0.25-1.0) → adjusts MIN_CONFIDENCE + stake sizing
+    //   2. Raw score (-1..+1) → halts entire trader when < -0.3 (bad streak)
+    // Env gate REGRET_TRACKER_DISABLE=1 to bypass everything.
     let regretMultiplierEarly = 1;
+    let regretScoreForHalt = 0;
     try {
-      if ((process.env.REGRET_TRACKER_DISABLE ?? '') !== '1'
-        && (process.env.REGRET_CONVICTION_GATE_DISABLE ?? '') !== '1') {
-        const { computeSizeMultiplier } = await import('@/lib/services/ai/regret-tracker');
+      if ((process.env.REGRET_TRACKER_DISABLE ?? '') !== '1') {
+        const { computeSizeMultiplier, computeRegretScore } = await import('@/lib/services/ai/regret-tracker');
         const { query } = await import('@/lib/db/postgres');
         const rows = await query<{ open_confidence: number; realized_pnl: number; created_at: Date }>(
           `SELECT COALESCE(open_confidence, 60) as open_confidence,
@@ -764,16 +768,39 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
            ORDER BY created_at DESC LIMIT 200`
         ).catch(() => []);
         if (rows.length > 0) {
-          regretMultiplierEarly = await computeSizeMultiplier({
-            recentDecisions: rows.map((r) => ({
-              openConfidence: Number(r.open_confidence),
-              realizedPnl: Number(r.realized_pnl),
-              openedAt: new Date(r.created_at),
-            })),
-          });
+          const decisions = rows.map((r) => ({
+            openConfidence: Number(r.open_confidence),
+            realizedPnl: Number(r.realized_pnl),
+            openedAt: new Date(r.created_at),
+          }));
+          regretMultiplierEarly = (process.env.REGRET_CONVICTION_GATE_DISABLE ?? '') === '1'
+            ? 1
+            : await computeSizeMultiplier({ recentDecisions: decisions });
+          regretScoreForHalt = computeRegretScore(decisions);
         }
       }
     } catch { /* best-effort */ }
+
+    // Regret-based full halt: distinct from conviction-adjustment above.
+    // Halts trader entirely for the tick when 30-day regret is deeply
+    // negative. Env: TRADER_REGRET_HALT_DISABLE=1 to keep trading
+    // through losing streaks.
+    if ((process.env.TRADER_REGRET_HALT_DISABLE ?? '') !== '1') {
+      const { regretBasedHalt } = await import('@/lib/services/trading/trade-quality-gates');
+      const haltDecision = regretBasedHalt({ regretScore: regretScoreForHalt });
+      if (haltDecision.halt) {
+        logger.warn('[EdgeTrader] regret-based halt', haltDecision);
+        await notifyDiscord(
+          `🛑 Trader HALTED (regret ${regretScoreForHalt.toFixed(3)} < ${haltDecision.threshold})`,
+          'KILL', { haltDecision },
+        ).catch(() => {});
+        await recordSkip('regret-halt', haltDecision.reason);
+        return NextResponse.json({
+          success: true, ranAt, attempted: true, action: 'regret-halt',
+          reason: haltDecision.reason,
+        });
+      }
+    }
 
     const convictionAdjustMax = Number(process.env.REGRET_CONVICTION_MAX_ADJ_PCT) || 15;
     const regretAdjustedMinConf = Math.min(80,
@@ -1249,6 +1276,67 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         stats: safeStats,
         daily,
       });
+    }
+
+    // Funding-rate edge (2026-07-15): fetch funding at trade-open time
+    // and skip if we'd be paying meaningful funding (headwind). BlueFin's
+    // built-in guard rejects only at threshold (0.0001/8h ≈ 11% APR);
+    // this catches the sub-threshold-but-still-negative range where the
+    // AI signal would need to be very strong to overcome the bleed.
+    if ((process.env.TRADER_FUNDING_EDGE_DISABLE ?? '') !== '1') {
+      try {
+        const md = await bf.getMarketData(symbol).catch(() => null);
+        const fundingRate = md?.fundingRate ?? 0;
+        const { fundingEdge } = await import('@/lib/services/trading/trade-quality-gates');
+        const edge = fundingEdge(side as 'LONG' | 'SHORT', fundingRate);
+        if (edge.advantage === 'PAY' && Math.abs(edge.bonusPct) >= 5) {
+          logger.warn('[EdgeTrader] funding-edge headwind — skipping', edge);
+          await recordSkip('funding-headwind', edge.reason);
+          return NextResponse.json({
+            success: true, ranAt, attempted: true, action: 'funding-headwind',
+            reason: edge.reason,
+          });
+        }
+        if (edge.advantage === 'RECEIVE') {
+          logger.info('[EdgeTrader] funding-edge tailwind — proceeding with bonus', edge);
+        }
+      } catch (fundErr) {
+        logger.warn('[EdgeTrader] funding-edge check failed (non-critical)', {
+          error: fundErr instanceof Error ? fundErr.message : String(fundErr),
+        });
+      }
+    }
+
+    // Exposure cap (2026-07-15): reject when total notional would exceed
+    // TRADE_MAX_TOTAL_NOTIONAL_PCT of the trader's effective capital
+    // (free + sum(position margins)). Prevents concentration bleed like
+    // the 2026-07-15 case where a single ETH SHORT was 48% of NAV.
+    if ((process.env.TRADER_EXPOSURE_CAP_DISABLE ?? '') !== '1') {
+      try {
+        const currentTotalNotional = positionsPre.reduce(
+          (s, p) => s + Math.abs(Number(p.size ?? 0) * Number((p as { markPrice?: number }).markPrice ?? refPrice ?? 0)),
+          0,
+        );
+        const traderNav = free + positionsPre.reduce((s, p) => s + Number(p.margin ?? 0), 0);
+        const { exposureCap } = await import('@/lib/services/trading/trade-quality-gates');
+        const capDecision = exposureCap({
+          navUsd: traderNav,
+          currentTotalNotionalUsd: currentTotalNotional,
+          proposedTradeNotionalUsd: notionalUsd,
+        });
+        if (!capDecision.ok) {
+          logger.warn('[EdgeTrader] exposure cap rejected trade', capDecision);
+          await recordSkip('exposure-cap', capDecision.reason);
+          return NextResponse.json({
+            success: true, ranAt, attempted: true, action: 'exposure-cap',
+            reason: capDecision.reason,
+          });
+        }
+      } catch (capErr) {
+        logger.warn('[EdgeTrader] exposure cap check failed (non-critical)', {
+          error: capErr instanceof Error ? capErr.message : String(capErr),
+        });
+      }
     }
 
     // JWT expiration is handled at the BluefinService apiRequest layer
