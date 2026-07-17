@@ -103,34 +103,66 @@ async function handle(request: NextRequest): Promise<NextResponse> {
 
       // Execution paths — each behind its own env gate. Kept small so
       // rollout can enable one at a time.
+      //
+      // Silent-catch removed 2026-07-17: previously every setCronState
+      // was `.catch(() => {})` which swallowed the exact failure that
+      // means "halt did not actually apply". Same pattern as the
+      // stale-hedge silent-fail (dust-lock hidden for 34 days). Now
+      // logs + alerts on failure so operator sees when a halt didn't
+      // persist.
       try {
         if (r.type === 'HALT_TRADER' && (process.env.ALERT_RESPONSE_EXECUTE_HALT ?? '') === '1') {
-          await setCronState('polymarket-edge-trader:halt', now).catch(() => {});
+          try {
+            await setCronState('polymarket-edge-trader:halt', now);
+          } catch (haltErr) {
+            logger.error('[AlertResponseLoop] HALT_TRADER cron_state write FAILED', {
+              error: haltErr instanceof Error ? haltErr.message : String(haltErr),
+            });
+            await notifyDiscord(
+              `❌ HALT_TRADER halt-write FAILED — trader may keep trading during breach`,
+              'ERROR', { error: haltErr instanceof Error ? haltErr.message : String(haltErr) },
+            ).catch(() => {});
+          }
         }
         if (r.type === 'HALT_AUTOHEDGE' && (process.env.ALERT_RESPONSE_EXECUTE_HALT ?? '') === '1') {
-          await setCronState('sui-community-pool:autohedge:halt', {
-            untilMs: now + 24 * 60 * 60 * 1000,
-            reason: 'alert-response-loop halt',
-          }).catch(() => {});
+          try {
+            await setCronState('sui-community-pool:autohedge:halt', {
+              untilMs: now + 24 * 60 * 60 * 1000,
+              reason: 'alert-response-loop halt',
+            });
+          } catch (haltErr) {
+            logger.error('[AlertResponseLoop] HALT_AUTOHEDGE cron_state write FAILED', {
+              error: haltErr instanceof Error ? haltErr.message : String(haltErr),
+            });
+            await notifyDiscord(
+              `❌ HALT_AUTOHEDGE halt-write FAILED — auto-hedge may keep firing`,
+              'ERROR', { error: haltErr instanceof Error ? haltErr.message : String(haltErr) },
+            ).catch(() => {});
+          }
         }
         // SHRINK_SPOT / UNWIND_ALL_SPOT — write a target-risk-cap override
         // to cron_state; sui-community-pool reads this AFTER profit-lock and
         // uses the tighter cap (min of profit-lock and this). PortfolioDriver
         // then unwinds existing spot to hit it (requires PORTFOLIO_DRIVER_EXECUTE=1
         // in the sui-community-pool cron). TTL 6h so a stale override auto-clears.
-        if (r.type === 'SHRINK_SPOT') {
-          await setCronState('alert-response:spot-target-risk-cap', {
-            capPct: 20,
-            reason: r.reason,
-            expiresAtMs: now + 6 * 60 * 60 * 1000,
-          }).catch(() => {});
-        }
-        if (r.type === 'UNWIND_ALL_SPOT') {
-          await setCronState('alert-response:spot-target-risk-cap', {
-            capPct: 0,
-            reason: r.reason,
-            expiresAtMs: now + 6 * 60 * 60 * 1000,
-          }).catch(() => {});
+        if (r.type === 'SHRINK_SPOT' || r.type === 'UNWIND_ALL_SPOT') {
+          const capPct = r.type === 'SHRINK_SPOT' ? 20 : 0;
+          try {
+            await setCronState('alert-response:spot-target-risk-cap', {
+              capPct,
+              reason: r.reason,
+              expiresAtMs: now + 6 * 60 * 60 * 1000,
+            });
+          } catch (capErr) {
+            logger.error('[AlertResponseLoop] risk-cap override write FAILED', {
+              type: r.type, capPct,
+              error: capErr instanceof Error ? capErr.message : String(capErr),
+            });
+            await notifyDiscord(
+              `❌ ${r.type} override write FAILED — spot unwind will not fire`,
+              'ERROR', { error: capErr instanceof Error ? capErr.message : String(capErr) },
+            ).catch(() => {});
+          }
         }
       } catch (execErr) {
         logger.warn('[AlertResponseLoop] execute failed for response', {
