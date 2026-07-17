@@ -88,9 +88,14 @@ async function handle(request: NextRequest): Promise<NextResponse> {
     });
 
     for (const r of responses) {
+      // Emit at WARN, not KILL — the auto-response's own emission was
+      // getting appended to alert-log and self-triggering the 3-KILL/hr
+      // rule (observed 2026-07-17: 8 KILL alerts in 60min were mostly
+      // its own emissions). KILL stays reserved for genuine trigger
+      // sources (real trade halts, phantom rate breach, etc).
       await notifyDiscord(
         `🤖 Auto-response: ${r.type} — ${r.reason} [${execute ? 'EXECUTING' : 'log-only'}]`,
-        execute ? 'KILL' : 'WARN',
+        'WARN',
         r as unknown as Record<string, unknown>,
       ).catch(() => {});
 

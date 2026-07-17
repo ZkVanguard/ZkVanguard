@@ -190,10 +190,42 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
           ).catch(() => {});
           if (autoClose) {
             for (const s of stale) {
+              const symbol = `${s.asset}-PERP`;
               try {
-                const symbol = `${s.asset}-PERP`;
-                await bf.closeHedge({ symbol, size: 0, leverage: 3 } as never).catch(() => {});
-              } catch { /* per-hedge best-effort */ }
+                // Omit size → full-position close (per BluefinService signature).
+                // Previous call passed { size: 0, leverage: 3 } which was
+                // silently a no-op: size=0 requested closing zero units,
+                // leverage isn't a valid parameter, and .catch(() => {})
+                // swallowed the failure. Observed 2026-07-17: #190 ETH SHORT
+                // flagged for 3+ days with no actual close.
+                const result = await bf.closeHedge({ symbol });
+                if (!result.success) {
+                  logger.warn('[SuiHedgeReconcile] stale-close FAILED', {
+                    hedgeId: s.id, symbol, error: result.error,
+                  });
+                  await notifyDiscord(
+                    `⚠️ Stale-close FAILED: #${s.id} ${symbol} — ${result.error}`,
+                    'WARN', { hedge: s, result },
+                  ).catch(() => {});
+                } else {
+                  logger.info('[SuiHedgeReconcile] stale-close succeeded', {
+                    hedgeId: s.id, symbol, filledSize: result.filledSize,
+                  });
+                  await notifyDiscord(
+                    `✅ Stale-hedge closed: #${s.id} ${symbol}`,
+                    'TRADE', { hedge: s, result },
+                  ).catch(() => {});
+                }
+              } catch (closeErr) {
+                logger.error('[SuiHedgeReconcile] stale-close threw', {
+                  hedgeId: s.id, symbol,
+                  error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+                });
+                await notifyDiscord(
+                  `❌ Stale-close threw: #${s.id} ${symbol}`,
+                  'WARN', { hedge: s, error: closeErr instanceof Error ? closeErr.message : String(closeErr) },
+                ).catch(() => {});
+              }
             }
           }
         }
