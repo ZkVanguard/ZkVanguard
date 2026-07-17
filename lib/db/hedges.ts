@@ -466,16 +466,52 @@ export async function updateHedgeStatus(
   // Atomic transition guard: only allow active → terminal. This prevents
   // races between the hedge-monitor and the cron stale-closer from each
   // overwriting the other's terminal status.
-  // On terminal transition, zero current_pnl so stale watch-loop snapshots
-  // don't pollute closed-hedge analytics. realized_pnl is left alone (this
-  // path has no PnL info — caller should use closeHedge/closeOnChainHedge
-  // when realized PnL is known).
+  //
+  // 2026-07-15 fix: previously this path zeroed current_pnl and left
+  // realized_pnl untouched, which meant reconciler-driven closes
+  // (majority of closes) always had realized_pnl=0 in the DB. Now
+  // derives PnL from entry_price + current_price + funding_paid when
+  // going terminal. This unlocks the regret tracker + analytics.
+  //
+  // Formula:
+  //   LONG:  size × (current_price - entry_price) - funding_paid
+  //   SHORT: size × (entry_price - current_price) - funding_paid
+  // If either price is null, keep realized_pnl as-is (best-effort).
   const sql = `
     UPDATE hedges
     SET status = $1::varchar,
         updated_at = CURRENT_TIMESTAMP,
         closed_at = CASE WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled') THEN CURRENT_TIMESTAMP ELSE closed_at END,
-        current_pnl = CASE WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled') THEN 0 ELSE current_pnl END
+        realized_pnl = CASE
+          WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled')
+            AND COALESCE(realized_pnl, 0) = 0
+            AND entry_price IS NOT NULL
+            AND current_price IS NOT NULL
+            AND size IS NOT NULL
+          THEN (
+            CASE WHEN UPPER(side) = 'LONG'
+              THEN size * (current_price - entry_price)
+              ELSE size * (entry_price - current_price)
+            END
+          ) - COALESCE(funding_paid, 0)
+          ELSE realized_pnl
+        END,
+        current_pnl = CASE
+          WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled')
+            AND COALESCE(realized_pnl, 0) = 0
+            AND entry_price IS NOT NULL
+            AND current_price IS NOT NULL
+            AND size IS NOT NULL
+          THEN (
+            CASE WHEN UPPER(side) = 'LONG'
+              THEN size * (current_price - entry_price)
+              ELSE size * (entry_price - current_price)
+            END
+          ) - COALESCE(funding_paid, 0)
+          WHEN $1::varchar IN ('closed', 'liquidated', 'cancelled')
+          THEN 0
+          ELSE current_pnl
+        END
     WHERE (order_id = $2 OR hedge_id_onchain = $2)
       AND (
         $1::varchar = 'active'
