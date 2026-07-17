@@ -1,0 +1,30 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Fails the push if the security scan detects the obfuscated-malware
+# signatures documented in DEPLOY_RUNBOOK.md § "Threat model".
+#
+# Two prior incidents (2026-05-08 next.config.js, 2026-07-15 postcss +
+# security-scan + verify-supply-chain) both matched the same class of
+# attack: _$_[hex]{4} variable names + String.fromCharCode(127) + long
+# obfuscated payloads appended after legit code.
+#
+# Vercel's build already runs this scan as a prebuild gate. Adding it
+# to pre-push means a compromised author machine can't push infected
+# code to origin in the first place — the corruption is caught locally.
+#
+# To bypass in a real emergency: SUPPLY_CHAIN_BYPASS=1 git push
+if [ "$SUPPLY_CHAIN_BYPASS" = "1" ]; then
+  echo "⚠️  pre-push: security scan BYPASSED (SUPPLY_CHAIN_BYPASS=1)"
+  exit 0
+fi
+
+echo "🔒 pre-push: running security scan..."
+if ! node scripts/security-scan.cjs; then
+  echo ""
+  echo "❌ pre-push: security scan FAILED — refusing to push."
+  echo "   Investigate the flagged files. If they're genuinely clean,"
+  echo "   run: SUPPLY_CHAIN_BYPASS=1 git push"
+  exit 1
+fi
+echo "✅ pre-push: security scan clean, push proceeding."
