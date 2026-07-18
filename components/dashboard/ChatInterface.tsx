@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Shield, Zap, Activity, TrendingDown, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { assessPortfolioRisk, getHedgingRecommendations, executeSettlementBatch, generatePortfolioReport } from '../../lib/api/agents';
+import { executeSettlementBatch, generatePortfolioReport } from '../../lib/api/agents';
+import { fetchRiskAnalysis, fetchHedgeRecommendations } from '../../lib/services/ai-decisions';
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
@@ -329,7 +330,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
         case 'analyze_portfolio': {
           setActiveAgent('Lead Agent → Risk Agent');
           // Real API call
-          const riskData = await assessPortfolioRisk(_address);
+          const riskData = await fetchRiskAnalysis(_address);
           response = {
             content: `📊 **Portfolio Analysis** (ZK-Verified)\n\n` +
               `**Value at Risk (95%):** ${(riskData.var95 * 100).toFixed(1)}%\n` +
@@ -344,7 +345,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
 
         case 'assess_risk': {
           setActiveAgent('Lead Agent → Risk Agent');
-          const risk = await assessPortfolioRisk(_address);
+          const risk = await fetchRiskAnalysis(_address);
           const riskLevel = risk.var95 < 0.1 ? 'LOW' : risk.var95 < 0.2 ? 'MEDIUM' : 'HIGH';
           response = {
             content: `⚠️ **Risk Assessment** (AI-Powered)\n\n` +
@@ -393,7 +394,7 @@ export function ChatInterface({ address: _address }: { address: string }) {
           setActiveAgent('Lead Agent → Risk Agent → Hedging Agent');
           
           // Step 1: Get AI recommendations (no signature needed for analysis)
-          const hedgeRecs = await getHedgingRecommendations(_address, []);
+          const hedgeRecs = await fetchHedgeRecommendations(_address);
           const _amount = params.amount as number || 10000000;
           const targetYield = params.targetYield || 8;
           

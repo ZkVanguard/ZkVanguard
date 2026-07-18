@@ -11,28 +11,9 @@
 
 import { AgentTask as SharedAgentTask } from '../../shared/types/agent';
 import { logger } from '@/lib/utils/logger';
-import { fetchRiskAnalysis, fetchHedgeRecommendations } from '@/lib/services/ai-decisions';
 
 // Re-export for backward compatibility
 export type AgentTask = SharedAgentTask;
-
-/**
- * Get portfolio risk assessment - REAL AI ANALYSIS
- * @deprecated Use AIDecisions.fetchRisk() or useRiskAnalysis() hook instead
- */
-export async function assessPortfolioRisk(address: string) {
-  // Delegate to centralized service with caching
-  return fetchRiskAnalysis(address);
-}
-
-/**
- * Get hedging recommendations
- * @deprecated Use AIDecisions.fetchHedges() or useHedgeRecommendations() hook instead
- */
-export async function getHedgingRecommendations(address: string, _positions: unknown[]) {
-  // Delegate to centralized service with caching
-  return fetchHedgeRecommendations(address);
-}
 
 /**
  * Execute settlement batch
