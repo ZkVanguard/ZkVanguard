@@ -96,16 +96,3 @@ export function buildMobileWalletLink(wallet: MobileWalletOption): string {
   if (!encoded) return '';
   return wallet.buildUniversalLink(encoded);
 }
-
-/**
- * @deprecated Prefer rendering an `<a href={buildMobileWalletLink(w)}>`
- * so iOS honors the universal-link association. Kept for callers that
- * legitimately need a programmatic redirect (e.g. from a router event).
- */
-export function openMobileWallet(wallet: MobileWalletOption): string {
-  const url = buildMobileWalletLink(wallet);
-  if (typeof window !== 'undefined' && url) {
-    window.location.assign(url);
-  }
-  return url;
-}

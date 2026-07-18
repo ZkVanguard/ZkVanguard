@@ -463,17 +463,6 @@ export function getZkProofsRemaining(tier: SubscriptionTier, usedThisMonth: numb
   return Math.max(0, limit - usedThisMonth);
 }
 
-/**
- * @deprecated terminology: "hedge positions" was tier-gated as a single concept;
- * the new model distinguishes `maxPrivateHedgePositions` from pool-shared
- * hedges (no tier gate). Kept for back-compat with FeeDisplay + admin tools.
- */
-export function canCreateHedge(tier: SubscriptionTier, currentPositions: number): boolean {
-  const max = PRICING_TIERS[tier].limits.maxPrivateHedgePositions;
-  if (max === -1) return true;
-  return currentPositions < max;
-}
-
 export function formatPrice(price: number): string {
   if (price === 0) return 'Free';
   if (price === -1) return 'Custom';

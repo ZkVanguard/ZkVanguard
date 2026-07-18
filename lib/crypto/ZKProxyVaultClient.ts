@@ -418,17 +418,3 @@ export function createZKProxyVaultClient(
   return new ZKProxyVaultClient(vaultAddress, verifierAddress, providerOrSigner);
 }
 
-/**
- * Contract addresses by network
- */
-export const ZK_PROXY_VAULT_ADDRESSES: Record<string, { vault: string; verifier: string }> = {
-  // Will be populated after deployment
-  'cronos-testnet': {
-    vault: '0x0000000000000000000000000000000000000000', // TODO: Deploy
-    verifier: '0x0000000000000000000000000000000000000000', // TODO: Deploy
-  },
-  'cronos-mainnet': {
-    vault: '0x0000000000000000000000000000000000000000', // TODO: Deploy
-    verifier: '0x0000000000000000000000000000000000000000', // TODO: Deploy
-  },
-};
