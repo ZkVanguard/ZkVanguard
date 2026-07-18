@@ -47,26 +47,30 @@ const ANALYSIS_KEYWORDS = [
 ];
 
 /**
- * Check if message should be routed through agents
- * Only routes to agents if there's actual portfolio data to analyze
+ * Check if message should be routed through agents.
+ * For analysis keywords, only routes if the caller's wallet actually has
+ * a portfolio — otherwise a plain LLM response is more useful than an
+ * agent report about an empty account.
  */
-async function shouldUseAgents(message: string): Promise<boolean> {
+async function shouldUseAgents(message: string, walletAddress?: string): Promise<boolean> {
   const lowerMessage = message.toLowerCase();
-  
+
   // Check for direct action keywords (always route to agents)
   const hasActionKeyword = AGENT_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
   if (hasActionKeyword) {
     return true;
   }
-  
+
   // Check for analysis keywords
   const hasAnalysisKeyword = ANALYSIS_KEYWORDS.some(keyword => lowerMessage.includes(keyword));
   if (hasAnalysisKeyword) {
-    // Only use agents if we have actual portfolio data
+    // Only use agents if the caller has actual portfolio data. Previously
+    // called getPortfolioData() with no args → server-wallet portfolio →
+    // routing decision made against the wrong wallet.
     try {
-      const portfolioData = await getPortfolioData();
+      const portfolioData = await getPortfolioData(walletAddress);
       const portfolio = (portfolioData?.portfolio ?? {}) as Record<string, unknown>;
-      const hasPortfolio = (portfolio.totalValue as number) > 0 || 
+      const hasPortfolio = (portfolio.totalValue as number) > 0 ||
                           ((portfolio.positions as unknown[])?.length || 0) > 0;
       if (!hasPortfolio) {
         logger.info('Analysis requested but no portfolio data - using LLM for intelligent response');
@@ -78,7 +82,7 @@ async function shouldUseAgents(message: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   return false;
 }
 
@@ -114,9 +118,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if this should go through agent orchestration
-    // LeadAgent orchestrates all specialized agents for complex operations
-    const useAgents = await shouldUseAgents(message);
+    // Check if this should go through agent orchestration.
+    // LeadAgent orchestrates all specialized agents for complex operations.
+    // The signed-auth header (`x-wallet-address`) has already been verified
+    // by requireAuth above, so we can trust it here for the routing check.
+    const callerWallet = request.headers.get('x-wallet-address') ||
+                         (typeof context?.address === 'string' ? context.address : undefined);
+    const useAgents = await shouldUseAgents(message, callerWallet || undefined);
     
     if (useAgents) {
       logger.info('Routing message through LeadAgent orchestration', { message: message.substring(0, 50) });
