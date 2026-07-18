@@ -395,9 +395,9 @@ TEST_COMPLETE.md
 CLAUDE.md
 
 # -------------------------------------------
-# Claude Code local settings
+# Claude Code local settings + session state
 # -------------------------------------------
-.claude/settings.local.json
+.claude/
 
 # -------------------------------------------
 # Graphify knowledge-graph output (per-machine, up to ~100 MB)
