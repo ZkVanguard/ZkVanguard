@@ -5,9 +5,9 @@
 
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { logger } from '@/lib/utils/logger';
-import { useSignMessage } from '@/lib/wdk/wdk-hooks';
+import { useApiAuth } from '@/lib/hooks/useApiAuth';
 import { Send, Bot, User, Sparkles, TrendingUp, Shield, Zap, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -214,28 +214,7 @@ function MarkdownContent({ content, isUser }: { content: string; isUser: boolean
 }
 
 export function EnhancedChat({ address, onActionTrigger, hideHeader = false }: EnhancedChatProps) {
-  const { signMessageAsync } = useSignMessage();
-  const authCacheRef = useRef<{ headers: Record<string, string>; expiresAt: number } | null>(null);
-
-  // Same session-cached auth token as ChatInterface — sign once, reuse
-  // for 4 min. auth-middleware.ts accepts signatures up to 5 min old.
-  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const now = Date.now();
-    if (authCacheRef.current && authCacheRef.current.expiresAt > now) {
-      return authCacheRef.current.headers;
-    }
-    if (!address) throw new Error('Wallet not connected');
-    const timestamp = Math.floor(now / 1000);
-    const message = `ZkVanguard AI Chat\n\nWallet: ${address}\ntimestamp:${timestamp}`;
-    const signature = await signMessageAsync({ message });
-    const headers = {
-      'x-wallet-address': address,
-      'x-wallet-signature': signature,
-      'x-wallet-message': btoa(message),
-    };
-    authCacheRef.current = { headers, expiresAt: now + 4 * 60_000 };
-    return headers;
-  }, [address, signMessageAsync]);
+  const { getAuthHeaders } = useApiAuth(address);
 
   const [messages, setMessages] = useState<Message[]>([
     {

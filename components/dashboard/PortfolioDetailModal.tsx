@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { logger } from '@/lib/utils/logger';
+import { useApiAuth } from '@/lib/hooks/useApiAuth';
 import { X, TrendingUp, PieChart, History, Brain, Settings, ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
 import PerformanceChart from './PerformanceChart';
 
@@ -49,6 +50,7 @@ interface PortfolioDetailModalProps {
 }
 
 export default function PortfolioDetailModal({ portfolio, onClose, walletAddress }: PortfolioDetailModalProps) {
+  const { getAuthHeaders } = useApiAuth(walletAddress);
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'analysis' | 'settings'>('overview');
   const [riskLevel, setRiskLevel] = useState<'Low' | 'Medium' | 'High'>(portfolio.riskLevel);
   const [targetAPY, setTargetAPY] = useState(portfolio.targetAPY);
@@ -423,9 +425,10 @@ export default function PortfolioDetailModal({ portfolio, onClose, walletAddress
                     try {
                       // Enable/disable auto-rebalancing based on toggle
                       const action = autoRebalance ? 'enable' : 'disable';
+                      const authHeaders = await getAuthHeaders();
                       const response = await fetch(`/api/agents/auto-rebalance?action=${action}`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', ...authHeaders },
                         body: JSON.stringify({
                           portfolioId: portfolio.id,
                           walletAddress,

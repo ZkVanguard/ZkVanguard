@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Shield, Zap, Activity, TrendingDown, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { executeSettlementBatch, generatePortfolioReport } from '../../lib/api/agents';
 import { fetchRiskAnalysis, fetchHedgeRecommendations } from '../../lib/services/ai-decisions';
-import { useSignMessage } from '../../lib/wdk/wdk-hooks';
+import { useApiAuth } from '../../lib/hooks/useApiAuth';
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
@@ -34,29 +34,7 @@ const quickActions = [
 ];
 
 export function ChatInterface({ address: _address }: { address: string }) {
-  const { signMessageAsync } = useSignMessage();
-  const authCacheRef = useRef<{ headers: Record<string, string>; expiresAt: number } | null>(null);
-
-  // Wallet-signed auth token, reused for ~4 min so the user signs once
-  // per session instead of once per message. The verifier accepts the
-  // signature for 5 min (auth-middleware timestamp check).
-  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const now = Date.now();
-    if (authCacheRef.current && authCacheRef.current.expiresAt > now) {
-      return authCacheRef.current.headers;
-    }
-    if (!_address) throw new Error('Wallet not connected');
-    const timestamp = Math.floor(now / 1000);
-    const message = `ZkVanguard AI Chat\n\nWallet: ${_address}\ntimestamp:${timestamp}`;
-    const signature = await signMessageAsync({ message });
-    const headers = {
-      'x-wallet-address': _address,
-      'x-wallet-signature': signature,
-      'x-wallet-message': btoa(message),
-    };
-    authCacheRef.current = { headers, expiresAt: now + 4 * 60_000 };
-    return headers;
-  }, [_address, signMessageAsync]);
+  const { getAuthHeaders } = useApiAuth(_address);
 
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [swapTokenOut, setSwapTokenOut] = useState<string>('WCRO');

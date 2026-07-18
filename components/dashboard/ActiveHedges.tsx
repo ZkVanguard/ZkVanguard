@@ -4,6 +4,7 @@ import { useState, memo, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Shield, TrendingUp, TrendingDown, CheckCircle, ExternalLink, RefreshCw, Wallet, Lock, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePolling, useToggle } from '@/lib/hooks';
+import { useApiAuth } from '@/lib/hooks/useApiAuth';
 import { useHedgeRecommendations } from '@/contexts/AIDecisionsContext';
 import { logger } from '@/lib/utils/logger';
 import { useWalletClient, useChainId } from '@/lib/wdk/wdk-hooks';
@@ -28,6 +29,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   // Get the connected wallet client (works with OKX, MetaMask, etc.)
   const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
+  const { getAuthHeaders } = useApiAuth(address);
   
   // Get dynamic contract addresses based on connected chain
   const contractAddresses = useMemo(() => getContractAddresses(chainId || CHAIN_IDS.CRONOS_TESTNET), [chainId]);
@@ -542,9 +544,10 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
 
       // Fallback: Try to close in database for non-on-chain hedges
       try {
+        const authHeaders = await getAuthHeaders();
         const response = await fetch('/api/agents/hedging/close', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({
             orderId: selectedHedge.id,
             realizedPnl: selectedHedge.pnl,
