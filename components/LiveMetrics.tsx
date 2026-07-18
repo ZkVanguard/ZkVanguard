@@ -58,11 +58,15 @@ async function fetchPoolMetrics(): Promise<PoolMetrics | null> {
     const agentData = agentRes.ok ? await agentRes.json() : null;
 
     const pool = poolData?.pool;
+    // /api/agents/status returns `agents` as an object keyed by role
+    // (risk, hedging, settlement, reporting, lead), not an array — the
+    // previous .length read was always undefined, showing "0 online".
+    const agentsObj = agentData?.agents as Record<string, unknown> | undefined;
     return {
       tvl: pool?.totalNAV ?? 0,
       memberCount: pool?.memberCount ?? 0,
       sharePrice: pool?.sharePrice ?? 0,
-      agents: agentData?.agents?.length ?? 0,
+      agents: agentsObj ? Object.keys(agentsObj).length : 0,
     };
   } catch {
     return null;
