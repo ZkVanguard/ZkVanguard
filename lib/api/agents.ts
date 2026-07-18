@@ -1,12 +1,7 @@
 /**
- * Agent API Integration
- * Frontend interface to AI agents
- * 
- * NOTE: For new code, prefer using the centralized AI service:
- * import { AIDecisions } from '@/lib/ai';
- * 
- * These functions are maintained for backwards compatibility but
- * now delegate to the centralized AIDecisions service with caching.
+ * Frontend fetch wrappers for the agent API routes.
+ * For risk/hedge analysis, call fetchRiskAnalysis / fetchHedgeRecommendations
+ * from lib/services/ai-decisions directly (cached).
  */
 
 import { AgentTask as SharedAgentTask } from '../../shared/types/agent';
@@ -35,18 +30,6 @@ export async function generatePortfolioReport(address: string, period: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address, period })
-  });
-  return response.json();
-}
-
-/**
- * Send natural language command
- */
-export async function sendAgentCommand(command: string) {
-  const response = await fetch('/api/agents/command', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command })
   });
   return response.json();
 }
@@ -149,22 +132,3 @@ export async function getAgentActivity(_address: string) {
   return activities;
 }
 
-/**
- * Format agent message for display
- */
-export function formatAgentMessage(msg: Record<string, unknown>): string {
-  const payload = msg.payload as Record<string, unknown> | undefined;
-  if (msg.type === 'RISK_ALERT') {
-    return `⚠️ Risk Alert: ${payload?.message}`;
-  }
-  if (msg.type === 'HEDGE_RECOMMENDATION') {
-    return `Hedge: ${payload?.action} ${payload?.asset} ${payload?.size}x`;
-  }
-  if (msg.type === 'SETTLEMENT_BATCH') {
-    return `Batch settlement: ${payload?.count || 0} transactions`;
-  }
-  if (msg.type === 'REPORT_GENERATED') {
-    return `${payload?.period || 'Portfolio'} report generated`;
-  }
-  return String(msg.type);
-}
