@@ -400,10 +400,17 @@ CLAUDE.md
 .claude/
 
 # -------------------------------------------
+# Claude Code AI plugins — personal tooling, never platform code
+# -------------------------------------------
 # Graphify knowledge-graph output (per-machine, up to ~100 MB)
 # See CLAUDE.md § "Codebase navigation (Graphify)" for usage.
-# -------------------------------------------
 graphify-out/
+
+# Ponytail lazy-senior-dev plugin — configs stay in home dir, but
+# guard against anything the plugin drops into the project.
+.ponytail*
+ponytail.config.*
+.ponytail-debt/
 
 # Operational snapshot artifacts (debug only)
 scripts/.neon-snapshot.json
