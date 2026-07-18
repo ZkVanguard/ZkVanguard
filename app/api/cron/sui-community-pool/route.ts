@@ -1494,14 +1494,33 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
         // Track continuous zero-risk-tier duration for alert-response-loop
         // Gap 8's UNWIND_ALL_SPOT rule triggers after > 24h at 0% risk cap.
+        //
+        // Silent-catch removed 2026-07-17: same class of bug as the halt
+        // writes and stale-close. If the write fails silently, either:
+        // (a) 24h clock never starts → UNWIND_ALL_SPOT never fires when
+        //     it should, OR
+        // (b) key never clears on recovery → spurious UNWIND after recovery
+        // Both leak downstream. Now logs + alerts on write failure.
         try {
           if (lockDecision.active && lockDecision.riskAllocationCap === 0) {
             const existing = await getCronStateOr<number | null>('profit-lock:zero-since', null);
             if (!existing) {
-              await setCronState('profit-lock:zero-since', Date.now()).catch(() => {});
+              try {
+                await setCronState('profit-lock:zero-since', Date.now());
+              } catch (writeErr) {
+                logger.error('[SUI Cron] profit-lock:zero-since START write FAILED', {
+                  error: writeErr instanceof Error ? writeErr.message : String(writeErr),
+                });
+              }
             }
           } else {
-            await setCronState('profit-lock:zero-since', null).catch(() => {});
+            try {
+              await setCronState('profit-lock:zero-since', null);
+            } catch (writeErr) {
+              logger.error('[SUI Cron] profit-lock:zero-since CLEAR write FAILED', {
+                error: writeErr instanceof Error ? writeErr.message : String(writeErr),
+              });
+            }
           }
         } catch { /* best-effort */ }
 

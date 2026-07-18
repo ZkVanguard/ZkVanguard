@@ -98,9 +98,19 @@ export async function refreshBluefinCache(args: {
   if (venueLooksEmpty) {
     // Increment persistent empty-read counter. Alert on the 3rd one
     // (≈ 15 min of consecutive empties at 5-min cron cadence).
+    //
+    // 2026-07-17: silent-catch on the increment removed. If the write
+    // fails, the count stays stale → 3-strike alert never fires →
+    // operator doesn't learn venue is empty. Now logs on failure.
     const prev = await getCronStateOr<number>('bluefin:consecutiveEmptyReads', 0);
     const next = prev + 1;
-    await setCronState('bluefin:consecutiveEmptyReads', next).catch(() => {});
+    try {
+      await setCronState('bluefin:consecutiveEmptyReads', next);
+    } catch (err) {
+      logger.error('[bluefin-read-safe] consecutiveEmptyReads increment FAILED', {
+        prev, next, error: err instanceof Error ? err.message : String(err),
+      });
+    }
     if (next === 3) {
       const { notifyDiscord } = await import('@/lib/utils/discord-notify');
       await notifyDiscord(
@@ -115,7 +125,13 @@ export async function refreshBluefinCache(args: {
   }
 
   // Clean (non-empty) read — reset the empty counter and refresh cache.
-  await setCronState('bluefin:consecutiveEmptyReads', 0).catch(() => {});
+  try {
+    await setCronState('bluefin:consecutiveEmptyReads', 0);
+  } catch (err) {
+    logger.warn('[bluefin-read-safe] consecutiveEmptyReads reset failed (non-critical)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   let lockedMargin = 0;
   let upnl = 0;
