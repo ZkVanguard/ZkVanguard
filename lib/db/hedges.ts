@@ -2,6 +2,20 @@ import { query, queryOne } from './postgres';
 import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 
+// ── Close-path PnL invariant (documented in CLAUDE.md) ────────────────────
+// Every close writer in this file MUST mirror realized_pnl into current_pnl.
+// Analytics that sum current_pnl (dashboards, drawdown checks, regret
+// tracker) rely on SUM(current_pnl) == SUM(realized_pnl) for closed rows.
+// After f46b5289 the invariant became load-bearing; if you add a 6th close
+// path here, copy this pattern:
+//   SET status = 'closed',
+//       realized_pnl = <NEW>,      -- either absolute (SDK path) or
+//       current_pnl  = <NEW>,      -- COALESCE + delta (reconciler path)
+//       closed_at = CURRENT_TIMESTAMP,
+//       updated_at = CURRENT_TIMESTAMP
+// Silently breaking current_pnl means the regret tracker and profit-lock
+// guard read stale price-watch snapshots as if they were realized outcomes.
+
 // ── Lazy table initialization ──
 let hedgesTableReady = false;
 
