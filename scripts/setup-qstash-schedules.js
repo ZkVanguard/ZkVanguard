@@ -25,9 +25,11 @@
  * 
  * Usage:
  *   node scripts/setup-qstash-schedules.js
- *   node scripts/setup-qstash-schedules.js --individual   # Setup per-cron schedules
- *   node scripts/setup-qstash-schedules.js --list         # List existing schedules
- *   node scripts/setup-qstash-schedules.js --delete-all   # Remove all schedules
+ *   node scripts/setup-qstash-schedules.js --individual         # Setup per-cron schedules
+ *   node scripts/setup-qstash-schedules.js --list               # List existing schedules
+ *   node scripts/setup-qstash-schedules.js --delete-all         # Remove all schedules
+ *   node scripts/setup-qstash-schedules.js --add-edge-trader    # Idempotent: only add trader
+ *   node scripts/setup-qstash-schedules.js --add-alert-response # Idempotent: only add v0.3.0 alert-response-loop
  */
 
 const BASE_URL = process.env.BASE_URL 
@@ -111,6 +113,17 @@ const INDIVIDUAL_SCHEDULES = [
     destination: `${BASE_URL}/api/cron/liquidation-guard`,
     cron: '*/10 * * * *', // Every 10 minutes
     retries: 3,
+  },
+  {
+    // v0.3.0 defense: reads alert-log:ring-buffer + profit-lock:zero-since
+    // + phantom rate, emits halt-flag / spot-target-risk-cap directives.
+    // Cadence matches trader tick so response lag ≤ 1 trader cycle.
+    // TICK_INTERVAL_MS=60s debounce in-route so shorter QStash cadence
+    // would just no-op via tryClaimCronRun.
+    name: 'Alert Response Loop',
+    destination: `${BASE_URL}/api/cron/alert-response-loop`,
+    cron: '*/5 * * * *', // Every 5 minutes
+    retries: 2,
   },
 ];
 
@@ -219,27 +232,39 @@ async function main() {
     return;
   }
 
-  // Add ONLY the polymarket-edge-trader schedule without touching others
-  if (args.includes('--add-edge-trader')) {
-    const config = INDIVIDUAL_SCHEDULES.find(s => s.name === 'Polymarket Edge Trader');
-    console.log('🔧 Adding Polymarket Edge Trader schedule (every 5 min)\n');
-
-    // Check if one already exists so we don't duplicate
+  // Add ONE schedule from INDIVIDUAL_SCHEDULES by route path fragment.
+  // Idempotent — bails if a schedule for the same destination already exists.
+  async function addOneByPathFragment(pathFragment, displayName) {
+    const config = INDIVIDUAL_SCHEDULES.find(s => s.destination.includes(pathFragment));
+    if (!config) {
+      console.log(`❌ No config found in INDIVIDUAL_SCHEDULES matching "${pathFragment}"`);
+      return;
+    }
+    console.log(`🔧 Adding ${displayName} schedule (${config.cron})\n`);
     const existing = await listSchedules();
-    const alreadyExists = existing.some(s =>
-      s.destination && s.destination.includes('polymarket-edge-trader')
-    );
+    const alreadyExists = existing.some(s => s.destination && s.destination.includes(pathFragment));
     if (alreadyExists) {
       console.log('⚠️  Schedule already exists — delete it first with --delete-all if you want to recreate it.');
       return;
     }
-
     const result = await createSchedule(config);
     if (result) {
-      console.log(`\n✅ Polymarket Edge Trader schedule created!`);
-      console.log(`   Ticks every 5 min → 288 messages/day`);
+      console.log(`\n✅ ${displayName} schedule created!`);
+      console.log(`   Cron: ${config.cron}`);
       console.log(`   URL: ${config.destination}`);
     }
+  }
+
+  // Add ONLY the polymarket-edge-trader schedule without touching others
+  if (args.includes('--add-edge-trader')) {
+    await addOneByPathFragment('polymarket-edge-trader', 'Polymarket Edge Trader');
+    return;
+  }
+
+  // Add ONLY the alert-response-loop schedule — Phase 0.3 of the hardening
+  // plan. See docs/MAINNET_READINESS.md § Scale & Security Hardening.
+  if (args.includes('--add-alert-response')) {
+    await addOneByPathFragment('alert-response-loop', 'Alert Response Loop');
     return;
   }
 

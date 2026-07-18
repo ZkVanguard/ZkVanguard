@@ -39,7 +39,7 @@ Concrete action plan to move from "$10K TVL, 3 members, single-venue, hot-key Ad
 |---|---|---|---|---|
 | 0.1 | Doc drift on `NAV_SAFETY_CEILING_USDC` (500M → 10B) | DEPLOY_RUNBOOK + ROADMAP consistent with code | 0.1d | ✅ 2026-07-18 |
 | 0.2 | `.env.example` completeness — 19 real gaps (52 total; 33 have safe defaults) | Every safety-critical env read has a documented key (v0.3.0 gates, SUI capability IDs, DISCORD_WEBHOOK_URL, TREASURY_PRIVATE_KEY, Aiven notes, internal URLs) | 0.5d | ✅ 2026-07-18 |
-| 0.3 | Schedule QStash cron for `alert-response-loop` | `curl $QSTASH_URL/v2/schedules` shows it live, `cron:lastRun:alert-response-loop` heartbeat within 20 min | 0.1d | ⬜ |
+| 0.3 | Schedule QStash cron for `alert-response-loop` — run `node scripts/setup-qstash-schedules.js --add-alert-response` with `QSTASH_TOKEN` in env | `curl $QSTASH_URL/v2/schedules` shows it live, `cron:lastRun:alert-response-loop` heartbeat within 20 min | 0.1d | 🟡 script ready 2026-07-18; execution needs `QSTASH_TOKEN` |
 | 0.4 | Confirm 24h `[log-only]` observation window is complete on v0.3.0 defense | Discord log-only entries reviewed, no false-positives; incident-free | 1d observation | ⬜ |
 | 0.5 | Flip `PORTFOLIO_DRIVER_EXECUTE=1` in Vercel env, redeploy | First execute-mode Discord `TRADE` entry from PortfolioDriver in prod | 0.1d | ⬜ (blocked on 0.4) |
 | 0.6 | LLM provider chain drift (CLAUDE.md said Ollama-last, code is Ollama-first) | Recheck `llm-provider.ts` initialization order matches docs | 0.1d | ✅ 2026-07-18 |
