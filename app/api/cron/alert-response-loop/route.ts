@@ -49,18 +49,37 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   try {
     const alertLog = await readAlertLog();
 
-    // Phantom rate: query recent hedges for phantom marker.
+    // Phantom rate — mirrors app/api/health/production/route.ts checkPhantomRate().
+    // Prior implementation queried `status='phantom'` which the hedges CHECK
+    // constraint never allows (only active/closed/liquidated/cancelled), so the
+    // rate stayed 0 forever and Rule 3 never fired. Two signals now:
+    //   1. Closed-hedge rate: closed w/ realized_pnl=0 / total closed last hour.
+    //   2. In-flight opens: active > 20 min, updated_at ≈ created_at (0 reconciler
+    //      touches) — closes the 15-min window the closed-rate can't see.
     let phantomRatePctLastHour = 0;
+    let inFlightPhantomOpenCount = 0;
     try {
       const { query } = await import('@/lib/db/postgres');
-      const rows = await query<{ n: string; phantom: string }>(
-        `SELECT COUNT(*)::text as n,
-                SUM(CASE WHEN status='phantom' THEN 1 ELSE 0 END)::text as phantom
-         FROM hedges WHERE created_at > NOW() - INTERVAL '1 hour'`
-      );
-      const total = Number(rows[0]?.n ?? 0);
-      const phantoms = Number(rows[0]?.phantom ?? 0);
+      const [closedRow, openRow] = await Promise.all([
+        query<{ total: string; phantoms: string }>(
+          `SELECT COUNT(*)::text as total,
+                  SUM(CASE WHEN COALESCE(realized_pnl, 0) = 0 THEN 1 ELSE 0 END)::text as phantoms
+           FROM hedges
+           WHERE chain='sui' AND status='closed' AND notional_value >= 1
+             AND created_at > NOW() - INTERVAL '1 hour'`
+        ),
+        query<{ open_phantoms: string }>(
+          `SELECT COUNT(*)::text as open_phantoms
+           FROM hedges
+           WHERE chain='sui' AND status='active' AND notional_value >= 1
+             AND created_at < NOW() - INTERVAL '20 minutes'
+             AND EXTRACT(EPOCH FROM (updated_at - created_at)) < 30`
+        ),
+      ]);
+      const total = Number(closedRow[0]?.total ?? 0);
+      const phantoms = Number(closedRow[0]?.phantoms ?? 0);
       phantomRatePctLastHour = total > 0 ? (phantoms / total) * 100 : 0;
+      inFlightPhantomOpenCount = Number(openRow[0]?.open_phantoms ?? 0);
     } catch { /* best-effort */ }
 
     // Profit-lock zero-tier tracking — reads the timestamp we mark in cron_state
@@ -76,6 +95,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       now,
       profitLockZeroSinceMs,
       phantomRatePctLastHour,
+      inFlightPhantomOpenCount,
     });
 
     if (responses.length === 0) {

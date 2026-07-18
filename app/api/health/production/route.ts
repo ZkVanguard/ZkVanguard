@@ -66,22 +66,52 @@ async function checkCronAge(key: string, warnAfterMin: number, downAfterMin: num
   }
 }
 
-async function checkPhantomRate(): Promise<Component & { ratePct?: number; total?: number; phantoms?: number }> {
+async function checkPhantomRate(): Promise<Component & { ratePct?: number; total?: number; phantoms?: number; openPhantoms?: number }> {
   try {
-    const r = await query<{ total: string; phantoms: string }>(
-      `SELECT COUNT(*)::text as total,
-              SUM(CASE WHEN COALESCE(realized_pnl, 0) = 0 THEN 1 ELSE 0 END)::text as phantoms
-       FROM hedges
-       WHERE chain='sui' AND status='closed' AND notional_value >= 1
-         AND created_at > NOW() - INTERVAL '1 hour'`,
-    );
-    const total = Number(r[0]?.total ?? 0);
-    const phantoms = Number(r[0]?.phantoms ?? 0);
-    if (total === 0) return { status: 'ok', ratePct: 0, total: 0, phantoms: 0, detail: 'no hedges closed in last hour' };
-    const ratePct = (phantoms / total) * 100;
-    if (ratePct > 5) return { status: 'down', ratePct, total, phantoms, detail: `${ratePct.toFixed(1)}% of last-hour closes have $0 realized — exchange fills unreliable` };
-    if (ratePct > 1) return { status: 'warn', ratePct, total, phantoms, detail: `${ratePct.toFixed(1)}% phantom rate (> 1% threshold)` };
-    return { status: 'ok', ratePct, total, phantoms };
+    // Two blind spots for the same underlying failure (open call returns
+    // orderHash, engine silently drops the order — see f54d5b46):
+    //
+    //   1. CLOSED-hedge phantom — bluefin-db-reconcile eventually marks
+    //      active rows with no BlueFin match as closed w/ realized_pnl=0.
+    //      Rate = phantoms / total_closed last hour.
+    //
+    //   2. OPEN-hedge phantom (in-flight) — before the 15-min reconciler
+    //      catches an orphan, the row sits status='active' with an
+    //      untouched updated_at. In that window the closed-rate above
+    //      stays 0% even if the trader fires 3+ ghost opens back-to-back.
+    //      Heuristic: active + notional >= $1 + older than 20min (1 recon
+    //      tick + slop) + updated_at within 30s of created_at means no
+    //      subsequent job touched the row. Absolute count, not a rate —
+    //      ANY in-flight phantom should trip the trader halt.
+    const [closedRow, openRow] = await Promise.all([
+      query<{ total: string; phantoms: string }>(
+        `SELECT COUNT(*)::text as total,
+                SUM(CASE WHEN COALESCE(realized_pnl, 0) = 0 THEN 1 ELSE 0 END)::text as phantoms
+         FROM hedges
+         WHERE chain='sui' AND status='closed' AND notional_value >= 1
+           AND created_at > NOW() - INTERVAL '1 hour'`,
+      ),
+      query<{ open_phantoms: string }>(
+        `SELECT COUNT(*)::text as open_phantoms
+         FROM hedges
+         WHERE chain='sui' AND status='active' AND notional_value >= 1
+           AND created_at < NOW() - INTERVAL '20 minutes'
+           AND EXTRACT(EPOCH FROM (updated_at - created_at)) < 30`,
+      ),
+    ]);
+    const total = Number(closedRow[0]?.total ?? 0);
+    const phantoms = Number(closedRow[0]?.phantoms ?? 0);
+    const openPhantoms = Number(openRow[0]?.open_phantoms ?? 0);
+    const ratePct = total === 0 ? 0 : (phantoms / total) * 100;
+
+    // Escalate to worst-of. Open-phantom absolute count trips independently
+    // so alert-response can HALT_TRADER before the reconciler window closes.
+    if (openPhantoms >= 3) return { status: 'down', ratePct, total, phantoms, openPhantoms, detail: `${openPhantoms} in-flight phantom opens — trader firing ghost orders` };
+    if (ratePct > 5) return { status: 'down', ratePct, total, phantoms, openPhantoms, detail: `${ratePct.toFixed(1)}% of last-hour closes have $0 realized — exchange fills unreliable` };
+    if (openPhantoms >= 1) return { status: 'warn', ratePct, total, phantoms, openPhantoms, detail: `${openPhantoms} in-flight phantom open(s) — active hedge(s) never touched by reconciler` };
+    if (ratePct > 1) return { status: 'warn', ratePct, total, phantoms, openPhantoms, detail: `${ratePct.toFixed(1)}% phantom rate (> 1% threshold)` };
+    if (total === 0) return { status: 'ok', ratePct: 0, total: 0, phantoms: 0, openPhantoms, detail: 'no hedges closed in last hour' };
+    return { status: 'ok', ratePct, total, phantoms, openPhantoms };
   } catch (e: any) {
     return { status: 'warn', error: e?.message?.slice(0, 100) || 'unknown' };
   }

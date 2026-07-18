@@ -39,6 +39,10 @@ export interface EvaluateInput {
   now?: number;
   profitLockZeroSinceMs?: number; // when profit-lock crossed 0% risk (undefined = not there)
   phantomRatePctLastHour?: number;
+  // Count of active hedges older than 20 min never touched by the reconciler
+  // — the in-flight blind spot the closed-hedge rate can't see for 15 min.
+  // Any nonzero count trips HALT so trader can't fire 3+ ghost opens in a row.
+  inFlightPhantomOpenCount?: number;
 }
 
 export async function evaluateAutoResponse(input: EvaluateInput): Promise<AutoResponse[]> {
@@ -75,6 +79,24 @@ export async function evaluateAutoResponse(input: EvaluateInput): Promise<AutoRe
     responses.push({
       type: 'HALT_AUTOHEDGE',
       reason: `phantom hedge rate ${input.phantomRatePctLastHour!.toFixed(2)}% > 1% threshold — exchange fills unreliable`,
+      triggeredBy: [],
+    });
+  }
+
+  // Rule 4: in-flight phantom opens (any) — closes the 15-min blind spot
+  // where the closed-rate above stays 0% while trader fires ghost orders.
+  // Any active hedge > 20 min old with no reconciler touch = trader's
+  // openHedge succeeded on paper (orderHash) but engine dropped it.
+  const inFlight = input.inFlightPhantomOpenCount ?? 0;
+  if (inFlight >= 1) {
+    responses.push({
+      type: 'HALT_TRADER',
+      reason: `${inFlight} in-flight phantom open(s) — active hedge(s) never touched by reconciler after 20 min`,
+      triggeredBy: [],
+    });
+    responses.push({
+      type: 'HALT_AUTOHEDGE',
+      reason: `${inFlight} in-flight phantom open(s) — active hedge(s) never touched by reconciler after 20 min`,
       triggeredBy: [],
     });
   }

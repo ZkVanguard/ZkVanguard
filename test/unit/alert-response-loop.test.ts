@@ -128,6 +128,40 @@ describe('evaluateAutoResponse — phantom rate rule', () => {
   });
 });
 
+describe('evaluateAutoResponse — in-flight phantom-open rule', () => {
+  it('fires HALT_TRADER + HALT_AUTOHEDGE when inFlightPhantomOpenCount >= 1', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      inFlightPhantomOpenCount: 1,
+    });
+    expect(responses.filter(r => r.type === 'HALT_TRADER')).toHaveLength(1);
+    expect(responses.filter(r => r.type === 'HALT_AUTOHEDGE')).toHaveLength(1);
+    expect(responses[0].reason).toMatch(/in-flight phantom open/);
+  });
+
+  it('does NOT fire at 0 in-flight phantoms', async () => {
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      inFlightPhantomOpenCount: 0,
+    });
+    expect(responses).toEqual([]);
+  });
+
+  it('fires independently of phantomRatePctLastHour (closed-rate at 0%)', async () => {
+    // The whole point of this rule: closed-rate is 0% during the 15-min
+    // reconciler window, but in-flight opens ARE the phantom signal.
+    const responses = await evaluateAutoResponse({
+      alertLog: [],
+      now: NOW,
+      phantomRatePctLastHour: 0,
+      inFlightPhantomOpenCount: 2,
+    });
+    expect(responses.filter(r => r.type === 'HALT_TRADER')).toHaveLength(1);
+  });
+});
+
 describe('evaluateAutoResponse — composition', () => {
   it('emits multiple responses when multiple rules trigger', async () => {
     const responses = await evaluateAutoResponse({
