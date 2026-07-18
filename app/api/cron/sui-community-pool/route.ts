@@ -38,6 +38,23 @@ import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, 
 import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
 import { clampAllocationsToHedgeable } from '@/lib/services/sui/cron/hedgeable-allocation';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+// v0.3.0 defense dispatch — statically imported so the graph sees the
+// call chain. Previously loaded via `await import()` inside try-blocks
+// (36 dynamic imports in this file); tree-sitter can't resolve those,
+// so the entire defense pipeline was invisible in graph queries.
+// Enclosing try-blocks handle runtime failures; converting the imports
+// doesn't change error semantics (they still swallow throws).
+import { applyProfitLock } from '@/lib/services/sui/cron/profit-lock-guard';
+import { runPortfolioDriverTick } from '@/lib/services/sui/PortfolioDriver';
+import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
+import { checkAndCloseDrifts } from '@/lib/services/agents/position-drift-monitor';
+import { wouldBecomeDust } from '@/lib/services/sui/dust-manager';
+import { routeHedge } from '@/lib/services/perps/PerpVenueRouter';
+import { HyperliquidService } from '@/lib/services/perps/HyperliquidService';
+import { checkBeforeTrade, completeTrade } from '@/lib/services/agents/agent-trade-guard';
+import { emitPrivateHedgeCommitment } from '@/lib/services/sui/cron/private-hedge-emit';
+import { runPolyDiscoverTick } from '@/lib/services/market-data/poly-discover-tick';
+import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -1411,13 +1428,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       // and PROFIT_LOCK_ZERO_RISK_AT (20%). Disable with PROFIT_LOCK_DISABLE=1.
       try {
         const peakNavForLock = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
-        const { applyProfitLock } = await import('@/lib/services/sui/cron/profit-lock-guard');
 
         // Fetch 7-day-ago NAV so profit-lock can compute recovery momentum
         // (avoid "sit in USDC through the rally" pattern).
         let drawdownPct7dAgo: number | undefined;
         try {
-          const { query } = await import('@/lib/db/postgres');
           const rows = await query<{ dd_pct: string }>(
             `SELECT ROUND((($1::float - AVG(total_nav))::numeric / $1::float) * 100, 2)::text as dd_pct
              FROM community_pool_nav_history
@@ -1530,8 +1545,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
         // first few days after deploy are log-only — operator watches
         // Discord for what it WOULD do before flipping execute on.
         try {
-          const { runPortfolioDriverTick } = await import('@/lib/services/sui/PortfolioDriver');
-          const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
           const currentSignal = await Polymarket5MinService.getLatest5MinSignal().catch(() => null);
           if (currentSignal) {
             // Build a sandbox-like snapshot from real holdings for the pure driver.
@@ -2381,7 +2394,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     let driftResult: { checked: number; drifted: number; closed: number; skipped: number; errors: number; actions: unknown[] } | null = null;
     try {
       const bluefinService = BluefinService.getInstance();
-      const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
       driftResult = await checkAndCloseDrifts('sui', bluefinService);
       if (driftResult.drifted > 0) {
         logger.info('[SUI Cron] Drift monitor summary', driftResult);
@@ -2713,7 +2725,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               // OPEN_MIN_QTY_BUFFER in dust-manager.ts). Compare against the
               // TARGET post-snap size, not the pre-snap raw size.
               try {
-                const { wouldBecomeDust } = await import('@/lib/services/sui/dust-manager');
                 if (wouldBecomeDust(symbol, snappedSize)) {
                   const minSafe = spec.minQty * 1.5;
                   logger.info(`[SUI Cron] Skip ${asset}-PERP: size ${snappedSize} risks dust (< ${minSafe.toFixed(4)} = 1.5x minQty)`, {
@@ -2738,8 +2749,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
               // validate the router in production before flipping live.
               if ((process.env.PERP_ROUTER_SHADOW || '').toLowerCase() === 'true') {
                 try {
-                  const { routeHedge } = await import('@/lib/services/perps/PerpVenueRouter');
-                  const { HyperliquidService } = await import('@/lib/services/perps/HyperliquidService');
                   const hl = HyperliquidService.getInstance();
                   const [bfMd, hlSnap] = await Promise.all([
                     bluefin.getMarketData(symbol).catch(() => null),
@@ -2781,7 +2790,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                 //   - risk score above ceiling
                 //   - position cap / slippage / cooldown breach
                 // Logs to agent_decisions for outcome tracking.
-                const { checkBeforeTrade, completeTrade } = await import('@/lib/services/agents/agent-trade-guard');
                 const guard = await checkBeforeTrade({
                   chain: 'sui',
                   asset,
@@ -2904,7 +2912,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
                   // entryPrice behind a 32-byte commitment hash. Skips cleanly if
                   // privacy contracts aren't deployed (mainnet env vars unset).
                   try {
-                    const { emitPrivateHedgeCommitment } = await import('@/lib/services/sui/cron/private-hedge-emit');
                     const emit = await emitPrivateHedgeCommitment({
                       asset, side, size: snappedSize,
                       notionalValue: hedgeValueUSD, leverage,
@@ -3066,11 +3073,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // would actually use the data. Wrapped in try/catch so a Polymarket
     // outage can never fail the SUI cron.
     try {
-      const { runPolyDiscoverTick } = await import('@/lib/services/market-data/poly-discover-tick');
       const polyResult = await runPolyDiscoverTick();
       // Heartbeat for /api/health/production cron-freshness check on the
       // poly-discover key, so ops can still tell discovery is running.
-      const { setCronState } = await import('@/lib/db/cron-state');
       void setCronState('cron:lastRun:poly-discover', Date.now()).catch(() => {});
       logger.info('[SUI Cron] poly-discover (inlined) complete', {
         discovered: polyResult.discoveredCount,
@@ -3093,13 +3098,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // + UI. Try/catch'd so a specialist failure can never break the
     // SUI cron.
     try {
-      const { getAgentOrchestrator } = await import('@/lib/services/agent-orchestrator');
       const orchestrator = getAgentOrchestrator();
       const cycle = await orchestrator.runAutonomousCycle({
         chain: 'sui',
         portfolioId: -2,
       });
-      const { setCronState } = await import('@/lib/db/cron-state');
       await Promise.all([
         setCronState('cron:lastRun:lead-cycle', Date.now()).catch(() => {}),
         setCronState('lead-cycle:last-decision', { ts: Date.now(), ...cycle }).catch(() => {}),
@@ -3113,7 +3116,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       // Discord ping on actionable findings: high risk OR rebalance needed.
       if (cycle.success && (cycle.needsRebalance || (cycle.riskScore ?? 0) > 70)) {
         try {
-          const { notifyDiscord } = await import('@/lib/utils/discord-notify');
           await notifyDiscord(
             `🤖 LeadAgent cycle: risk=${cycle.riskScore ?? '?'}/${cycle.riskLevel ?? '?'}, ` +
             `hedge-recs=${cycle.hedgeRecommendations ?? 0}, ` +
