@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Bot, User, Shield, Zap, Activity, TrendingDown, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { executeSettlementBatch, generatePortfolioReport } from '../../lib/api/agents';
 import { fetchRiskAnalysis, fetchHedgeRecommendations } from '../../lib/services/ai-decisions';
+import { useSignMessage } from '../../lib/wdk/wdk-hooks';
 import { ZKBadgeInline, type ZKProofData } from '../ZKVerificationBadge';
 import { MarkdownContent } from './MarkdownContent';
 import { ActionApprovalModal, type ActionPreview } from './ActionApprovalModal';
@@ -33,6 +34,30 @@ const quickActions = [
 ];
 
 export function ChatInterface({ address: _address }: { address: string }) {
+  const { signMessageAsync } = useSignMessage();
+  const authCacheRef = useRef<{ headers: Record<string, string>; expiresAt: number } | null>(null);
+
+  // Wallet-signed auth token, reused for ~4 min so the user signs once
+  // per session instead of once per message. The verifier accepts the
+  // signature for 5 min (auth-middleware timestamp check).
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const now = Date.now();
+    if (authCacheRef.current && authCacheRef.current.expiresAt > now) {
+      return authCacheRef.current.headers;
+    }
+    if (!_address) throw new Error('Wallet not connected');
+    const timestamp = Math.floor(now / 1000);
+    const message = `ZkVanguard AI Chat\n\nWallet: ${_address}\ntimestamp:${timestamp}`;
+    const signature = await signMessageAsync({ message });
+    const headers = {
+      'x-wallet-address': _address,
+      'x-wallet-signature': signature,
+      'x-wallet-message': btoa(message),
+    };
+    authCacheRef.current = { headers, expiresAt: now + 4 * 60_000 };
+    return headers;
+  }, [_address, signMessageAsync]);
+
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [swapTokenOut, setSwapTokenOut] = useState<string>('WCRO');
   const [swapTokenIn, setSwapTokenIn] = useState<string>('devUSDC');
@@ -188,9 +213,10 @@ export function ChatInterface({ address: _address }: { address: string }) {
   // Call LLM API for conversational responses
   const callLLM = async (text: string): Promise<string> => {
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({
           message: text,
           conversationId: _address || 'default',
@@ -202,7 +228,8 @@ export function ChatInterface({ address: _address }: { address: string }) {
       });
 
       if (!response.ok) {
-        throw new Error('LLM API call failed');
+        const errBody = await response.text().catch(() => '');
+        throw new Error(`LLM API call failed: ${response.status} ${errBody.slice(0, 80)}`);
       }
 
       const data = await response.json();
@@ -223,6 +250,13 @@ export function ChatInterface({ address: _address }: { address: string }) {
       return data.response || "I'm here to help! Try asking about portfolio analysis, risk assessment, or hedging strategies.";
     } catch (error) {
       logger.error('LLM call failed', error instanceof Error ? error : undefined, { component: 'ChatInterface' });
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('User rejected') || msg.includes('rejected the request')) {
+        return "Sign-in declined. I need a wallet signature to talk to the AI backend — try again and approve when prompted.";
+      }
+      if (msg.includes('Wallet not connected')) {
+        return "Please connect your wallet — the AI backend needs it to authenticate your session.";
+      }
       return "I'm having trouble connecting to the AI service. Please try again in a moment.";
     }
   };
@@ -461,14 +495,15 @@ export function ChatInterface({ address: _address }: { address: string }) {
                   setIsExecutingAction(true);
                   try {
                     // Execute hedge with signature proof
+                    const authHeaders = await getAuthHeaders();
                     const result = await executeSettlementBatch([
-                      { 
-                        recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', 
-                        amount: 1000, 
+                      {
+                        recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+                        amount: 1000,
                         token: '0x0',
                         signature,  // Include manager signature
                       },
-                    ]);
+                    ], authHeaders);
                     
                     // Add success message
                     // Save hedge details to localStorage for dashboard tracking
@@ -545,9 +580,10 @@ export function ChatInterface({ address: _address }: { address: string }) {
 
         case 'execute_settlement': {
           setActiveAgent('Lead Agent → Settlement Agent');
+          const settlementAuth = await getAuthHeaders();
           const settlement = await executeSettlementBatch([
             { recipient: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', amount: 1000, token: '0x0' },
-          ]);
+          ], settlementAuth);
           response = {
             content: `⚡ **Settlement Executed** (x402 Gasless)\n\n` +
               `**Status:** ${settlement.status}\n` +
