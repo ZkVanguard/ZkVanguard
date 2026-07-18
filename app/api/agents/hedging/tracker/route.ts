@@ -8,6 +8,7 @@ import { hedgePnLTracker } from '@/lib/services/hedging/HedgePnLTracker';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { readLimiter, mutationLimiter } from '@/lib/security/rate-limiter';
+import { requireAdminAuth } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -42,7 +43,6 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   // Admin auth required to control tracker
-  const { requireAdminAuth } = await import('@/lib/security/auth-middleware');
   const authCheck = requireAdminAuth(request);
   if (authCheck instanceof NextResponse) return authCheck;
 

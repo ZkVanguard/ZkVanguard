@@ -18,6 +18,8 @@ import { bluefinService, BluefinService, BLUEFIN_PAIRS } from '@/lib/services/su
 import { createHedge, updateHedgeStatus } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { requireAuth } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -86,7 +88,6 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   // Rate limiting
-  const { mutationLimiter } = await import('@/lib/security/rate-limiter');
   const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
@@ -94,7 +95,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Authentication required
-    const { requireAuth } = await import('@/lib/security/auth-middleware');
     const authResult = await requireAuth(request, body);
     if (authResult instanceof NextResponse) return authResult;
 

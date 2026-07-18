@@ -6,6 +6,7 @@ import type { RiskAnalysis } from '@shared/types/agent';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 import { logger } from '@/lib/utils/logger';
+import { llmProvider } from '@/lib/ai/llm-provider';
 
 export const runtime = 'nodejs';
 
@@ -398,7 +399,6 @@ export async function POST(request: NextRequest) {
 
           // Now get LLM synthesis via Lead Agent context
           try {
-            const { llmProvider } = await import('@/lib/ai/llm-provider');
             await llmProvider.waitForInit();
 
             // Compute tentative token directions BEFORE sending to LLM,

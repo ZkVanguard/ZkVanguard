@@ -18,6 +18,7 @@ import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { createHedge, upsertOnChainHedge } from '@/lib/db/hedges';
+import { getStrictHedgePrice } from '@/lib/services/market-data/unified-price-provider';
 import { registerHedgeOwnership } from '@/lib/hedge-ownership';
 import { privateHedgeService } from '@/lib/services/cronos/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
@@ -579,7 +580,6 @@ export async function POST(request: NextRequest) {
     let priceSource: string;
     
     try {
-      const { getStrictHedgePrice } = await import('@/lib/services/market-data/unified-price-provider');
       const priceContext = await getStrictHedgePrice(asset, side, {
         maxStalenessMs: 15000, // 15s max for executions
         maxSpreadPercent: 3.0,

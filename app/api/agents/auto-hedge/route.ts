@@ -20,6 +20,7 @@ import {
   getAutoHedgeConfig 
 } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
+import { getActiveHedges } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 
@@ -40,7 +41,6 @@ export async function GET(request: NextRequest) {
     const currentStatus = autoHedgingService.getStatus();
     
     // Get active hedges count
-    const { getActiveHedges } = await import('@/lib/db/hedges');
     const activeHedges = await getActiveHedges();
     const activeHedgesDeduped = activeHedges.filter(h => h.status === 'active').length;
     

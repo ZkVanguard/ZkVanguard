@@ -39,6 +39,9 @@ import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-s
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCurrentChainId, getUsdcAddress, getRpcUrl, isTestnet } from '@/lib/utils/network';
 import { logger } from '@/lib/utils/logger';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
+import { verifyInternalAuth } from '@/lib/security/auth-middleware';
+import { getStrictHedgePrice } from '@/lib/services/market-data/unified-price-provider';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -90,7 +93,6 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   // Rate limiting
-  const { mutationLimiter } = await import('@/lib/security/rate-limiter');
   const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
@@ -108,7 +110,6 @@ export async function POST(request: NextRequest) {
     const { pairIndex, collateralAmount, leverage, isLong, walletAddress, signature, timestamp, systemSecret } = body;
 
     // Check for internal/system authentication (for automated hedging services)
-    const { verifyInternalAuth } = await import('@/lib/security/auth-middleware');
     const isInternalCall = verifyInternalAuth(request);
     const cronSecret = process.env.CRON_SECRET?.trim();
     const isSystemCall = systemSecret && cronSecret && systemSecret === cronSecret;
@@ -273,9 +274,7 @@ export async function POST(request: NextRequest) {
     let entryPrice: number;
     let priceSource: string;
     
-    try {
-      const { getStrictHedgePrice } = await import('@/lib/services/market-data/unified-price-provider');
-      const priceContext = await getStrictHedgePrice(asset, side as 'LONG' | 'SHORT', {
+    try {      const priceContext = await getStrictHedgePrice(asset, side as 'LONG' | 'SHORT', {
         maxStalenessMs: 15000, // 15s max staleness for executions
         maxSpreadPercent: 3.0, // Allow higher spread on testnet
       });

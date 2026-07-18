@@ -19,6 +19,10 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
+import { computeDustReport, formatDustReport } from '@/lib/services/sui/dust-manager';
+import { query } from '@/lib/db/postgres';
+import { checkBeforeTrade } from '@/lib/services/agents/agent-trade-guard';
+import { checkAndCloseDrifts } from '@/lib/services/agents/position-drift-monitor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,7 +53,6 @@ async function handle(req: NextRequest, dryRun: boolean) {
   if (mode === 'dust') {
     try {
       const bf = BluefinService.getInstance();
-      const { computeDustReport, formatDustReport } = await import('@/lib/services/sui/dust-manager');
       const report = await computeDustReport(bf);
       if (!dryRun && report.dustPositions > 0) {
         await notifyDiscord(formatDustReport(report), 'WARN', { report });
@@ -74,7 +77,6 @@ async function handle(req: NextRequest, dryRun: boolean) {
       const bf = BluefinService.getInstance();
       if (dryRun) {
         // Dry-run: enumerate what checkBeforeTrade would decide per active hedge
-        const { query } = await import('@/lib/db/postgres');
         const rows = await query<{
           market: string; side: string; notional_value: string;
         }>(
@@ -82,7 +84,6 @@ async function handle(req: NextRequest, dryRun: boolean) {
             WHERE chain='sui' AND status='active' AND COALESCE(notional_value,0) >= 1
               AND market LIKE '%-PERP'`,
         );
-        const { checkBeforeTrade } = await import('@/lib/services/agents/agent-trade-guard');
         const plan = [];
         for (const r of rows) {
           const asset = r.market.replace(/-PERP$/i, '').toUpperCase();
@@ -108,7 +109,6 @@ async function handle(req: NextRequest, dryRun: boolean) {
           durationMs: Date.now() - startTime,
         });
       }
-      const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
       const result = await checkAndCloseDrifts('sui', bf);
       logger.info('[close-bluefin-positions?mode=drifted] complete', result);
       return NextResponse.json({

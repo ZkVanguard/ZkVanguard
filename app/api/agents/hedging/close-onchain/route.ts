@@ -18,8 +18,9 @@ import { getHedgeOwner, removeHedgeOwnership, CLOSE_HEDGE_DOMAIN, CLOSE_HEDGE_TY
 import { getCronosProvider, getCronosRpcUrl } from '@/lib/throttled-provider';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { getHedgeByNumericId } from '@/lib/db/hedges';
+import { getHedgeByNumericId, closeOnChainHedge } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
+import { mutationLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -50,19 +51,6 @@ const PAIR_NAMES: Record<number, string> = {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
-  // Rate limiting - wrap in try-catch to avoid mysterious 500s
-  let mutationLimiter;
-  try {
-    const rateModule = await import('@/lib/security/rate-limiter');
-    mutationLimiter = rateModule.mutationLimiter;
-  } catch (importErr) {
-    logger.error('Failed to import rate-limiter', { error: importErr instanceof Error ? importErr.message : String(importErr) });
-    return NextResponse.json(
-      { success: false, error: 'Server configuration error (rate-limiter)' },
-      { status: 500 }
-    );
-  }
-  
   const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
 
@@ -451,7 +439,6 @@ export async function POST(request: NextRequest) {
 
     // ═══ DB UPDATE: Persist closed status to Neon ═══
     try {
-      const { closeOnChainHedge } = await import('@/lib/db/hedges');
       await closeOnChainHedge(hedgeId, realizedPnl, tx.hash);
       logger.info(`✅ DB updated: hedge ${hedgeId.slice(0,18)}... marked as closed`);
     } catch (dbErr) {
