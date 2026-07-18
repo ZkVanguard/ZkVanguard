@@ -578,12 +578,17 @@ export function ChatInterface({ address: _address }: { address: string }) {
         case 'generate_report': {
           setActiveAgent('Lead Agent → Reporting Agent');
           const report = await generatePortfolioReport(_address, 'monthly');
+          const perf = report.performance;
+          const perfAvailable = perf && perf.available !== false;
+          const perfBlock = perfAvailable
+            ? `**Performance:**\n• Daily: ${perf.daily}%\n• Weekly: ${perf.weekly}%\n• Monthly: ${perf.monthly}%\n\n`
+            : `**Performance:** Historical P/L not yet tracked per-address — showing current snapshot only.\n\n`;
           response = {
-            content: `📈 **Compliance Report Generated**\n\n` +
+            content: `📈 **Portfolio Snapshot**\n\n` +
               `**Period:** ${report.period}\n` +
               `**Total Value:** $${(report.totalValue / 1000).toFixed(1)}K\n` +
               `**P/L:** $${report.profitLoss >= 0 ? '+' : ''}${report.profitLoss.toFixed(0)}\n\n` +
-              `**Performance:**\n• Daily: ${report.performance.daily}%\n• Weekly: ${report.performance.weekly}%\n• Monthly: ${report.performance.monthly}%\n\n` +
+              perfBlock +
               `🔐 **Privacy:** All sensitive data protected with ZK proofs`,
             agent: 'Reporting Agent',
           };
