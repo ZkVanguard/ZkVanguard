@@ -189,6 +189,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
             { stale, autoClose },
           ).catch(() => {});
           if (autoClose) {
+            const dustAutoResolve = (process.env.DUST_LOCK_AUTO_RESOLVE ?? '') === '1';
             for (const s of stale) {
               const symbol = `${s.asset}-PERP`;
               try {
@@ -198,7 +199,59 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
                 // leverage isn't a valid parameter, and .catch(() => {})
                 // swallowed the failure. Observed 2026-07-17: #190 ETH SHORT
                 // flagged for 3+ days with no actual close.
-                const result = await bf.closeHedge({ symbol });
+                let result = await bf.closeHedge({ symbol });
+
+                // Dust-lock auto-resolve (2026-07-17): when close fails
+                // because size < minQty, top up the position to clear
+                // minQty, then retry close. Costs a small amount of
+                // extra collateral (~1-2 USDC at current sizes) but
+                // frees the trapped position. Env-gated because it
+                // spends capital.
+                if (!result.success
+                  && dustAutoResolve
+                  && /dust-locked at venue|<\s*minQty/i.test(result.error || '')) {
+                  try {
+                    const positions = await bf.getPositions();
+                    const pos = positions.find((p) => p.symbol === symbol);
+                    const { BLUEFIN_PAIRS } = await import('@/lib/services/sui/BluefinService');
+                    const pair = BLUEFIN_PAIRS[symbol as keyof typeof BLUEFIN_PAIRS];
+                    if (pos && pair) {
+                      const currentSize = Math.abs(Number(pos.size ?? 0));
+                      const minQty = pair.minQuantity;
+                      const topupNeeded = Math.max(minQty - currentSize, pair.stepSize);
+                      // Round up to nearest stepSize
+                      const topupSnapped = Math.ceil(topupNeeded / pair.stepSize) * pair.stepSize;
+                      logger.warn('[SuiHedgeReconcile] dust-lock detected, attempting auto-resolve', {
+                        symbol, currentSize, minQty, topupSnapped, side: pos.side,
+                      });
+                      // Top up the SAME side to clear minQty
+                      const topupResult = await bf.openHedge({
+                        symbol, side: pos.side as 'LONG' | 'SHORT',
+                        size: topupSnapped, leverage: 3,
+                        reason: `dust-lock auto-resolve top-up (was ${currentSize} < ${minQty})`,
+                      });
+                      if (topupResult.success) {
+                        await notifyDiscord(
+                          `🔧 Dust-lock top-up: #${s.id} ${symbol} +${topupSnapped} to clear minQty`,
+                          'TRADE', { hedgeId: s.id, symbol, topupSnapped, topupResult },
+                        ).catch(() => {});
+                        // Wait 3s for fill, then retry close of full position
+                        await new Promise((r) => setTimeout(r, 3000));
+                        result = await bf.closeHedge({ symbol });
+                      } else {
+                        logger.warn('[SuiHedgeReconcile] dust top-up FAILED', {
+                          symbol, error: topupResult.error,
+                        });
+                      }
+                    }
+                  } catch (dustErr) {
+                    logger.warn('[SuiHedgeReconcile] dust auto-resolve threw', {
+                      symbol,
+                      error: dustErr instanceof Error ? dustErr.message : String(dustErr),
+                    });
+                  }
+                }
+
                 if (!result.success) {
                   logger.warn('[SuiHedgeReconcile] stale-close FAILED', {
                     hedgeId: s.id, symbol, error: result.error,
