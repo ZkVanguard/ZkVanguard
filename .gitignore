@@ -399,6 +399,12 @@ CLAUDE.md
 # -------------------------------------------
 .claude/settings.local.json
 
+# -------------------------------------------
+# Graphify knowledge-graph output (per-machine, up to ~100 MB)
+# See CLAUDE.md § "Codebase navigation (Graphify)" for usage.
+# -------------------------------------------
+graphify-out/
+
 # Operational snapshot artifacts (debug only)
 scripts/.neon-snapshot.json
 docs/GRANT_HONEST_ASSESSMENT.md
