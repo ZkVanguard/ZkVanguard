@@ -192,11 +192,15 @@ async function readPoolStaticsOnChain(): Promise<{
     const json = await resp.json();
     const fields = json?.result?.data?.content?.fields;
     if (!fields) return null;
-    // Decimal handling: USDC has 6 decimals, share price stored in higher precision
+    // Decimal handling: USDC has 6 decimals, share price stored in higher precision.
+    // On-chain field is all_time_high_nav_per_share (verified against pool state
+    // 2026-07-14: value 2318309 = $2.318309). Older code read all_time_high_nav
+    // which is undefined — falling back to current share price and reporting
+    // drawdownPct=0 even when the pool was 40%+ off ATH.
     return {
       totalDeposited: Number(fields.total_deposited ?? 0) / 1e6,
       totalWithdrawn: Number(fields.total_withdrawn ?? 0) / 1e6,
-      allTimeHighSharePrice: Number(fields.all_time_high_nav ?? 0) / 1e6,
+      allTimeHighSharePrice: Number(fields.all_time_high_nav_per_share ?? 0) / 1e6,
     };
   } catch {
     return null;
