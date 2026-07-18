@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       portfolio: summary,
       trades: tradeHistory,
       snapshots,
-      note: 'Using REAL market data from Crypto.com MCP (FREE hackathon service)',
+      note: 'Using real market data from Crypto.com MCP',
     });
   } catch (error) {
     logger.error('Simulated portfolio error:', error);

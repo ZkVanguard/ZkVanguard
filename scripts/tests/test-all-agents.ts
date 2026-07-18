@@ -210,9 +210,9 @@ async function testAllAgents() {
   console.log('   ✅ Comprehensive portfolio reporting');
   console.log();
   
-  console.log('💡 HACKATHON INTEGRATION:');
-  console.log('   ✅ Uses Cronos x402 Paytech (Gasless Transactions)');
-  console.log('   ✅ Uses Crypto.com AI Agent SDK (FREE Hackathon API)');
+  console.log('💡 INTEGRATIONS:');
+  console.log('   ✅ Uses Cronos x402 (gasless transactions)');
+  console.log('   ✅ Uses Crypto.com AI Agent SDK');
   console.log('   ✅ Deploys to Cronos zkEVM Testnet');
   console.log('   ✅ Leverages VVS Finance for DeFi integration');
   console.log();

@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
           stealthAddress: privateHedge.stealthAddress.substring(0, 10) + '...',
         });
         
-        // For hackathon demo, we simulate on-chain storage
+        // Simulate on-chain storage for the private-execute path
         txHash = `0x${crypto.randomBytes(32).toString('hex')}`;
         onChainStored = true;
       } catch (chainError) {

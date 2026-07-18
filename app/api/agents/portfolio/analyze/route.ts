@@ -14,7 +14,7 @@ export const maxDuration = 30;
 /**
  * AI-Powered Portfolio Analysis API
  * Uses HACKATHON-PROVIDED services:
- * - Crypto.com AI SDK (FREE for hackathon)
+ * - Crypto.com AI SDK
  * - Crypto.com MCP (FREE market data)
  */
 export async function POST(request: NextRequest) {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get market data from Crypto.com MCP (FREE hackathon service)
+    // Get market data from Crypto.com MCP
     const mcpClient = new MCPClient();
     await mcpClient.connect();
     
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Use Crypto.com AI SDK for analysis (FREE hackathon service)
+    // Use Crypto.com AI SDK for analysis
     const aiService = getCryptocomAIService();
     const analysis = await aiService.analyzePortfolio(address, portfolioData);
 
@@ -105,10 +105,6 @@ export async function POST(request: NextRequest) {
         ...analysis,
         tokens: portfolioData.tokens,
         totalValue: portfolioData.totalValue,
-      },
-      hackathonAPIs: {
-        aiSDK: 'Crypto.com AI Agent SDK (FREE)',
-        marketData: 'Crypto.com MCP (FREE)',
       },
       realAgent: aiService.isAvailable(),
       realMarketData: true,
@@ -124,10 +120,6 @@ export async function GET() {
   const aiService = getCryptocomAIService();
   return NextResponse.json({
     status: 'AI Portfolio Analysis API operational',
-    hackathonAPIs: {
-      'Crypto.com AI SDK': aiService.isAvailable() ? '✅ Active (FREE)' : '⚠️ Fallback mode',
-      'Crypto.com MCP': '✅ Available (FREE market data)',
-    },
-    note: 'Using hackathon-provided FREE APIs from Crypto.com',
+    note: 'Powered by Crypto.com AI Agent SDK',
   });
 }

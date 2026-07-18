@@ -3,7 +3,7 @@
  * 
  * Manages CommunityPool contract addresses and configurations across:
  * - Ethereum Mainnet - Production with USDT (via Tether WDK)
- * - Sepolia Testnet - Hackathon testing with WDK USDT
+ * - Sepolia Testnet - WDK USDT integration testing
  * - Cronos - Live on testnet, mainnet ready
  * - Hedera - Live on testnet
  * - SUI - Testing
@@ -92,7 +92,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
         pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
       },
       mainnet: {
-        communityPool: '0x0000000000000000000000000000000000000000', // Deploy after hackathon
+        communityPool: '0x0000000000000000000000000000000000000000', // Deploy pending
         usdt: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // Official Tether USDT on Ethereum
         pythOracle: '0x4305FB66699C3B2702D4d05CF36551390A4c69C6',
       },
@@ -205,7 +205,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     contracts: {
       testnet: {
         // CommunityPool deployed via hardhat (2026-03-18)
-        // OFFICIAL WDK USDT - use this for Tether Hackathon!
+        // OFFICIAL WDK USDT - use this for USDT support.
         communityPool: '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086',
         usdt: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL Tether WDK USDT
         pythOracle: '0xDd24F84d36BF92C65F92307595335bdFab5Bbd21',
@@ -218,7 +218,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     },
     // Pool accepts USDT deposits, manages diversified portfolio of 4 assets
     // On-chain allocations: 25% BTC, 25% ETH, 25% SUI, 25% CRO
-    // PRIMARY for Tether WDK Hackathon - has official USDT
+    // PRIMARY for Tether WDK - has official USDT
     assets: ['BTC', 'ETH', 'SUI', 'CRO'],
     status: 'live',
   },

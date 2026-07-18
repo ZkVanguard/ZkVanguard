@@ -76,7 +76,7 @@ class CryptocomAIService {
   private apiKey: string | null = null;
 
   constructor() {
-    // Initialize with API key from environment (hackathon-provided)
+    // Initialize with API key from environment
     // Check both NEXT_PUBLIC_ (client-side) and regular (server-side) versions
     this.apiKey = process.env.NEXT_PUBLIC_CRYPTOCOM_DEVELOPER_API_KEY || 
                    process.env.CRYPTOCOM_DEVELOPER_API_KEY || 
@@ -85,7 +85,7 @@ class CryptocomAIService {
     
     if (this.apiKey) {
       try {
-        // Dynamic import for Crypto.com AI Agent SDK (hackathon-provided)
+        // Dynamic import for Crypto.com AI Agent SDK
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         import('@crypto.com/ai-agent-client').then((module: any) => {
           const { createClient } = module;

@@ -16,7 +16,7 @@
  * 
  * Source: https://tether.to/en/transparency/#usdt
  * 
- * IMPORTANT: For Tether WDK Hackathon, use Sepolia which has OFFICIAL WDK USDT.
+ * IMPORTANT: For Tether WDK, use Sepolia which has OFFICIAL WDK USDT.
  * Cronos testnet uses testnet USDT (not official WDK).
  * 
  * For x402 payments: Use USD₮0 on Plasma/Stable chains
@@ -24,7 +24,7 @@
 import { getRpcUrl } from '../rpc-urls';
 
 export const USDT_ADDRESSES = {
-  // Sepolia Testnet - OFFICIAL WDK USDT (use this for hackathon!)
+  // Sepolia Testnet - OFFICIAL WDK USDT (use this for USDT support.)
   sepolia: {
     mainnet: null, // Sepolia is testnet only
     testnet: '0xd077a400968890eacc75cdc901f0356c943e4fdb', // OFFICIAL Tether WDK USDT
@@ -87,7 +87,7 @@ export interface WDKChainConfig {
 /**
  * WDK-compatible chain configurations.
  * 
- * PRIORITY: Sepolia has official WDK USDT - use for Tether Hackathon demo!
+ * PRIORITY: Sepolia has official WDK USDT - use for the WDK USDT integration.
  */
 export const WDK_CHAINS: Record<string, WDKChainConfig> = {
   // ============================================
@@ -265,7 +265,7 @@ export function getWDKEvmConfig(chainId: number) {
  * Default supported chain IDs for WDK integration.
  * Includes x402 recommended chains (Plasma, Stable)
  * 
- * PRIORITY: Sepolia (11155111) has official WDK USDT for hackathon!
+ * PRIORITY: Sepolia (11155111) has official WDK USDT for USDT support.
  */
 export const WDK_SUPPORTED_CHAINS = [
   25,       // Cronos Mainnet

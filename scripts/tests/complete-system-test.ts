@@ -506,7 +506,7 @@ async function runCompleteSystemTest() {
   
   log(`\n🚀 System Status: PRODUCTION READY`, colors.green);
   log(`📊 Total Score: ${passed}/${passed + failed} (${((passed / (passed + failed)) * 100).toFixed(0)}%)`, colors.cyan);
-  log(`🎯 Ready for Hackathon Demo: ${passed >= 6 ? 'YES ✅' : 'NEEDS REVIEW ⚠️'}`, passed >= 6 ? colors.green : colors.yellow);
+  log(`🎯 Ready for demo: ${passed >= 6 ? 'YES ✅' : 'NEEDS REVIEW ⚠️'}`, passed >= 6 ? colors.green : colors.yellow);
 }
 
 // Run the complete system test

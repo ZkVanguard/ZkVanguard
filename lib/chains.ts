@@ -31,7 +31,7 @@ export const EthereumMainnet = defineChain({
 // CRONOS CHAINS (EVM-Compatible)
 // ============================================
 
-// Cronos EVM Mainnet (Required for Cronos x402 Paytech Hackathon)
+// Cronos EVM Mainnet
 export const CronosMainnet = defineChain({
   id: 25,
   name: 'Cronos',

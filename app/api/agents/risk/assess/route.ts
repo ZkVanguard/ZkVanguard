@@ -13,9 +13,8 @@ export const maxDuration = 30;
 
 /**
  * Risk Assessment API Route
- * Uses HACKATHON-PROVIDED services:
- * - Crypto.com AI SDK (FREE for hackathon)
- * - Crypto.com MCP (FREE market data with historical prices)
+ * Uses Crypto.com AI Agent SDK for the risk model and Crypto.com MCP
+ * for market data (live prices + short historical series for volatility).
  */
 export async function POST(request: NextRequest) {
   const rateLimited = heavyLimiter.check(request);
@@ -72,9 +71,6 @@ export async function POST(request: NextRequest) {
         realAgent: aiService.isAvailable(),
         aiPowered: aiService.isAvailable(),
         simulationMode: false,
-        hackathonAPIs: {
-          aiSDK: 'Crypto.com AI Agent SDK (FREE)',
-        },
         timestamp: new Date().toISOString()
       });
     }
@@ -86,7 +82,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get market data from Crypto.com MCP (FREE hackathon service)
+    // Get market data from Crypto.com MCP
     const mcpClient = new MCPClient();
     await mcpClient.connect();
     
@@ -173,7 +169,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Use Crypto.com AI SDK for risk assessment (FREE hackathon service)
+    // Use Crypto.com AI SDK for risk assessment
     const aiService = getCryptocomAIService();
     const riskAssessment = await aiService.assessRisk(portfolioData);
 
@@ -192,10 +188,6 @@ export async function POST(request: NextRequest) {
         `Portfolio volatility: ${(riskAssessment.volatility * 100).toFixed(1)}%`,
         ...riskAssessment.factors.map(f => `${f.factor}: ${f.description}`),
       ],
-      hackathonAPIs: {
-        aiSDK: 'Crypto.com AI Agent SDK (FREE)',
-        marketData: 'Crypto.com MCP (FREE with historical data)',
-      },
       realAgent: aiService.isAvailable(),
       aiPowered: aiService.isAvailable(),
       realMarketData: true,

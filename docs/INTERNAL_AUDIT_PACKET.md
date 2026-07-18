@@ -142,7 +142,7 @@ Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I
 - **NAV oracle single-source.** The `admin_set_external_nav` attestation is fed by the cron polling Crypto.com prices + BlueFin position values. There's no Pyth or Chainlink cross-check today. Documented as Tranche B work.
 - **BlueFin as sole perp venue.** Multi-venue router (TA2) has adapter stubs for Hyperliquid + dYdX but no keys yet. Real hedging still 100% BlueFin.
 - **Hot-key AdminCap.** Documented in TA5 runbook. Not yet executed.
-- **Privacy contracts on testnet only.** `zk_hedge_commitment`, `zk_proxy_vault`, `zk_verifier` are deployed on testnet at `0xb1442796...`. Mainnet deploy pending per `docs/HEDGE_PRIVACY_MAINNET_DEPLOY.md`.
+- **Privacy contracts on testnet only.** `zk_hedge_commitment`, `zk_proxy_vault`, `zk_verifier` are deployed on testnet at `0xb1442796...`. Mainnet deploy pending — audit should verify the mainnet package IDs in `docs/SUI_DEPLOYMENT.md` do not yet include the privacy contract types.
 - **`SettlementAgent` is x402-only.** Correctly excluded on SUI cycles. On Cronos it runs but x402 flows are not live in production either.
 - **Custody attestor Move contract not deployed.** Code + tests + off-chain SDK are shipped. Deploy pending per `scripts/deploy-custody-attestor.md`.
 
@@ -174,7 +174,7 @@ Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I
 
 Every prod deploy has:
 - Commit SHA in Vercel deploy metadata → `/api/health/production` returns SHA + build timestamp
-- Signed commits requirement documented in `docs/SUPPLY_CHAIN_POLICY.md` (audit should verify this is enforced on `main` — it may not be yet)
+- Signed commits: recommended but not yet enforced on `main`. Audit should verify branch-protection settings on GitHub.
 - Lockfile-first policy enforced by `scripts/verify-supply-chain.cjs`
 - `.audit-allowlist.json` review date visible
 
@@ -207,16 +207,17 @@ findings should map cleanly to bounty scope.
 
 Any audit engagement starts with a disclosure of known issues. Ours:
 
-1. **Directive cache is derived from PredictionAggregator, not HedgingAgent's own reasoning** — the LeadAgent cycle runs the specialist agents but their `hedgingStrategy.recommendations` output feeds only into the Discord notification, not into the guard cache. Functionally equivalent (same data source underneath), semantically less rigorous. Documented in `docs/AGENT_PIPELINE_ACTIVATION.md` § semantic gap.
+1. **Directive cache is derived from PredictionAggregator, not HedgingAgent's own reasoning** — the LeadAgent cycle runs the specialist agents but their `hedgingStrategy.recommendations` output feeds only into the Discord notification, not into the guard cache. Functionally equivalent (same data source underneath), semantically less rigorous.
 2. **7 HIGH-severity npm audit findings remain** after triaging 8 to `.audit-allowlist.json`. Actionable ones (`lodash`, `next`, `path-to-regexp`) are transitives of currently-required Sui SDK versions.
 3. **`test_zk_system.py` is bit-rotted.** References a renamed module (`zkp.core.true_stark` → `cuda_true_stark`). Doesn't affect the shipping `test_real_world_zk.py` or E2E suites.
 4. **Multi-agent consensus is deterministic single-source** — see §8.3.
 
 ## Related documents
 
-- `docs/HEDGE_PRIVACY_MAINNET_DEPLOY.md` — privacy contract deploy runbook
-- `docs/ADMINCAP_MSAFE_MIGRATION.md` — hot-key mitigation runbook
-- `docs/AGENT_PIPELINE_ACTIVATION.md` — agent activation flow
-- `docs/SLO_AND_RUNBOOKS.md` — SLO + top-5 incident runbooks
-- `docs/HEDGE_PRIVACY_MAINNET_GATE.md` — privacy gate matrix
+- `docs/ARCHITECTURE.md` — full system architecture
+- `docs/CHANGELOG.md` — v0.1.0 / v0.2.0 / v0.3.0 release history with post-ship follow-ups
+- `docs/DEPLOY_RUNBOOK.md` — incident response, env preset, BlueFin invariants (Appendix Y), reconcile topology
+- `docs/SECURITY.md` — threat model + reporting policy
+- `docs/SLO_AND_RUNBOOKS.md` — SLO + incident runbooks (Runbook 6: phantom rate, Runbook 7: alert-response-loop misfires)
+- `docs/SUI_DEPLOYMENT.md` — mainnet deploy state + object IDs
 - [SCALABILITY_ANALYSIS.md](./SCALABILITY_ANALYSIS.md) — scale-readiness walls (future work)

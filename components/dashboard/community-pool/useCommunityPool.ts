@@ -244,14 +244,14 @@ export function useCommunityPool(propAddress?: string) {
         dispatchPool({ type: 'SET_CHAIN', payload: 'sui' });
       }
     } else if (evmWalletConnected && !suiWalletConnected) {
-      // Only EVM wallet connected - prefer Sepolia (WDK USDT) for hackathon demo
+      // Only EVM wallet connected - prefer Sepolia (WDK USDT) demo
       // Only switch if user is actually on Sepolia, otherwise keep default
       if (chainId === 11155111 && selectedChain !== 'sepolia') {
         dispatchPool({ type: 'SET_CHAIN', payload: 'sepolia' });
       }
       // Don't auto-switch away from Sepolia if user is on another chain
     } else if (suiWalletConnected && evmWalletConnected) {
-      // Both wallets connected - prefer Sepolia/WDK for Tether hackathon
+      // Both wallets connected — prefer Sepolia (official WDK USDT)
       if (selectedChain !== 'sepolia') {
         dispatchPool({ type: 'SET_CHAIN', payload: 'sepolia' });
       }

@@ -8,7 +8,7 @@
 // ============================================
 
 export const CHAIN_IDS = {
-  SEPOLIA: 11155111, // Primary for WDK USDT hackathon
+  SEPOLIA: 11155111, // Sepolia primary for WDK USDT
   CRONOS_MAINNET: 25,
   CRONOS_TESTNET: 338,
   CRONOS_ZKEVM: 388,
@@ -140,12 +140,12 @@ export function getSuiNetwork(): 'mainnet' | 'testnet' | 'devnet' {
 /**
  * Get USDT address for current network (via Tether WDK)
  * 
- * PRIORITY: Sepolia has OFFICIAL WDK USDT - use for hackathon!
+ * PRIORITY: Sepolia has OFFICIAL WDK USDT - use for USDT support.
  */
 export function getUsdtAddress(chainId?: number): `0x${string}` {
   const id = chainId ?? getCurrentChainId();
   switch (id) {
-    // OFFICIAL WDK USDT - Tether Hackathon primary
+    // OFFICIAL WDK USDT - Sepolia WDK USDT primary
     case CHAIN_IDS.SEPOLIA:
       return '0xd077a400968890eacc75cdc901f0356c943e4fdb';
     // Hedera Testnet - USDT
@@ -163,7 +163,7 @@ export function getUsdtAddress(chainId?: number): `0x${string}` {
     case CHAIN_IDS.CRONOS_ZKEVM:
       return '0x0000000000000000000000000000000000000000';
     default:
-      // Default to Sepolia WDK USDT for hackathon
+      // Default to Sepolia WDK USDT
       return '0xd077a400968890eacc75cdc901f0356c943e4fdb';
   }
 }

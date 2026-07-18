@@ -2,8 +2,8 @@
  * @fileoverview MCP (Model Context Protocol) Server client for real-time data feeds
  * @module integrations/mcp/MCPClient
  * 
- * Uses Crypto.com's FREE MCP server via SSE (Server-Sent Events)
- * No API key required - public access for hackathon projects
+ * Uses Crypto.com's public MCP server via SSE (Server-Sent Events).
+ * No API key required.
  */
 
 import { EventEmitter } from 'eventemitter3';
@@ -47,7 +47,7 @@ export class MCPClient extends EventEmitter {
   constructor() {
     super();
     // Disabled - MCP is for Claude Desktop integration, not direct API access
-    // console.log('✅ Crypto.com MCP Client initialized (SSE-based, FREE hackathon access)');
+    // console.log('✅ Crypto.com MCP Client initialized (SSE-based, public access)');
   }
 
   /**

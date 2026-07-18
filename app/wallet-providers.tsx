@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WdkProvider } from '@/lib/wdk/wdk-context';
 import { PositionsProvider } from '../contexts/PositionsContext';
 
-// Production-ready configuration for Tether WDK Hackathon
+// Production-ready configuration for Tether WDK
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

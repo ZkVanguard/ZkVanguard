@@ -505,7 +505,7 @@ function ZKProofsSection() {
       <div className="bg-[#007AFF]/10 border border-[#007AFF]/30 rounded-lg p-4 mb-6">
         <p className="text-[#1D1D1F] text-sm">
           <strong>💡 Cronos zkEVM Context:</strong> Cronos zkEVM uses ZK Stack from zkSync/Matter Labs, NOT StarkNet/Cairo. 
-          This project implements a custom Python STARK proof system (AIR + FRI protocol) which is valid for the hackathon. 
+          This project implements a custom Python STARK proof system (AIR + FRI protocol) which is 
           No Cairo conversion needed.
         </p>
       </div>

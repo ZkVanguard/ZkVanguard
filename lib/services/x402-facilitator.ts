@@ -2,7 +2,7 @@
  * X402 Facilitator Service - Official SDK Integration
  * 
  * Uses @crypto.com/facilitator-client for proper x402 payment flows.
- * This is the CORE x402 integration for the hackathon.
+ * Core x402 gasless-payment integration.
  */
 
 import { logger } from '../utils/logger';

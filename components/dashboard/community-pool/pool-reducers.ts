@@ -55,7 +55,7 @@ export const initialPoolState: CommunityPoolState = {
   loading: true,
   error: null,
   successMessage: null,
-  selectedChain: 'sepolia',  // Sepolia with WDK USDT for Tether Hackathon
+  selectedChain: 'sepolia',  // Sepolia carries official WDK USDT
   suiPoolStateId: null,
 };
 

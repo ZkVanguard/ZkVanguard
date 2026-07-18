@@ -471,10 +471,6 @@ export default function SimulatorPage() {
             const riskScore = riskResult.riskScore ?? 65; // Default risk score
             addLog(`   └─ REAL API Response: VaR ${(varValue * 100).toFixed(1)}% | Risk Score: ${riskScore.toFixed(0)}/100`, 'success');
             addLog(`   └─ Agent Status: ${riskResult.realAgent ? '✅ Real AI Agent' : '⚠️ Simulation Mode'}`, riskResult.realAgent ? 'success' : 'warning');
-            const riskResultExtended = riskResult as RealRiskAssessment & { hackathonAPIs?: { aiSDK?: string } };
-            if (riskResultExtended.hackathonAPIs) {
-              addLog(`   └─ Using: ${riskResultExtended.hackathonAPIs.aiSDK || 'Crypto.com AI SDK'}`, 'info');
-            }
           } else {
             addLog('   └─ Current VaR: 6.8% (Threshold: 4.0%) [Simulated]', 'error');
           }
