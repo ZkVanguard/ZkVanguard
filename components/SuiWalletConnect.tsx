@@ -10,7 +10,7 @@ import {
   useDisconnectWallet, 
   useCurrentWallet,
 } from '@mysten/dapp-kit';
-import type { WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
+import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { useSuiSafe } from '@/app/sui-providers';
 import {
   SUI_MOBILE_WALLETS,

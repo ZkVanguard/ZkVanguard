@@ -39,7 +39,7 @@ import { getProviderAsync } from './provider-cache';
 export type { StoredWallet } from './storage';
 
 // Dev-only logging — tree-shaken in production
-const wdkLog =
+const _wdkLog =
   process.env.NODE_ENV === 'development'
     ? (...args: unknown[]) => logger.debug(String(args[0] ?? ''), ...args.slice(1))
     : (..._args: unknown[]) => {};

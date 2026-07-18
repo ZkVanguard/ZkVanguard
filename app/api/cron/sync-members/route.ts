@@ -16,7 +16,6 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { saveUserSharesToDb } from '@/lib/db/community-pool';
 import { ethers } from 'ethers';
 import { getCronosRpcUrl } from '@/lib/throttled-provider';
-import { errMsg } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;

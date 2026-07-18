@@ -16,7 +16,7 @@
 
 'use client';
 
-import { useReducer, useCallback, useRef, useEffect, useMemo, useTransition, startTransition } from 'react';
+import { useReducer, useCallback, useRef, useEffect, useMemo, startTransition } from 'react';
 // WDK hooks
 import { 
   useAccount, 
@@ -29,7 +29,7 @@ import {
   useSignTypedData 
 } from '@/lib/wdk/wdk-hooks';
 import { useSmartAccount } from '@/lib/wdk/useSmartAccount';
-import { parseUnits, formatUnits, keccak256, toBytes, encodePacked } from 'viem';
+import { parseUnits, formatUnits } from 'viem';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { usePolling } from '@/lib/hooks';
@@ -42,7 +42,7 @@ import {
   isPoolDeployed,
   COMMUNITY_POOL_ABI,
 } from '@/lib/contracts/community-pool-config';
-import { getChainKeyFromId, getNetworkFromChainId, getValidChainIds } from './utils';
+import { getNetworkFromChainId, getValidChainIds } from './utils';
 import type { 
   CommunityPoolState, 
   TransactionState, 
@@ -107,11 +107,11 @@ export function useCommunityPool(propAddress?: string) {
   const suiSponsoredExecute = suiContext?.sponsoredExecute;
   const suiNetwork = suiContext?.network ?? 'testnet';
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
-  const suiSetNetwork = suiContext?.setNetwork;
+  const _suiSetNetwork = suiContext?.setNetwork;
   
   // WDK chain support check (treasury wallet is server-side)
   const wdkContext = useWdkSafe();
-  const isWdkChainSupported = wdkContext?.isChainSupported;
+  const _isWdkChainSupported = wdkContext?.isChainSupported;
   
   // Derived values
   const { selectedChain } = poolState;
@@ -138,7 +138,7 @@ export function useCommunityPool(propAddress?: string) {
   }, [selectedChain, suiIsConnected, isConnected, address]);
   
   // Effective address based on active wallet
-  const effectiveAddress = useMemo(() => {
+  const _effectiveAddress = useMemo(() => {
     if (activeWalletType === 'sui') return suiAddress;
     return address;
   }, [activeWalletType, suiAddress, address]);

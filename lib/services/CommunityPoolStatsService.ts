@@ -19,7 +19,6 @@
 import { ethers, type BrowserProvider, type JsonRpcProvider } from 'ethers';
 import { logger } from '../utils/logger';
 import { isMainnet } from '../utils/network';
-import { getMarketDataService } from './market-data/RealMarketDataService';
 import { getPoolStateFromDb, savePoolStateToDb } from '../db/community-pool';
 
 // ═══════════════════════════════════════════════════════════════
@@ -63,7 +62,7 @@ const ASSET_INDEX = {
   SUI: 2,
   CRO: 3,
 } as const;
-type AssetSymbol = keyof typeof ASSET_INDEX;
+type _AssetSymbol = keyof typeof ASSET_INDEX;
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES

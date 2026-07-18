@@ -14,7 +14,7 @@ import {
   forceCommunityPoolCheck,
 } from '@/lib/services/market-data/PriceAlertWebhook';
 import { logger } from '@/lib/utils/logger';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 export const dynamic = 'force-dynamic';
 

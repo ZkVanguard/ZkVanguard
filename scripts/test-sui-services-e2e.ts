@@ -207,7 +207,7 @@ async function testSuiExplorerService() {
 
   // Get SUI balance of a known address (the package publisher)
   // We'll use the deployer address from the conversation
-  const testAddr = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c'; // This is an EVM address
+  const _testAddr = '0xb9966f1007E4aD3A37D29949162d68b0dF8Eb51c'; // This is an EVM address
   // Use the package ID as a known SUI object owner instead
   // Let's check the rwaManagerState owner
   try {

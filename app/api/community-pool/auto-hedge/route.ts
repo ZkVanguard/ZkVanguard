@@ -17,7 +17,7 @@ import { getActiveHedges } from '@/lib/db/hedges';
 import { query, ensureAllTables } from '@/lib/db/postgres';
 import { autoHedgingService } from '@/lib/services/hedging/AutoHedgingService';
 import { readLimiter } from '@/lib/security/rate-limiter';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -158,7 +158,7 @@ async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
 
     const enabled = Boolean(autoCfg.enabled);
     const riskThresholdBps = Number(autoCfg.risk_threshold_bps || 0);
-    const maxHedgeRatioBps = Number(autoCfg.max_hedge_ratio_bps || 0);
+    const _maxHedgeRatioBps = Number(autoCfg.max_hedge_ratio_bps || 0);
     const defaultLeverage = Number(autoCfg.default_leverage || 1);
 
     return {

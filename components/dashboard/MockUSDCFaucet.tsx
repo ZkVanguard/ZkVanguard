@@ -5,7 +5,7 @@ import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink, AlertTriangle }
 import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { formatUnits, parseUnits } from 'viem';
-import { CHAIN_IDS, getUsdcAddress, isTestnet as checkIsTestnet, getExplorerUrl } from '@/lib/utils/network';
+import { CHAIN_IDS, getExplorerUrl } from '@/lib/utils/network';
 
 // TESTNET ONLY - Testnet USDC with public mint() function
 // This component should ONLY be rendered on testnet (chainId 338)
@@ -62,7 +62,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const isTestnet = chainId === CHAIN_IDS.CRONOS_TESTNET;
-  const explorerUrl = getExplorerUrl(chainId);
+  const _explorerUrl = getExplorerUrl(chainId);
   
   const [balance, setBalance] = useState<string>('0');
   const [selectedAmount, setSelectedAmount] = useState('10000');

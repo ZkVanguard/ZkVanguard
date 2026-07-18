@@ -19,7 +19,7 @@ import type { AutoRebalanceConfig } from '@/lib/storage/auto-rebalance-storage';
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
 import type { RebalanceAssessment } from '@/lib/services/rebalance-executor';
 import { getTimestamp, setTimestamp, getNumber, setNumber, CronKeys } from '@/lib/db/cron-state';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 
@@ -27,7 +27,7 @@ export const maxDuration = 30;
 // Configuration
 const DRIFT_THRESHOLD_DEFAULT = 2; // 2% - lowered for more active rebalancing
 const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
-const LOSS_PROTECTION_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours default
+const _LOSS_PROTECTION_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours default
 
 // In-memory caches — loaded from DB on cold start, saved on change
 let lastHedgeTimeCache = new Map<number, number>();

@@ -20,7 +20,6 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { execSync } from 'child_process';
 import { SUI_USDC_POOL_CONFIG } from '../lib/services/sui/SuiCommunityPoolService';
-import * as fs from 'fs';
 import * as path from 'path';
 
 const DRY_RUN = process.argv.includes('--dry-run');

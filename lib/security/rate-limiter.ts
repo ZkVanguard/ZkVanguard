@@ -144,7 +144,7 @@ function createUpstashLimiter(config: RateLimitConfig, redis: Redis) {
 
   return {
     check(request: NextRequest): NextResponse | null {
-      const key = keyFn(request);
+      const _key = keyFn(request);
       // Upstash ratelimit is async, but our API is sync for backwards compatibility.
       // Use a synchronous wrapper: fire the check and allow it through optimistically,
       // relying on the next request to catch violations. This avoids making every

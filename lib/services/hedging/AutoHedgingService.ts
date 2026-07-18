@@ -20,12 +20,11 @@ import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { getUnifiedPriceProvider, getHedgeExecutionPrice } from '../market-data/unified-price-provider';
-import { getAutoHedgeConfigs, type AutoHedgeConfig as StoredAutoHedgeConfig } from '@/lib/storage/auto-hedge-storage';
+import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, SUI_COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 import { calculatePoolNAV } from '../cronos/CommunityPoolService';
 import { getPoolStats as getUnifiedPoolStats } from '../CommunityPoolStatsService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
-import type { FiveMinBTCSignal } from '../market-data/Polymarket5MinService';
 import { PredictionAggregatorService, type AggregatedPrediction } from '../market-data/PredictionAggregatorService';
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 import {

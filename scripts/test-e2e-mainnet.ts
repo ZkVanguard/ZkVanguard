@@ -578,7 +578,7 @@ async function testServiceLayer() {
   // 5c. Aggregator service
   try {
     const { getBluefinAggregatorService } = await import('../lib/services/sui/BluefinAggregatorService');
-    const agg = getBluefinAggregatorService('mainnet');
+    const _agg = getBluefinAggregatorService('mainnet');
     ok('BluefinAggregatorService(mainnet)', 'initialized');
   } catch (e: any) {
     err('BluefinAggregatorService', e.message);

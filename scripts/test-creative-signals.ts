@@ -14,7 +14,7 @@
  * internet but no local secrets.
  */
 
-import { getDynamicTrackedAssets, MultiAssetSignalService } from '../lib/services/market-data/MultiAssetSignalService';
+import { getDynamicTrackedAssets } from '../lib/services/market-data/MultiAssetSignalService';
 import { ManifoldMarketService } from '../lib/services/market-data/ManifoldMarketService';
 import { SignalDriftFusion } from '../lib/services/market-data/SignalDriftFusion';
 import { PredictionAggregatorService } from '../lib/services/market-data/PredictionAggregatorService';

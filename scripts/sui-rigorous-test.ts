@@ -191,7 +191,7 @@ async function testDeposit(keypair: Ed25519Keypair, amountMist: number): Promise
 }
 
 async function testWithdraw(keypair: Ed25519Keypair, sharesToBurn: number): Promise<string> {
-  const address = keypair.getPublicKey().toSuiAddress();
+  const _address = keypair.getPublicKey().toSuiAddress();
   
   console.log(`   Withdrawing ${formatSui(sharesToBurn)} shares...`);
   

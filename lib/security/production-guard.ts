@@ -242,7 +242,7 @@ export function validateLeverage(leverage: unknown, fieldName: string = 'leverag
 // ═══════════════════════════════════════════════════════════════════════════
 
 const EVM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
-const SUI_ADDRESS_REGEX = /^0x[a-fA-F0-9]{64}$/;
+const _SUI_ADDRESS_REGEX = /^0x[a-fA-F0-9]{64}$/;
 const TX_HASH_REGEX = /^0x[a-fA-F0-9]{64}$/;
 
 /**
@@ -462,7 +462,7 @@ export function requireNotMock(source: string, context?: Record<string, unknown>
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Production network chain IDs
-const PRODUCTION_CHAIN_IDS = {
+const _PRODUCTION_CHAIN_IDS = {
   CRONOS_MAINNET: 25,
   ETHEREUM_MAINNET: 1,
   SUI_MAINNET: 'mainnet',

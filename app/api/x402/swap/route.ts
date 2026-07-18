@@ -13,7 +13,7 @@ import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ProductionGuard } from '@/lib/security/production-guard';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 

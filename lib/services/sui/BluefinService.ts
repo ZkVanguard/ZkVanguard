@@ -33,7 +33,6 @@
 import { logger } from '@/lib/utils/logger';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
 import { parseTickerOpenInterest } from '@/lib/services/sui/bluefin-ticker-parsers';
-import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import crypto from 'crypto';

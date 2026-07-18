@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount, usePublicClient, useChainId, useWriteContract, useWaitForTransactionReceipt } from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits } from 'viem';
-import { getUSDTAddress, getChainConfig, isMainnet, USDT_METADATA, WDK_SUPPORTED_CHAINS } from '../config/wdk';
+import { getUSDTAddress, getChainConfig, USDT_METADATA, WDK_SUPPORTED_CHAINS } from '../config/wdk';
 
 // ============================================
 // Types

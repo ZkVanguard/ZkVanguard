@@ -9,7 +9,6 @@
  * 5. Status monitoring
  */
 
-import { ethers } from 'ethers';
 
 // Test configuration
 const BASE_URL = 'http://localhost:3000';

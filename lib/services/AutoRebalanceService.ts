@@ -27,7 +27,6 @@
  */
 
 import { logger } from '../utils/logger';
-import { ethers } from 'ethers';
 
 // Configuration
 const CONFIG = {

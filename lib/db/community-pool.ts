@@ -74,7 +74,7 @@ function isValidTransactionType(type: string): type is 'DEPOSIT' | 'WITHDRAWAL' 
 /**
  * Sanitize string input (prevent XSS in stored data)
  */
-function sanitizeString(input: string, maxLength = 1000): string {
+function _sanitizeString(input: string, maxLength = 1000): string {
   if (!input || typeof input !== 'string') return '';
   return input
     .slice(0, maxLength)

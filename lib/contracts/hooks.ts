@@ -2,7 +2,7 @@
  * React hooks for interacting with deployed smart contracts
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { logger } from '@/lib/utils/logger';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId } from '@/lib/wdk/wdk-hooks';
 import { getContractAddresses } from './addresses';

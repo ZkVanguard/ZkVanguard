@@ -52,7 +52,7 @@ export function useMultiChain(): MultiChainContextType {
 // ============================================
 
 // Map EVM chainId to ChainType
-function getChainTypeFromEvmId(chainId: number): ChainType | null {
+function _getChainTypeFromEvmId(chainId: number): ChainType | null {
   switch (chainId) {
     case 25:      // Cronos mainnet
     case 338:     // Cronos testnet

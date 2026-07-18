@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { useWdk, useWdkAccount, useWdkChain } from './wdk-context';
+import { useWdk } from './wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { ethers } from 'ethers';
 import { getCachedProvider } from './provider-cache';
@@ -22,7 +22,7 @@ const CHAIN_ID_TO_KEY: Record<number, string> = Object.fromEntries(
   Object.entries(WDK_CHAINS).map(([key, cfg]) => [cfg.chainId, key]),
 );
 
-const CHAIN_KEY_TO_ID: Record<string, number> = Object.fromEntries(
+const _CHAIN_KEY_TO_ID: Record<string, number> = Object.fromEntries(
   Object.entries(WDK_CHAINS).map(([key, cfg]) => [key, cfg.chainId]),
 );
 

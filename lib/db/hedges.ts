@@ -1,6 +1,5 @@
 import { query, queryOne } from './postgres';
 import crypto from 'crypto';
-import { COMMUNITY_POOL_PORTFOLIO_ID } from '../constants';
 import { logger } from '@/lib/utils/logger';
 
 // ── Lazy table initialization ──

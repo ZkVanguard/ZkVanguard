@@ -15,9 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { safeErrorResponse } from '@/lib/security/safe-error';
 import { getActiveHedges as getActiveHedgesFromDB, closeHedge, type Hedge } from '@/lib/db/hedges';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 import { setCronState } from '@/lib/db/cron-state';
 
 export const runtime = 'nodejs';

@@ -8,7 +8,7 @@
  *   $env:BLUEFIN_PRIVATE_KEY="suiprivkey..."; npx tsx scripts/test-bluefin-pro-sdk.ts
  */
 
-import { BluefinProSdk, makeSigner, OrderType, OrderSide } from '@bluefin-exchange/pro-sdk';
+import { BluefinProSdk, makeSigner } from '@bluefin-exchange/pro-sdk';
 import { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -26,7 +26,7 @@ const SUI_RPC = {
 };
 
 // Helper to get current timestamp in ms
-function now(): number {
+function _now(): number {
   return Date.now();
 }
 

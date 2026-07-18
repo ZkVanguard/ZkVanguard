@@ -430,7 +430,7 @@ class BackgroundHedgeController extends EventEmitter {
   // ═══════════════════════════════════════════════════════════════════════════
 
   private checkDailyReset(): void {
-    const now = Date.now();
+    const _now = Date.now();
     const today = new Date().setHours(0, 0, 0, 0);
     
     if (today > this.dailyResetTime) {

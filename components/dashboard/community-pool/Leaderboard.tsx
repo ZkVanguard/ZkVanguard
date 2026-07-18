@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo, useState } from 'react';
-import { Award, Shield, Wallet, ExternalLink, ChevronDown, ChevronUp, CheckCircle2, Database } from 'lucide-react';
+import { Award, Shield, Wallet, ExternalLink, CheckCircle2, Database } from 'lucide-react';
 import type { LeaderboardEntry } from './types';
 import { formatPercent } from './utils';
 

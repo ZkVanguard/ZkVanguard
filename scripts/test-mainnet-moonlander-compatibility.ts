@@ -132,7 +132,7 @@ async function main() {
       const testPairIndex = 0; // BTC
       const testTradeIndex = 0;
       
-      const trade = await moonlander.getTrade(testTrader, testPairIndex, testTradeIndex);
+      const _trade = await moonlander.getTrade(testTrader, testPairIndex, testTradeIndex);
       log('getTrade()', 'PASS', 'Method exists and callable', { 
         trader: testTrader,
         pairIndex: testPairIndex,
@@ -309,9 +309,9 @@ async function main() {
     try {
       // Try to estimate gas for openMarketTradeWithPythAndExtraFee
       // This won't actually execute, just estimate
-      const testCollateral = ethers.parseUnits('100', 6); // 100 USDC
-      const testLeverage = 3;
-      const emptyPythData: string[] = [];
+      const _testCollateral = ethers.parseUnits('100', 6); // 100 USDC
+      const _testLeverage = 3;
+      const _emptyPythData: string[] = [];
       
       log('Gas Estimate', 'INFO', 'Cannot estimate without funded wallet', { 
         note: 'Would require actual USDC balance and gas' 

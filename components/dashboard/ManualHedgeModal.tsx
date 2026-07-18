@@ -4,12 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId, useWalletClient } from '@/lib/wdk/wdk-hooks';
-import { parseUnits, formatUnits, parseEther, keccak256, encodePacked } from 'viem';
+import { parseUnits, formatUnits, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';
 import { TESTNET_USDC_ABI } from './MockUSDCFaucet';
 import { getContractAddresses } from '@/lib/contracts/addresses';
-import { EXPLORER_URLS } from '@/lib/hooks/useNetwork';
 import { getUsdcAddress, getExplorerUrl, CHAIN_IDS } from '@/lib/utils/network';
 import {
   PAIR_INDEX,

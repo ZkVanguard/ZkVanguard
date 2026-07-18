@@ -50,7 +50,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     } else {
       keypair = Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace('0x', ''), 'hex'));
     }
-    const adminAddress = keypair.getPublicKey().toSuiAddress();
+    const _adminAddress = keypair.getPublicKey().toSuiAddress();
 
     // Connect to SUI
     const poolConfig = SUI_USDC_POOL_CONFIG[network];

@@ -14,7 +14,7 @@
 
 import { query, queryOne } from '@/lib/db/postgres';
 import { hedgePnLTracker, type HedgePnLUpdate } from '../hedging/HedgePnLTracker';
-import { getActiveHedgesByWallet, type Hedge } from '@/lib/db/hedges';
+import { type Hedge } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 
 // ============================================

@@ -13,7 +13,6 @@
  * 4. Complete end-to-end flow
  */
 
-import { ethers } from 'ethers';
 
 // Test configuration
 const BASE_URL = 'http://localhost:3000';
@@ -246,7 +245,7 @@ async function testExecutionTimeLimit() {
   
   const startTime = Date.now();
   
-  const response = await makeRequest('/api/cron/auto-rebalance', 'GET', null, {
+  const _response = await makeRequest('/api/cron/auto-rebalance', 'GET', null, {
     'Authorization': `Bearer ${CRON_SECRET}`,
   });
   
@@ -300,7 +299,7 @@ async function testCooldownPersistence() {
   });
   
   // Run cron twice - second should skip due to cooldown
-  const firstRun = await makeRequest('/api/cron/auto-rebalance', 'GET', null, {
+  const _firstRun = await makeRequest('/api/cron/auto-rebalance', 'GET', null, {
     'Authorization': `Bearer ${CRON_SECRET}`,
   });
   
@@ -402,7 +401,7 @@ async function testVercelConfigPresence() {
     const path = require('path');
     const vercelConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'vercel.json'), 'utf-8'));
     
-    const hasCrons = vercelConfig.crons && vercelConfig.crons.length > 0;
+    const _hasCrons = vercelConfig.crons && vercelConfig.crons.length > 0;
     const hasAutoRebalanceCron = vercelConfig.crons?.some((cron: any) => 
       cron.path === '/api/cron/auto-rebalance'
     );

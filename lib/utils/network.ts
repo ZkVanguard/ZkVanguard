@@ -118,7 +118,7 @@ export function getExplorerAddressUrl(address: string, chainId?: number): string
  */
 export function getSuiExplorerTxUrl(txDigest: string, network: 'mainnet' | 'testnet' | 'devnet' = 'testnet'): string {
   const baseUrl = SUI_EXPLORER_URLS[network];
-  const separator = baseUrl.includes('?') ? '&' : '?';
+  const _separator = baseUrl.includes('?') ? '&' : '?';
   return `${baseUrl.split('?')[0]}/txblock/${txDigest}${network !== 'mainnet' ? `?network=${network}` : ''}`;
 }
 

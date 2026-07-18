@@ -129,7 +129,7 @@ import {
 } from '@/lib/services/trading/trailing-stop';
 const STOP_LOSS_BPS     = DEFAULT_TRAILING_STOP_CONFIG.stopLossBps;
 const FEE_BREAKEVEN_BPS = DEFAULT_TRAILING_STOP_CONFIG.feeBreakevenBps;
-const MAX_DEFER_COUNT   = DEFAULT_TRAILING_STOP_CONFIG.maxDeferCount;
+const _MAX_DEFER_COUNT   = DEFAULT_TRAILING_STOP_CONFIG.maxDeferCount;
 const DEFER_EXTEND_MS   = DEFAULT_TRAILING_STOP_CONFIG.deferExtendMs;
 // Signal-flip score-collapse threshold — was 50% (very lax; let losers run).
 // Tightened to 30% so signal degradation triggers exit sooner.

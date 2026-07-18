@@ -13,7 +13,7 @@ import { Polymarket5MinService } from '../lib/services/market-data/Polymarket5Mi
 import { notifyDiscord } from '../lib/utils/discord-notify';
 
 // ── test infra ──────────────────────────────────────────────────────────────
-let pass = 0; let fail = 0; let section = '';
+let pass = 0; let fail = 0; let _section = '';
 function S(name: string) { section = name; console.log(`\n[${name}]`); }
 function ok(name: string, cond: boolean, detail?: unknown) {
   const tag = cond ? '  ✓' : '  ✗';

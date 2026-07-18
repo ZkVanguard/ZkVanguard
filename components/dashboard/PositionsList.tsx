@@ -398,7 +398,7 @@ export function PositionsList({ address, onOpenHedge }: PositionsListProps) {
   }, [onChainPortfolios, totalValue, positions]);
 
   // Memoize weighted 24h change calculation (used for wallet balances section)
-  const weighted24hChange = useMemo(() => {
+  const _weighted24hChange = useMemo(() => {
     if (totalValue === 0 || positions.length === 0) return 0;
     return positions.reduce((acc, pos) => {
       const posValue = parseFloat(pos.balanceUSD || '0');

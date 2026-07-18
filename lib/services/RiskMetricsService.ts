@@ -756,7 +756,7 @@ export async function calculateRiskMetrics(chain?: string): Promise<RiskMetrics>
     const annualizedDownsideVol = dailyDownsideVol * Math.sqrt(TRADING_DAYS_PER_YEAR);
     
     // Daily risk-free rate
-    const dailyRiskFree = RISK_FREE_RATE / TRADING_DAYS_PER_YEAR;
+    const _dailyRiskFree = RISK_FREE_RATE / TRADING_DAYS_PER_YEAR;
     
     // Sharpe Ratio (annualized)
     const excessReturn = annualizedReturn - RISK_FREE_RATE;

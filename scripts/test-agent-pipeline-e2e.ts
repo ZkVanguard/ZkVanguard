@@ -595,7 +595,7 @@ async function main() {
   const btcStake = computeMinStakeForAsset(0.001, 60000);
   const ethStake = computeMinStakeForAsset(0.01, 1625);
   const suiStake = computeMinStakeForAsset(1, 0.72);
-  const solStake = computeMinStakeForAsset(0.1, 140);
+  const _solStake = computeMinStakeForAsset(0.1, 140);
   record(
     'Multi-market: BTC requires stake > 70% free at $23 NAV → SKIP',
     btcStake / FREE > MAX_PCT,

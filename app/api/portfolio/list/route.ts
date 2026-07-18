@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
-import { CRONOS_CONTRACT_ADDRESSES, getContractAddresses } from '@/lib/contracts/addresses';
+import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosProvider, getCronosChainId } from '@/lib/throttled-provider';
 import { getCached, setCached } from '@/lib/db/ui-cache';
 

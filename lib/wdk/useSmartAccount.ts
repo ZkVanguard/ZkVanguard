@@ -18,7 +18,7 @@ interface UserOperation {
   signature: string;
 }
 
-interface DepositResponse {
+interface _DepositResponse {
   userOp: UserOperation;
   userOpHash: string;
 }

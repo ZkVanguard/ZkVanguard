@@ -8,7 +8,7 @@
 import { Facilitator, CronosNetwork } from '@crypto.com/facilitator-client';
 import { ethers } from 'ethers';
 import { logger } from '../../shared/utils/logger';
-import type { X402TransferRequest, X402BatchRequest } from './X402Client';
+import type { X402TransferRequest } from './X402Client';
 
 // Re-export shared interfaces from main client
 export type { X402TransferRequest, X402BatchRequest } from './X402Client';

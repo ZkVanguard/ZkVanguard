@@ -11,7 +11,6 @@
  * - Stale pending request detection (prevents leaked promises)
  */
 
-import { logger } from '@/lib/utils/logger';
 
 interface PendingRequest<T> {
   promise: Promise<T>;

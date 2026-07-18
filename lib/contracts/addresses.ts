@@ -11,7 +11,6 @@
  * MAINNET READY: Set NEXT_PUBLIC_CHAIN_ID and configure mainnet addresses via env vars
  */
 
-import { logger } from '@/lib/utils/logger';
 
 // ============================================
 // CRONOS (EVM) CONTRACT ADDRESSES

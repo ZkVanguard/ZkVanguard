@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  const aiService = getCryptocomAIService();
+  const _aiService = getCryptocomAIService();
   return NextResponse.json({
     status: 'AI Portfolio Analysis API operational',
     note: 'Powered by Crypto.com AI Agent SDK',

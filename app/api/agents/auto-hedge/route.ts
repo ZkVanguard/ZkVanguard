@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Get config for community pool
-    const communityConfig = autoHedgingService.getLastRiskAssessment(COMMUNITY_POOL_PORTFOLIO_ID);
+    const _communityConfig = autoHedgingService.getLastRiskAssessment(COMMUNITY_POOL_PORTFOLIO_ID);
     
     return NextResponse.json({
       enabled: currentStatus.isRunning,

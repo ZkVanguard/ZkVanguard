@@ -23,7 +23,7 @@
  * to decide whether to keep `HEDGE_REQUIRE_PREDICTION_SIGNAL=true`.
  */
 
-import { query, queryOne } from '@/lib/db/postgres';
+import { query } from '@/lib/db/postgres';
 import { logger } from '@/lib/utils/logger';
 
 let tableReady = false;

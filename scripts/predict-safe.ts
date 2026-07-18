@@ -1,6 +1,5 @@
 
 import { SafeUtils } from '../lib/services/safe-utils';
-import { SAFE_CONFIG } from '../lib/config/aa-paymaster';
 
 const OWNER = process.argv[2] ? process.argv[2] : '0xbEe5BFeEfB43B7BfCe00B0Dcb45bb65Be0F37a69';
 const CHAIN_ID = 11155111;

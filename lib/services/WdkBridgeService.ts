@@ -25,7 +25,7 @@ import 'server-only';
 
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
-import { WDK_CHAINS, USDT_ADDRESSES, type WDKChainConfig } from '@/lib/config/wdk';
+import { WDK_CHAINS, type WDKChainConfig } from '@/lib/config/wdk';
 
 // ============================================
 // TYPES

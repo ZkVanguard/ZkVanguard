@@ -32,7 +32,7 @@ import {
 import { mutationLimiter, readLimiter, createRateLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

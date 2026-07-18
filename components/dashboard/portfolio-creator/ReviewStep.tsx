@@ -4,7 +4,6 @@ import {
   CheckCircle, Loader2, Shield, Sparkles, 
   Target, Filter, Lock, Eye, AlertTriangle 
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import type { StrategyConfig, AssetFilter } from './types';
 
 export function ReviewStep({ 

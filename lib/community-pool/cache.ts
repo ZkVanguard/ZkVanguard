@@ -7,7 +7,6 @@
  * - Thundering herd prevention via pending request dedup
  */
 
-import { logger } from '@/lib/utils/logger';
 
 interface CacheEntry<T> {
   data: T;

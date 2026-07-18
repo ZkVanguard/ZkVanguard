@@ -14,7 +14,7 @@
  */
 
 import { logger } from '../utils/logger';
-import { query, queryOne } from '../db/postgres';
+import { query } from '../db/postgres';
 import fs from 'fs/promises';
 import path from 'path';
 

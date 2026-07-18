@@ -34,7 +34,7 @@ export const ActiveHedges = memo(function ActiveHedges({ address, compact = fals
   // Get dynamic contract addresses based on connected chain
   const contractAddresses = useMemo(() => getContractAddresses(chainId || CHAIN_IDS.CRONOS_TESTNET), [chainId]);
   const explorerUrl = useMemo(() => getExplorerUrl(chainId), [chainId]);
-  const networkName = useMemo(() => getNetworkName(chainId), [chainId]);
+  const _networkName = useMemo(() => getNetworkName(chainId), [chainId]);
   
   // EIP-712 domain for signatures (dynamic based on chain)
   const getEIP712Domain = useCallback(() => ({

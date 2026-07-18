@@ -8,7 +8,6 @@
  * - Hit/miss stats for observability
  */
 
-import { logger } from '@/lib/utils/logger';
 
 interface CacheEntry<T> {
   data: T;

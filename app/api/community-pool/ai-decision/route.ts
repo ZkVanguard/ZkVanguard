@@ -25,7 +25,7 @@ import {
   SUPPORTED_ASSETS,
   SupportedAsset,
 } from '@/lib/storage/community-pool-storage';
-import { requireAuth, requireAdminAuth } from '@/lib/security/auth-middleware';
+import { requireAdminAuth } from '@/lib/security/auth-middleware';
 import { readLimiter, heavyLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 

@@ -14,7 +14,7 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { isMainnet } from '@/lib/utils/network';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 
 export const runtime = 'nodejs';
 

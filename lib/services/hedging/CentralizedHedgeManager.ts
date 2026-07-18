@@ -23,7 +23,6 @@ import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 import { getMarketDataService, type ExtendedMarketData } from '../market-data/RealMarketDataService';
 import { getUnifiedPriceProvider } from '../market-data/unified-price-provider';
-import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
 import { 
   ProductionGuard, 

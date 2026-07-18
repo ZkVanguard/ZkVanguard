@@ -5,8 +5,6 @@
  */
 
 import { ethers } from 'ethers';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // Contract initcode sizes from Hardhat compilation (in KiB)
 const CONTRACT_SIZES_KIB = {
@@ -123,7 +121,7 @@ async function estimateCosts() {
   console.log(`   ${configCRO.toFixed(2)} CRO ($${configUSD.toFixed(2)} USD)`);
   
   const grandTotalCRO = totalCRO + configCRO;
-  const grandTotalUSD = grandTotalCRO * CRO_PRICE_USD;
+  const _grandTotalUSD = grandTotalCRO * CRO_PRICE_USD;
   
   // Add 20% safety buffer
   const safetyBuffer = 1.2;

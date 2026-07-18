@@ -582,7 +582,7 @@ async function detectStaticData() {
   // Check API routes for static responses
   await runTest('Static Check: API routes', async () => {
     const fs = await import('fs');
-    const path = await import('path');
+    const _path = await import('path');
     
     const routeFile = './app/api/sui/community-pool/route.ts';
     const content = fs.readFileSync(routeFile, 'utf-8');

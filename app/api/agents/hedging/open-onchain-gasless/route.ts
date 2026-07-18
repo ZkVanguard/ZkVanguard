@@ -37,7 +37,7 @@ import { getCronosProvider } from '@/lib/throttled-provider';
 import { upsertOnChainHedge } from '@/lib/db/hedges';
 import { syncSinglePriceToChain, ensureMoonlanderLiquidity } from '@/lib/price-sync';
 import { getContractAddresses } from '@/lib/contracts/addresses';
-import { getCurrentChainId, getUsdcAddress, getRpcUrl, isMainnet, isTestnet } from '@/lib/utils/network';
+import { getCurrentChainId, getUsdcAddress, getRpcUrl, isTestnet } from '@/lib/utils/network';
 import { logger } from '@/lib/utils/logger';
 
 export const runtime = 'nodejs';

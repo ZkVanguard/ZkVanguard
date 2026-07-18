@@ -16,7 +16,6 @@
 import { ethers, type BrowserProvider, type Signer } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getOasisSapphireProvider } from '@/lib/throttled-provider';
-import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 
 // ============================================
 // ABI (same CommunityPool Solidity contract)

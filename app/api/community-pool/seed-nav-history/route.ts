@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
     
     // Calculate daily return needed
     const totalReturn = (currentSharePrice / INCEPTION_SHARE_PRICE) - 1;
-    const avgDailyReturn = totalReturn / DAYS_TO_SEED;
-    const volatility = 0.01;
+    const _avgDailyReturn = totalReturn / DAYS_TO_SEED;
+    const _volatility = 0.01;
     
     const snapshots: Array<{
       timestamp: Date;

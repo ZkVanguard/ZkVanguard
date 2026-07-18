@@ -3,7 +3,7 @@
  * Tests: swap-quote, allocation, share math, pool stats, auto-hedge
  */
 
-const BASE_URL = 'http://localhost:3099';
+const _BASE_URL = 'http://localhost:3099';
 
 async function findServer(): Promise<string> {
   for (const port of [3100, 3200, 3099, 3105, 3103, 3102, 3101, 3000]) {
@@ -164,7 +164,7 @@ async function main() {
     const expectedShares = depositUsdc / sharePrice;
     
     // Check if route.ts hardcodes sharesToMint = amountUsdc (which is wrong if sharePrice != 1.0)
-    const hardcoded = sharePrice !== 1.0; // If pool has active NAV, 1:1 is wrong
+    const _hardcoded = sharePrice !== 1.0; // If pool has active NAV, 1:1 is wrong
     const issues: string[] = [];
 
     if (sharePrice !== 1.0) {

@@ -29,7 +29,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';

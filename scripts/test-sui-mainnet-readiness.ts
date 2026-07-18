@@ -496,12 +496,12 @@ async function main() {
   console.log(`  Server:  ${API_BASE}`);
   
   // Phase 1: Infrastructure checks
-  const adminWallet = await testAdminWallet();
+  const _adminWallet = await testAdminWallet();
   await testContractInfo();
   
   // Phase 2: AI & DEX readiness
-  const allocation = await testAllocation();
-  const swapCapability = await testSwapQuotes();
+  const _allocation = await testAllocation();
+  const _swapCapability = await testSwapQuotes();
   
   // Phase 3: Full deposit → withdraw flow
   const initialPos = await testInitialPosition();

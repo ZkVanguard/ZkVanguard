@@ -615,23 +615,19 @@ class AIManagerService {
     this.state.metrics.lastHealthCheck = now;
     this.state.metrics.uptime = this.state.startedAt ? now - this.state.startedAt : 0;
 
-    let needsRecovery = false;
-
     this.state.services.forEach((status, type) => {
       // Check for stale data
       const staleness = now - status.lastSuccess;
       const expectedInterval = DEFAULT_INTERVALS[type];
-      
+
       if (status.lastSuccess > 0 && staleness > expectedInterval * 3) {
         status.health = 'degraded';
-        needsRecovery = true;
       }
 
       // Check if stuck in processing
       if (status.isProcessing && staleness > 60000) {
         status.isProcessing = false;
         status.health = 'degraded';
-        needsRecovery = true;
       }
 
       // Auto-recover unhealthy services

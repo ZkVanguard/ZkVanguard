@@ -11,7 +11,7 @@
  * (mints if needed — this is a test contract).
  */
 import { ethers } from 'ethers';
-import { getCurrentChainId, CHAIN_IDS, isMainnet, getRpcUrl } from '@/lib/utils/network';
+import { isMainnet } from '@/lib/utils/network';
 import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 
 // ⚠️ TESTNET-ONLY ADDRESSES
@@ -46,7 +46,7 @@ const USDC_ABI = [
 ];
 
 // Crypto.com ticker symbol → pair index
-const TICKER_TO_PAIR: Record<string, number> = {
+const _TICKER_TO_PAIR: Record<string, number> = {
   'BTC_USDT': 0, 'ETH_USDT': 1, 'CRO_USDT': 2,
   'ATOM_USDT': 3, 'DOGE_USDT': 4, 'SOL_USDT': 5,
 };

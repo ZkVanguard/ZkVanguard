@@ -76,7 +76,7 @@ const DRAWDOWN_WARNING_PERCENT = 3; // Warn at 3% drawdown (lowered from 5%)
 const DRAWDOWN_CRITICAL_PERCENT = 7; // Critical at 7% drawdown (lowered from 10%)
 const DRIFT_WARNING_PERCENT = 2; // Warn if allocation drifts 2%+ from target (lowered from 3%)
 const HOURLY_LOSS_WARNING_PERCENT = 0.5; // Warn on 0.5%+ hourly loss (lowered from 1%)
-const DAILY_LOSS_WARNING_PERCENT = 2; // Warn on 2%+ daily loss (lowered from 3%)
+const _DAILY_LOSS_WARNING_PERCENT = 2; // Warn on 2%+ daily loss (lowered from 3%)
 const AUTO_HEDGE_THRESHOLD_PERCENT = 1.5; // Trigger hedge at 1.5%+ loss (lowered from 2%)
 
 // The pool's authoritative state lives in the DB snapshot written by the

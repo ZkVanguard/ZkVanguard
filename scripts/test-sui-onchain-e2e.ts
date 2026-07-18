@@ -85,7 +85,7 @@ function fail(step: string, err: unknown) {
   results.push({ step, status: 'FAIL', detail: msg });
 }
 
-function bigintReplacer(_k: string, v: unknown) {
+function _bigintReplacer(_k: string, v: unknown) {
   return typeof v === 'bigint' ? v.toString() + 'n' : v;
 }
 
@@ -692,7 +692,7 @@ async function main() {
   const hedgeId = await step1_openHedge();
 
   // 2. Store a ZK commitment
-  const commitmentId = await step2_storeCommitment();
+  const _commitmentId = await step2_storeCommitment();
 
   // 3. Create a ZK proxy vault
   const proxyId = await step3_createProxy();

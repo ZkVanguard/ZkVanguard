@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getCronosProvider } from '@/lib/throttled-provider';
-import { mutationLimiter, heavyLimiter, readLimiter } from '@/lib/security/rate-limiter';
+import { heavyLimiter, readLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 
 export const runtime = 'nodejs';
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const provider = getCronosProvider().provider;
+    const _provider = getCronosProvider().provider;
     const contract = getPaymasterReadContract();
 
     const [totalCommitments, totalGasSponsored, totalTxRelayed, balance] = await contract.getStats();
@@ -177,7 +177,7 @@ async function handlePrepare(body: {
     }, { status: 400 });
   }
 
-  const provider = getCronosProvider().provider;
+  const _provider = getCronosProvider().provider;
   const contract = getPaymasterReadContract();
 
   // Get user's nonce

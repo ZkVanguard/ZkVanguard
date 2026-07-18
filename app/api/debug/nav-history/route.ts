@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { query } from '@/lib/db/postgres';
 import { logger } from '@/lib/utils/logger';

@@ -74,7 +74,7 @@ const RWA_MANAGER_ABI = [
 ];
 
 // HedgeExecutor ABI
-const HEDGE_EXECUTOR_ABI = [
+const _HEDGE_EXECUTOR_ABI = [
   'function hedgeCount() view returns (uint256)',
   'function getHedge(uint256) view returns (address owner, address asset, bool isShort, uint256 size, uint256 entryPrice, uint256 currentPrice, int256 unrealizedPnl, uint256 leverage, uint256 timestamp, bool isActive)',
 ];

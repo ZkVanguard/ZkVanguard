@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    const registry = _cachedRegistry;
+    const _registry = _cachedRegistry;
     const leadAgent = _cachedLeadAgent;;
     
     logger.info('✅ Multi-Agent System ready (cached)', { 

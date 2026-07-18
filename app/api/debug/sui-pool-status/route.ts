@@ -6,7 +6,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { logger } from '@/lib/utils/logger';
 import { query } from '@/lib/db/postgres';
 import { getSuiUsdcPoolService, SUI_USDC_POOL_CONFIG } from '@/lib/services/sui/SuiCommunityPoolService';
 import { BluefinService } from '@/lib/services/sui/BluefinService';

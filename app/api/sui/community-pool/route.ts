@@ -923,7 +923,7 @@ export async function POST(request: NextRequest) {
         mds.getTokenPrice('ETH').then(p => p.price).catch(() => 0),
         mds.getTokenPrice('SUI').then(p => p.price).catch(() => 0),
       ]);
-      const pricesUSD: Record<string, number> = { BTC: btcPrice, ETH: ethPrice, SUI: suiPrice };
+      const _pricesUSD: Record<string, number> = { BTC: btcPrice, ETH: ethPrice, SUI: suiPrice };
 
       // Step 1: Sell all non-USDC assets via BlueFin
       // (inline the replenish logic to avoid importing cron internals)

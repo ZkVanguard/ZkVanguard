@@ -31,7 +31,6 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/hedging/AutoHedgingService';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 import { recordNavSnapshot, initCommunityPoolTables, saveUserSharesToDb, savePoolStateToDb, addPoolTransactionToDb, getAllUserSharesFromDb, deleteUserSharesFromDb } from '@/lib/db/community-pool';
-import { calculatePoolNAV } from '@/lib/services/cronos/CommunityPoolService';
 import { ethers } from 'ethers';
 import { getCronosRpcUrl } from '@/lib/throttled-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
@@ -65,10 +64,10 @@ const VVS_ROUTER_ABI = [
 ];
 
 // Asset indices matching CommunityPool.sol constants
-const ASSET_BTC = 0;
-const ASSET_ETH = 1;
-const ASSET_SUI = 2;
-const ASSET_CRO = 3;
+const _ASSET_BTC = 0;
+const _ASSET_ETH = 1;
+const _ASSET_SUI = 2;
+const _ASSET_CRO = 3;
 const ASSET_NAMES = ['BTC', 'ETH', 'SUI', 'CRO'] as const;
 
 // Minimum USDC to allocate per asset ($1 min to avoid wasting gas)

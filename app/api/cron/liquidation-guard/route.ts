@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { errMsg, errName } from '@/lib/utils/error-handler';
+import { errMsg } from '@/lib/utils/error-handler';
 import { getActiveHedges } from '@/lib/db/hedges';
 import type { Hedge } from '@/lib/db/hedges';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
@@ -71,7 +71,7 @@ interface LiquidationGuardResult {
 // Thresholds
 const MARGIN_LEVEL_CRITICAL = 120; // Below 120% = emergency action
 const MARGIN_LEVEL_WARNING = 150; // Below 150% = add collateral
-const MARGIN_LEVEL_HEALTHY = 200; // Above 200% = healthy
+const _MARGIN_LEVEL_HEALTHY = 200; // Above 200% = healthy
 const LIQUIDATION_BUFFER_PERCENT = 5; // Close if within 5% of liquidation
 const COLLATERAL_TOP_UP_PERCENT = 20; // Add 20% more collateral when needed
 const SIZE_REDUCTION_PERCENT = 25; // Reduce size by 25% if collateral unavailable

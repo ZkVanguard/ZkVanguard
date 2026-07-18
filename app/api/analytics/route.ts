@@ -14,7 +14,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
-import { readLimiter } from '@/lib/security/rate-limiter';
 
 export const runtime = 'nodejs';
 

@@ -26,7 +26,7 @@
  */
 
 import { logger } from '../../utils/logger';
-import { isMainnet, getCurrentChainId } from '../../utils/network';
+import { isMainnet } from '../../utils/network';
 import { getMarketDataService, type ExtendedMarketData } from '../market-data/RealMarketDataService';
 import {
   getPoolStats as getOnChainPoolStats,
@@ -69,7 +69,7 @@ const POOL_CONFIG = {
 /**
  * Get network-specific configuration
  */
-function getPoolConfig() {
+function _getPoolConfig() {
   const mainnetMode = isMainnet();
   const config = mainnetMode ? POOL_CONFIG.mainnet : POOL_CONFIG.testnet;
   
@@ -100,8 +100,8 @@ const VIRTUAL_SHARES = 1;             // 1 virtual share
 const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
 
 // Slippage protection
-const DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
-const MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
+const _DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
+const _MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
 
 // Extended market data cache - minimal TTL, relies on RealMarketDataService caching
 let extendedDataCache: Map<string, ExtendedMarketData> | null = null;

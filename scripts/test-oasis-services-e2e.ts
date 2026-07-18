@@ -67,7 +67,7 @@ function fail(label: string, err: unknown) {
   console.error(`  ❌ ${label} — ${err instanceof Error ? err.message : String(err)}`);
 }
 
-function skip(label: string, reason: string) {
+function _skip(label: string, reason: string) {
   skipped++;
   console.log(`  ⏭️  ${label} — SKIPPED: ${reason}`);
 }

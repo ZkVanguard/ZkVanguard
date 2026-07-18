@@ -197,7 +197,7 @@ export async function executeRebalance(
     logger.info(`[RebalanceExecutor] Executing rebalance for portfolio ${portfolioId}`, { actions });
     
     // Prepare allocation changes for ZK proof
-    const allocationChanges = actions.map(action => ({
+    const _allocationChanges = actions.map(action => ({
       asset: action.asset,
       action: action.action,
       amount: action.amount,

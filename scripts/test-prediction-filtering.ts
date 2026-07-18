@@ -10,9 +10,8 @@
  * 6. Caching & deduplication (performance optimization)
  */
 
-import { DelphiMarketService, type PredictionMarket } from '../lib/services/market-data/DelphiMarketService';
+import { DelphiMarketService, type _PredictionMarket } from '../lib/services/market-data/DelphiMarketService';
 import { Polymarket5MinService } from '../lib/services/market-data/Polymarket5MinService';
-import { logger } from '../lib/utils/logger';
 
 // ============================================================================
 // Test Utilities

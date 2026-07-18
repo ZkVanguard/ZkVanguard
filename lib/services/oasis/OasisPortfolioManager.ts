@@ -20,8 +20,6 @@ import { logger } from '@/lib/utils/logger';
 import { getOasisSapphireProvider } from '@/lib/throttled-provider';
 import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // ============================================
 // CONFIGURATION
@@ -53,7 +51,7 @@ const RWA_MANAGER_ABI = [
 ];
 
 // ERC20 ABI for token reads
-const ERC20_ABI = [
+const _ERC20_ABI = [
   'function balanceOf(address) view returns (uint256)',
   'function symbol() view returns (string)',
   'function name() view returns (string)',

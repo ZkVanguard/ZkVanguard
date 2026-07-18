@@ -16,7 +16,7 @@ import { SuiClient } from '@mysten/sui/client';
 const PRIVATE_KEY = process.env.BLUEFIN_PRIVATE_KEY || '';
 const AUTH_URL = 'https://auth.api.sui-staging.bluefin.io';
 const TRADE_URL = 'https://trade.api.sui-staging.bluefin.io';
-const EXCHANGE_URL = 'https://api.sui-staging.bluefin.io';
+const _EXCHANGE_URL = 'https://api.sui-staging.bluefin.io';
 
 function initKeypair(privateKey: string): Ed25519Keypair {
   const hexKey = privateKey.startsWith('0x') ? privateKey.slice(2) : privateKey;

@@ -10,8 +10,6 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // Private key from env (never hardcode!)
 const SUI_PRIVKEY = process.env.SUI_PRIVATE_KEY || process.env.BLUEFIN_PRIVATE_KEY || '';

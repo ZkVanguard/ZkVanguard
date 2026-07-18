@@ -37,7 +37,7 @@ export const maxDuration = 60;
 // Load from deployment file — these are on Sepolia testnet
 const SEPOLIA_POOL_ADDRESS = '0x07d68C2828F35327d12a7Ba796cCF3f12F8A1086';
 const SEPOLIA_USDT_ADDRESS = '0xd077a400968890eacc75cdc901f0356c943e4fdb';
-const SEPOLIA_DEX_ADDRESS = '0x57e888f22c21D931b2deA19bb132a8d344F1F965';
+const _SEPOLIA_DEX_ADDRESS = '0x57e888f22c21D931b2deA19bb132a8d344F1F965';
 
 const ASSET_NAMES = ['BTC', 'ETH', 'CRO', 'SUI'] as const;
 const TARGET_ALLOCATION_BPS = {
@@ -425,7 +425,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
     // ═══════════════════════════════════════════════════════════
 
     let rebalanceTrades: WdkCronResult['rebalanceTrades'] = undefined;
-    const adminKey = privateKey;
+    const _adminKey = privateKey;
 
     if (aiDecision.shouldRebalance && navUsd > 1 && contractInitialized && dexConfigured) {
       try {

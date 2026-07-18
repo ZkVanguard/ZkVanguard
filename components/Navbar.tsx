@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useEffect, useRef, useCallback } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Link } from '../i18n/routing';
 import { ConnectButton } from './ConnectButton';
 import { LanguageSelector } from './LanguageSelector';

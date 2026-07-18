@@ -236,7 +236,7 @@ export class SuiService {
 
 // Singleton instance with race-condition-safe initialization
 let suiServiceInstance: SuiService | null = null;
-let suiServiceInitLock: Promise<SuiService> | null = null;
+let _suiServiceInitLock: Promise<SuiService> | null = null;
 
 export function getSuiService(network?: SuiNetworkType): SuiService {
   if (suiServiceInstance) {

@@ -17,7 +17,6 @@
 import { ethers, type Signer, type Provider } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { getOasisSapphireProvider } from '@/lib/throttled-provider';
-import { OASIS_CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 
 // ============================================
 // CONFIGURATION

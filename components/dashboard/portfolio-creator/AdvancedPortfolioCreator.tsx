@@ -5,7 +5,7 @@ import { useSignMessage } from '@/lib/wdk/wdk-hooks';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio } from '../../../lib/contracts/hooks';
 import { useRWAManager } from '../../../lib/contracts/suiHooks';
-import { Loader2, CheckCircle, XCircle, Sparkles, Lock } from 'lucide-react';
+import { CheckCircle, XCircle, Sparkles, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from '../../../lib/utils/logger';
 import type { StrategyConfig, AssetFilter, AIPreset, AdvancedPortfolioCreatorProps } from './types';

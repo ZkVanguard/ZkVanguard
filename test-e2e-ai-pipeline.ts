@@ -25,7 +25,7 @@ interface TestResult {
 
 const results: TestResult[] = [];
 
-function log(msg: string) {
+function _log(msg: string) {
   console.log(msg);
 }
 
@@ -70,7 +70,7 @@ async function main() {
   logSection('STAGE 1: DATA SOURCES');
 
   // Test 1.1: Polymarket 5-min BTC Signal
-  const fiveMinSignal = await runTest('Polymarket 5-min BTC Signal', async () => {
+  const _fiveMinSignal = await runTest('Polymarket 5-min BTC Signal', async () => {
     const signal = await Polymarket5MinService.getLatest5MinSignal();
     if (!signal) throw new Error('No signal returned');
     console.log(`   Direction: ${signal.direction} | Probability: ${signal.probability}% | Confidence: ${signal.confidence}%`);
@@ -78,7 +78,7 @@ async function main() {
   });
 
   // Test 1.2: DelphiMarketService - Prediction Markets
-  const predictions = await runTest('DelphiMarketService Predictions', async () => {
+  const _predictions = await runTest('DelphiMarketService Predictions', async () => {
     const markets = await DelphiMarketService.getRelevantMarkets(['BTC', 'ETH', 'SUI', 'CRO']);
     if (!markets || markets.length === 0) throw new Error('No predictions returned');
     console.log(`   Retrieved ${markets.length} prediction markets`);

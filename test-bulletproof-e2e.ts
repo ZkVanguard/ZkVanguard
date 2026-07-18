@@ -9,10 +9,7 @@
  */
 import 'dotenv/config';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { BluefinService } from './lib/services/sui/BluefinService';
-import { BluefinTreasuryService } from './lib/services/sui/BluefinTreasuryService';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from './lib/services/sui/SuiCommunityPoolService';
 import { getSuiPoolAgent } from './agents/specialized/SuiPoolAgent';
 import { getCronStateOr } from './lib/db/cron-state';
@@ -211,7 +208,7 @@ async function main() {
 
   // ── 10. POOL -> ADMIN TRANSFER FEASIBILITY (Step 6.5) ───────────────────
   sect('10. Pool -> admin transfer (Step 6.5) feasibility');
-  const reserveFloor = contractBalance * 0.20;
+  const _reserveFloor = contractBalance * 0.20;
   const maxByReserve = contractBalance * 0.80;
   const totalHedged = Number(poolFields.hedge_state?.fields?.total_hedged_value || 0) / 1e6;
   const maxByRatio = Math.max(0, navUsd * 0.50 - totalHedged);
