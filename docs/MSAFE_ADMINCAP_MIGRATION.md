@@ -172,11 +172,13 @@ curl -s https://www.zkvanguard.xyz/api/health/production | python -m json.tool
 
 If §4.2 confirmed that cron paths depend on AdminCap for external NAV attestation, one of these paths must ship BEFORE cutting over:
 
-**Option A — split `OracleCap` (recommended):**
-- Move contract change: new `OracleCap has key, store {}` struct with `admin_attest_external_nav` gate switched from `&AdminCap` to `&OracleCap`.
-- Migrate: mint one `OracleCap` at upgrade, transfer to `SUI_ADMIN_ADDRESS` (hot key retained ONLY for oracle attestation).
-- Cron reads `SUI_ORACLE_CAP_ID` instead of `SUI_ADMIN_CAP_ID` for the attest path.
-- AdminCap fully cold on MSafe.
+**Option A — split `OracleCap` (SHIPPED as v0.4.0 patch 2026-07-18, awaiting mainnet upgrade):**
+- ✅ Move contract change: new `OracleCap has key, store {}` struct in `community_pool_usdc.move`; body of `admin_attest_external_nav` extracted into `attest_external_nav_internal`; new `oracle_attest_external_nav` entry fn gated by `&OracleCap`; `admin_mint_oracle_cap` AdminCap-gated one-shot minter.
+- ✅ Off-chain: `sui-community-pool` cron reads `SUI_ORACLE_CAP_ID` and calls `oracle_attest_external_nav` when set; falls back to `SUI_ADMIN_CAP_ID` + `admin_attest_external_nav` when unset (pre-upgrade / pre-migration compatibility).
+- ⬜ Mainnet: v0.4.0 upgrade PTB + `admin_mint_oracle_cap` → hot key + Vercel env `SUI_ORACLE_CAP_ID=<new-id>` — sequenced BEFORE §5 AdminCap transfer.
+- ⬜ AdminCap fully cold on MSafe: §5.
+- **Signature invariant:** `admin_attest_external_nav<T>` signature unchanged (compatible upgrade); body now delegates to internal helper. `admin_reset_hedge_state` still AdminCap-gated (rare; MSafe co-sign acceptable).
+- **Known unfixed:** `sui-hedge-reconcile` and `admin/sui-reset-hedges` bundle `admin_reset_hedge_state` + re-attest in one PTB. Post-migration, cron cannot sign the reset half; both routes already detect "AdminCap on MSafe" and gracefully no-op (alert-only). Operator resolves drift via MSafe co-sign, per §3 MEDIUM operations.
 
 **Option B — MSafe co-sign per attestation (rejected):**
 - Operationally infeasible; attestation runs every 30min.
@@ -184,7 +186,32 @@ If §4.2 confirmed that cron paths depend on AdminCap for external NAV attestati
 **Option C — sponsored-attest via a Move-native oracle module:**
 - Longer-term; requires a new pattern for delegated attestation. Out of scope for this phase.
 
-**Blocker:** Option A requires a Move upgrade → requires external audit clearance → **sequence Option A upgrade AFTER Phase 1.1 (audit close) and BEFORE §5 mainnet execution of this runbook.**
+**Blocker (updated 2026-07-18):** Option A code shipped locally; mainnet upgrade sequenced AFTER Phase 1.1 (audit close on the v0.4.0 diff) and BEFORE §5 mainnet execution of this runbook. Zero pre-existing Move unit tests on `community_pool_usdc.move` — refactor coverage relies on `sui move build` static checks + auditor review; adding a full test module is deliberately out of scope for this patch.
+
+### 7.1 · v0.4.0 rollout order (Option A)
+
+```bash
+# 1. Build + verify locally
+cd contracts/sui && sui move build          # must succeed
+bun jest test/integration/pool-drawdown-defense.test.ts  # must stay 10/10
+
+# 2. Testnet upgrade + rehearsal (dry-run pattern from §4.3)
+sui client upgrade --upgrade-capability $SUI_UPGRADE_CAP_ID \
+  --gas-budget 700000000                    # 0.7 SUI per audit note
+
+# 3. Mint OracleCap → hot key
+sui client call --package $NEW_PACKAGE_ID \
+  --module community_pool_usdc \
+  --function admin_mint_oracle_cap \
+  --args $SUI_ADMIN_CAP_ID $SUI_ADMIN_ADDRESS \
+  --gas-budget 50000000                     # capture the new OracleCap object id
+
+# 4. Set SUI_ORACLE_CAP_ID in Vercel env → redeploy
+# 5. Confirm sui-community-pool cron: log entry shows capKind="oracle", attestFn="oracle_attest_external_nav"
+# 6. Confirm cron_state heartbeat cron:lastRun:sui-community-pool fresh (< 30 min)
+# 7. 72h log-observe (per Phase 0 rollout order)
+# 8. Only then: §5 AdminCap → MSafe
+```
 
 ---
 
@@ -244,4 +271,4 @@ Phase 2 (contract + scale walls)
 
 ---
 
-Last updated: 2026-07-18 (draft)
+Last updated: 2026-07-18 (draft — §7 Option A shipped as code; mainnet upgrade pending audit close)

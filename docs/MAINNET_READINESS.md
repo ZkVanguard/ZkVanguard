@@ -49,7 +49,7 @@ Concrete action plan to move from "$10K TVL, 3 members, single-venue, hot-key Ad
 | # | Item | Exit criterion | Effort | Status |
 |---|---|---|---|---|
 | 1.1 | External audit firm engagement (Zellic / OtterSec / MoveBit) | Signed engagement letter + kick-off date | 2d + 🔒 auditor availability | ⬜ |
-| 1.2 | **`AdminCap` MSafe migration** — currently on hot key, single-point theft surface | `admin_*` PTB requires MSafe co-sign; verified by rejected direct call | 3d (Move + MSafe policy + rehearsal on testnet) | 🟡 runbook drafted [`MSAFE_ADMINCAP_MIGRATION.md`](./MSAFE_ADMINCAP_MIGRATION.md); execution sequenced AFTER 1.1 (audit clearance for OracleCap split) |
+| 1.2 | **`AdminCap` MSafe migration** — currently on hot key, single-point theft surface | `admin_*` PTB requires MSafe co-sign; verified by rejected direct call | 3d (Move + MSafe policy + rehearsal on testnet) | 🟡 runbook drafted [`MSAFE_ADMINCAP_MIGRATION.md`](./MSAFE_ADMINCAP_MIGRATION.md); v0.4.0 OracleCap split code-shipped 2026-07-18 (Move + cron); mainnet upgrade + AdminCap transfer sequenced AFTER 1.1 (audit clearance for v0.4.0 diff) |
 | 1.3 | Aiven Business tier + PgBouncer | Connection limit ≥100; health endpoint no longer needs serialisation | 1d + 🔒 Aiven upgrade cost | ⬜ |
 | 1.4 | Flip remaining v0.3.0 execution gates: `STALE_HEDGE_AUTO_CLOSE`, `ALERT_RESPONSE_EXECUTE`, `ALERT_RESPONSE_EXECUTE_HALT` | Each flipped independently with 72h log-observe between flips | 0.5d each + observation | ⬜ (blocked on 0.5) |
 | 1.5 | External audit prep bundle — updated `INTERNAL_AUDIT_PACKET.md` with v0.3.0 addendum (T11-T20 invariants, F8-F11 threats, 8 audit-question additions) | Auditor receives single-URL bundle: tag, spec, threat model, prior findings | 2d | ✅ 2026-07-18 |

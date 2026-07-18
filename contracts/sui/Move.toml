@@ -1,7 +1,16 @@
 [package]
 name = "zkvanguard"
-version = "0.2.0"
+version = "0.4.0"
 edition = "2024"
+# v0.4.0 — 2026-07-18 — phase 16 OracleCap split for MSafe migration.
+# Enables AdminCap → MSafe cold custody by carving out the every-30-min
+# NAV attestation into a hot-key OracleCap. See docs/MSAFE_ADMINCAP_MIGRATION.md.
+# Changes vs v0.2.0:
+#   - New OracleCap struct + admin_mint_oracle_cap (AdminCap-gated one-shot)
+#   - New oracle_attest_external_nav entry fn (OracleCap-gated hot path)
+#   - admin_attest_external_nav body extracted into attest_external_nav_internal;
+#     signature preserved (compatible upgrade), body delegates to helper
+#
 # v0.2.0 — 2026-06-09 — 13 audit phases, ~44 bugs fixed, billion-dollar
 # safety features added. See docs/AUDIT_2026-06-04.md for full details.
 # Major changes vs v0.1.0:

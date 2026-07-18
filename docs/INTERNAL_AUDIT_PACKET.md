@@ -6,7 +6,7 @@
 > maximize auditor productivity — the audit engagement should validate,
 > falsify, or expand this document.
 
-Last updated: 2026-07-18 (v0.3.0 defense addendum). Corresponds to git
+Last updated: 2026-07-18 (v0.3.0 defense + v0.4.0 OracleCap addendum). Corresponds to git
 commit at time of packet freeze — see `git log` for the exact SHA.
 
 ## 0 · Scope
@@ -167,6 +167,8 @@ Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I
 - **v0.3.0 execution gates default OFF.** `PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `ALERT_RESPONSE_EXECUTE`, `ALERT_RESPONSE_EXECUTE_HALT` unset in production at time of audit. Defense stack log-observes only. Rollout order per `docs/MAINNET_READINESS.md § Scale & Security Hardening`.
 - **`alert-response-loop` QStash schedule not yet created.** Route exists at `/api/cron/alert-response-loop` but no upstream cron. Cannot exercise T20 in production until scheduled.
 - **`AdminCap` still on hot key.** MSafe holds `FeeManagerCap` only. Migration doc: `docs/MSAFE_ADMINCAP_MIGRATION.md`. This is TA5 in the tranche plan and Phase 1.2 in the hardening plan.
+- **v0.4.0 OracleCap split — code-shipped, mainnet-pending.** `community_pool_usdc.move` gains `OracleCap`, `admin_mint_oracle_cap`, and `oracle_attest_external_nav`; `admin_attest_external_nav` body extracted into `attest_external_nav_internal` (signature preserved for compatible upgrade). `sui-community-pool` cron reads `SUI_ORACLE_CAP_ID` with `SUI_ADMIN_CAP_ID` fallback. Enables Phase 1.2 by carving the every-30-min oracle hot path off AdminCap; every other admin function stays behind (future-MSafe) AdminCap. Auditor should verify: (a) `attest_external_nav_internal` preserves all phase-5/9 invariants byte-for-byte, (b) `admin_mint_oracle_cap` is the only path to mint an OracleCap and requires AdminCap, (c) no other Move function reads `OracleCap`, (d) upgrade compatibility (signature of `admin_attest_external_nav` unchanged). No pre-existing Move unit tests exist on this file — coverage delta is a known gap and auditor should flag if a full test module is required for sign-off.
+- **`community_pool_usdc.move` has zero Move unit tests.** Pre-existing debt (predates v0.3.0 and v0.4.0). The bulletproof drawdown test at `test/integration/pool-drawdown-defense.test.ts` covers the off-chain defense stack against a mocked SUI client; the Move contract itself has been validated only by internal audit phases 1-13 (documented) and by production use since 2026-06-12. Auditor recommendation on a minimum viable Move test suite is welcomed.
 
 ## 6 · Test coverage summary
 

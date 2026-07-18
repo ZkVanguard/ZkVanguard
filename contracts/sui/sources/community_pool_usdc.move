@@ -159,6 +159,23 @@ module zkvanguard::community_pool_usdc {
         id: UID,
     }
 
+    /// AUDIT 2026-07-18 phase 16: OracleCap for the NAV attestation hot path.
+    ///
+    /// The 30-min external-NAV push is the only admin_* function the cron
+    /// needs to invoke autonomously. Every other admin function can move
+    /// to MSafe co-sign. Split the capability so:
+    ///   - AdminCap → MSafe (2-of-3 co-sign for high-risk admin ops)
+    ///   - OracleCap → hot key (cron reads it for the every-30-min attest)
+    ///
+    /// OracleCap holder blast radius is bounded by the same anti-
+    /// manipulation guards as before (100x total_deposited absolute cap
+    /// + 30% per-tick delta cap). Compromise of OracleCap = compromise
+    /// of the oracle write path only; every other admin surface (pause,
+    /// treasury, fees, resets, TVL cap) remains behind MSafe.
+    public struct OracleCap has key, store {
+        id: UID,
+    }
+
     /// Agent capability (AI keeper, used by QStash cron)
     public struct AgentCap has key, store {
         id: UID,
@@ -1211,25 +1228,14 @@ module zkvanguard::community_pool_usdc {
         balance::value(&state.balance) + get_external_nav_usdc(state)
     }
 
-    /// AdminCap-gated oracle update. Bounded change magnitude prevents
-    /// rugpull-style manipulation: a single attestation cannot move the
-    /// recorded value by more than EXTERNAL_NAV_MAX_CHANGE_BPS (30%).
+    /// Shared body for admin_ and oracle_ attest entry points.
     ///
-    /// AUDIT 2026-06-06 phase 5 (MEDIUM): first attestation now also
-    /// bounded. Previously the 30% delta cap only kicked in once a
-    /// prior value existed (`prior > 0`); first-ever attestation was
-    /// unbounded. A compromised AdminCap holder could push an
-    /// arbitrarily large initial external_nav, inflate share price via
-    /// get_nav_per_share, trigger HWM crossings on every member, and
-    /// harvest performance fees to the admin-controlled treasury.
-    ///
-    /// First attestation is now capped at 100x of total_deposited as
-    /// a sanity bound. Real yields don't approach 100x; the cap leaves
-    /// room for legitimate growth while blocking a one-shot nuke. For
-    /// pools with total_deposited=0 (brand new), first attestation
-    /// must be 0 (which is the contract's default state already).
-    public entry fun admin_attest_external_nav<T>(
-        _admin: &AdminCap,
+    /// AUDIT 2026-07-18 phase 16: extracted so `oracle_attest_external_nav`
+    /// (v0.4.0 OracleCap split) reuses the same bounds and event. Body is
+    /// unchanged from the prior monolithic `admin_attest_external_nav` —
+    /// see the entry-fn docs below for the phase-5/9 invariants this
+    /// enforces.
+    fun attest_external_nav_internal<T>(
         state: &mut UsdcPoolState<T>,
         external_nav_usdc: u64,
         clock: &Clock,
@@ -1294,6 +1300,56 @@ module zkvanguard::community_pool_usdc {
             change_bps,
             timestamp: now,
         });
+    }
+
+    /// AdminCap-gated oracle update. Bounded change magnitude prevents
+    /// rugpull-style manipulation: a single attestation cannot move the
+    /// recorded value by more than EXTERNAL_NAV_MAX_CHANGE_BPS (30%).
+    ///
+    /// AUDIT 2026-06-06 phase 5 (MEDIUM): first attestation now also
+    /// bounded. Previously the 30% delta cap only kicked in once a
+    /// prior value existed (`prior > 0`); first-ever attestation was
+    /// unbounded. A compromised AdminCap holder could push an
+    /// arbitrarily large initial external_nav, inflate share price via
+    /// get_nav_per_share, trigger HWM crossings on every member, and
+    /// harvest performance fees to the admin-controlled treasury.
+    ///
+    /// First attestation is now capped at 100x of total_deposited as
+    /// a sanity bound. Real yields don't approach 100x; the cap leaves
+    /// room for legitimate growth while blocking a one-shot nuke. For
+    /// pools with total_deposited=0 (brand new), first attestation
+    /// must be 0 (which is the contract's default state already).
+    ///
+    /// AUDIT 2026-07-18 phase 16: DEPRECATED for cron use. Prefer
+    /// `oracle_attest_external_nav` so AdminCap can move to MSafe.
+    /// Kept live (signature preserved for compatible upgrade) so MSafe
+    /// can co-sign an emergency correction if the OracleCap path is
+    /// unavailable. Body delegates to `attest_external_nav_internal`.
+    public entry fun admin_attest_external_nav<T>(
+        _admin: &AdminCap,
+        state: &mut UsdcPoolState<T>,
+        external_nav_usdc: u64,
+        clock: &Clock,
+    ) {
+        attest_external_nav_internal(state, external_nav_usdc, clock);
+    }
+
+    /// AUDIT 2026-07-18 phase 16: OracleCap-gated oracle update.
+    ///
+    /// Same bounds and events as `admin_attest_external_nav`; different
+    /// gate lets the cron keep attesting every 30 min while AdminCap
+    /// sits cold on MSafe.
+    ///
+    /// OracleCap must be minted first via `admin_mint_oracle_cap` (a
+    /// one-shot AdminCap-gated call executed at v0.4.0 rollout before
+    /// AdminCap moves to MSafe).
+    public entry fun oracle_attest_external_nav<T>(
+        _oracle: &OracleCap,
+        state: &mut UsdcPoolState<T>,
+        external_nav_usdc: u64,
+        clock: &Clock,
+    ) {
+        attest_external_nav_internal(state, external_nav_usdc, clock);
     }
 
     // ============ Admin Functions ============
@@ -1551,6 +1607,34 @@ module zkvanguard::community_pool_usdc {
         _ctx: &mut TxContext
     ) {
         abort E_NOT_AUTHORIZED
+    }
+
+    /// AUDIT 2026-07-18 phase 16: OracleCap mint.
+    ///
+    /// Called once at v0.4.0 rollout to seed the hot key with an
+    /// OracleCap so the cron NAV attestation survives the AdminCap →
+    /// MSafe migration (see docs/MSAFE_ADMINCAP_MIGRATION.md).
+    ///
+    /// Deliberately AdminCap-gated (not permissionless, not in `init`)
+    /// so upgrade sequencing is explicit and observable. After MSafe
+    /// holds AdminCap, minting additional OracleCaps requires MSafe
+    /// co-sign — the desired posture, since the operator should never
+    /// need more than one OracleCap in the hot key at a time.
+    ///
+    /// Unlike `create_admin_cap` (permanently disabled), this mint is
+    /// legitimate because OracleCap has strictly smaller blast radius
+    /// than AdminCap: the only function it gates is
+    /// `oracle_attest_external_nav`, which is already bounded by the
+    /// 100x total_deposited absolute cap + 30% delta cap.
+    public entry fun admin_mint_oracle_cap(
+        _admin: &AdminCap,
+        recipient: address,
+        ctx: &mut TxContext,
+    ) {
+        transfer::transfer(
+            OracleCap { id: object::new(ctx) },
+            recipient,
+        );
     }
 
     /// AUDIT 2026-06-09 phase 13: Return the operator-set TVL ceiling

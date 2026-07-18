@@ -704,10 +704,16 @@ async function attestExternalNav(
   navUsdTotal: number,
 ): Promise<{ pushed: boolean; externalNavUsd?: number; txDigest?: string; error?: string }> {
   const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  // v0.4.0: prefer OracleCap so cron survives AdminCap → MSafe migration.
+  // Falls back to AdminCap for pre-v0.4.0 packages / pre-migration pools.
+  const oracleCapId = (process.env.SUI_ORACLE_CAP_ID || '').trim();
   const adminCapId = (process.env.SUI_ADMIN_CAP_ID || '').trim();
+  const capId = oracleCapId || adminCapId;
+  const capKind: 'oracle' | 'admin' = oracleCapId ? 'oracle' : 'admin';
+  const attestFn = capKind === 'oracle' ? 'oracle_attest_external_nav' : 'admin_attest_external_nav';
   const poolConfig = SUI_USDC_POOL_CONFIG[network];
-  if (!adminKey || !adminCapId || !poolConfig.packageId || !poolConfig.poolStateId) {
-    return { pushed: false, error: 'missing admin key, AdminCap, or pool config' };
+  if (!adminKey || !capId || !poolConfig.packageId || !poolConfig.poolStateId) {
+    return { pushed: false, error: 'missing admin key, OracleCap/AdminCap, or pool config' };
   }
 
   try {
@@ -738,25 +744,27 @@ async function attestExternalNav(
     const externalNavUsd = Math.max(0, navUsdTotal - balanceUsd - hedgedUsd);
     const externalNavRaw = Math.floor(externalNavUsd * 1e6); // USDC has 6 decimals
 
-    // AdminCap ownership check — like aiDrivenResetDailyHedge, the cron
-    // gracefully no-ops when the cap has been transferred to MSafe.
-    const capObj = await suiClient.getObject({ id: adminCapId, options: { showOwner: true } });
+    // Cap ownership check — cron gracefully no-ops when the cap has
+    // been transferred (e.g. AdminCap → MSafe). Post-v0.4.0 migration,
+    // OracleCap stays on the hot key so cron continues while AdminCap
+    // is cold; the no-op branch only fires if BOTH caps are cold.
+    const capObj = await suiClient.getObject({ id: capId, options: { showOwner: true } });
     const capOwner = capObj.data?.owner;
     const cronSigner = keypair.toSuiAddress();
     if (!capOwner || typeof capOwner !== 'object' || !('AddressOwner' in capOwner)) {
-      return { pushed: false, error: 'AdminCap owner unreadable — skipping attestation' };
+      return { pushed: false, error: `${capKind === 'oracle' ? 'OracleCap' : 'AdminCap'} owner unreadable — skipping attestation` };
     }
     if (capOwner.AddressOwner.toLowerCase() !== cronSigner.toLowerCase()) {
-      return { pushed: false, error: `AdminCap is on MSafe (${capOwner.AddressOwner.slice(0, 12)}…) — cron cannot attest. Multi-sig must push.` };
+      return { pushed: false, error: `${capKind === 'oracle' ? 'OracleCap' : 'AdminCap'} is not held by cron signer (owner=${capOwner.AddressOwner.slice(0, 12)}…) — cannot attest.` };
     }
 
     const tx = new Transaction();
     const usdcType = SUI_USDC_COIN_TYPE[network];
     tx.moveCall({
-      target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_attest_external_nav`,
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::${attestFn}`,
       typeArguments: [usdcType],
       arguments: [
-        tx.object(adminCapId),
+        tx.object(capId),
         tx.object(poolConfig.poolStateId!),
         tx.pure.u64(externalNavRaw),
         tx.object('0x6'),
@@ -770,6 +778,8 @@ async function attestExternalNav(
     const ok = result.effects?.status?.status === 'success';
     if (ok) {
       logger.info('[SUI Cron] External NAV attested', {
+        capKind,
+        attestFn,
         externalNavUsd: externalNavUsd.toFixed(2),
         balanceUsd: balanceUsd.toFixed(2),
         hedgedUsd: hedgedUsd.toFixed(2),
