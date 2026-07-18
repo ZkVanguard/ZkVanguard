@@ -82,7 +82,7 @@ Ships behind env flags (`PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `A
 
 ## Beyond Q1 2027 (directional, not committed)
 
-- **$100M TVL** — needs `NAV_SAFETY_CEILING_USDC` bump (currently $500M in cron; Move redeploy with u128 required beyond that)
+- **$100M TVL** — well below the current `NAV_SAFETY_CEILING_USDC=10B` cron gate, but a Move u128 redeploy is still the hard wall for fee/cap math beyond ~$500M
 - **AdminCap MSafe migration** — `FeeManagerCap` already on MSafe; `AdminCap` still hot key
 - **OTC desk relationships** — for splits above DEX aggregator liquidity
 - **Insurance fund** — protocol-owned buffer against black-swan scenarios

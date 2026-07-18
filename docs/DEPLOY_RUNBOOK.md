@@ -334,9 +334,10 @@ SAFE_GUARD_COOLDOWN_MS            default 5000         raise if rate-limited
 **NAV ceiling pre-warning (`sui-community-pool/route.ts`):**
 
 ```
-NAV_SAFETY_CEILING_USDC  default 500_000_000   hard halt — u64 overflow boundary
-NAV_SAFETY_WARN_PCT      default 80            % of ceiling at which to alert
-                                              (re-alerts every 6h while above)
+NAV_SAFETY_CEILING_USDC  default 10_000_000_000  hard halt — scale-readiness gate
+                                                 (above: multi-venue router / OTC / u128 Move redeploy required)
+NAV_SAFETY_WARN_PCT      default 80              % of ceiling at which to alert
+                                                 (re-alerts every 6h while above)
 ```
 
 **Aiven Postgres pool sizing (`lib/db/postgres.ts`):**

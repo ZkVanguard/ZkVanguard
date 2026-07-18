@@ -6,16 +6,18 @@
 > maximize auditor productivity — the audit engagement should validate,
 > falsify, or expand this document.
 
-Last updated: 2026-07-01. Corresponds to git commit at time of packet
-freeze — see `git log` for the exact SHA.
+Last updated: 2026-07-18 (v0.3.0 defense addendum). Corresponds to git
+commit at time of packet freeze — see `git log` for the exact SHA.
 
 ## 0 · Scope
 
 **In scope for the audit:**
 - All Move contracts under `contracts/sui/sources/` (10 files, ~5,500 LOC)
 - The trade-gating stack: `agent-trade-guard.ts`, `position-drift-monitor.ts`, `SafeExecutionGuard.ts`
+- **v0.3.0 8-gate defense stack (shipped 2026-07-15):** `PortfolioDriver.ts`, `HedgeFillVerifier.ts`, `StaleHedgeDetector.ts`, `applyHedgeabilityClamp` in `cron/allocation.ts`, `regret-tracker.ts`, `alert-response-loop.ts`, `agent-signal-tick` drift-close, `sui-community-pool` PortfolioDriver dispatch
 - ZK-STARK prover interface + on-chain verifier attestation flow
 - Deposit/withdraw/hedge lifecycle end-to-end
+- `/api/health/production` phantom-rate detection + halt-flag write path
 
 **Explicitly out of scope:**
 - EVM mirrors on Cronos / Hedera / Oasis / Sepolia (testnet only, no funds)
@@ -101,6 +103,19 @@ confirm them under all inputs.
 - **C2: Every cron uses `tryClaimCronRun` for state-changing operations.** Prevents double-fire on QStash retries.
 - **C3: Every cron writes `cron:lastRun:<route>` heartbeat.** `/api/health/production` reads these keys.
 
+### 3.4 · v0.3.0 defense invariants (verified by `test/integration/pool-drawdown-defense.test.ts`, 10/10 green)
+
+- **T11: `PortfolioDriver` actions are pure functions of (snapshot, signal, drawdown).** Given the same inputs, the same `PortfolioAction[]` list is emitted. Verified by `test/unit/portfolio-driver.test.ts`. No side effects until the cron dispatcher acts on the list.
+- **T12: `PORTFOLIO_DRIVER_EXECUTE` gates ALL PortfolioDriver dispatch.** When unset or 0, the cron logs the action list but never calls `replenishAdminUsdc` or `BluefinService.closeHedge`. Verified by unit test + integration test log-only mode.
+- **T13: `HedgeFillVerifier.verifyFill` polls `getPositions()` and returns `filled: false` if position delta below threshold.** Never returns success on `orderHash` alone. Verified by `test/unit/hedge-fill-verifier.test.ts`.
+- **T14: Phantom rate is `closed_hedges(notional≥$1, realized_pnl=0, last_hour) / total_closed_last_hour`.** Reported by `checkPhantomRate()` at `/api/health/production`. `> 1%` warn, `> 5%` component down. Alert-response returns `HALT_TRADER` + `HALT_AUTOHEDGE` at `> 1%` (gated by `ALERT_RESPONSE_EXECUTE` + `_HALT`).
+- **T15: `StaleHedgeDetector` requires ALL of (age > STALE_HEDGE_AGE_DAYS, signal_flips ≥ STALE_HEDGE_MIN_FLIPS, side contradicted by current signal).** Never force-closes on age alone. `STALE_HEDGE_AUTO_CLOSE=1` required for actual close; else candidate list only.
+- **T16: `applyHedgeabilityClamp` REDIRECTS capped allocation to USDC.** Never to a sibling risk asset. Prevents cascade where BTC clamp-out amplifies ETH position.
+- **T17: `regret-tracker` stake multiplier is bounded `[0.25, 1.0]`.** Never scales stake UP. `REGRET_TRACKER_DISABLE=1` forces multiplier=1.
+- **T18: Halt flags (`polymarket-edge-trader:halt`, `sui-community-pool:autohedge:halt`) are checked at cron entry.** When set, cron no-ops after heartbeat. Halt flags only cleared by explicit admin action, never auto-expire.
+- **T19: Alert log ring buffer at `alert-log:ring-buffer` is capped at 200 entries.** Every `notifyDiscord` call with level ∈ {KILL, ERROR, WARN} appends; head-truncated on overflow.
+- **T20: `alert-response-loop` decisions are pure functions of (`alert-log:ring-buffer` window, `profit-lock:zero-since` age, phantom rate).** Actions gated by `ALERT_RESPONSE_EXECUTE`; `HALT_*` actions additionally gated by `ALERT_RESPONSE_EXECUTE_HALT`.
+
 ## 4 · Threat model (STRIDE analysis)
 
 Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I = Info disclosure, D = DoS, E = Elevation of privilege) and has (a) a mitigation status and (b) residual risk assessment.
@@ -116,6 +131,10 @@ Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I
 | F5 | BlueFin API returns stale positions → cron opens duplicate hedge | T | Cron re-polls `getPositions()` post-open with 2.5s delay; skips if position already exists. `bluefin-db-reconcile` cron every 15min. | LOW |
 | F6 | Front-running cron rebalance | I/T | Cron uses market orders on BlueFin (no signed intents on public mempool). SUI rebalance swaps go through 7k aggregator with slippage cap. | LOW |
 | F7 | Reentrancy on Move `withdraw` → `deposit` → `withdraw` cycle | E | Move's ownership model + linear resource management prevents reentrancy structurally. Not applicable. | ZERO (language-level guarantee) |
+| F8 | BlueFin silent-reject → phantom hedge on the pool books | T | Pre-fix (2026-06-13) `isIsolated:false` silently dropped. Fix hardcodes `true` across `openHedge`/`closeHedge`/`dryRunHedge`. Post-fill verification via `getPositions()` delta (T13). Phantom rate detection at health endpoint (T14) triggers halt at > 1%. | LOW post-`f54d5b46` |
+| F9 | Stale hedge held past its signal-relevance horizon | T | v0.3.0 `StaleHedgeDetector` flags candidates; `STALE_HEDGE_AUTO_CLOSE=1` closes. Requires age + flip-count + contradiction (T15) — never auto-closes on age alone. | LOW |
+| F10 | Existing spot never unwound when profit-lock fires (2026-06-26 → 2026-07-15 drawdown root cause) | T | v0.3.0 `PortfolioDriver` actively reshapes holdings on ≥65% opposing signal (symmetric sell trigger). Verified by `pool-drawdown-defense.test.ts` — max NAV loss ≤ 15% vs actual 30% without defense. `PORTFOLIO_DRIVER_EXECUTE=1` gates execution. | LOW when gate flipped, MEDIUM until then |
+| F11 | Halt-flag mis-set by compromised alert-response-loop → indefinite trader freeze | E | `polymarket-edge-trader:halt` + `sui-community-pool:autohedge:halt` require explicit admin clear (T18 — no auto-expire). Halt setters require `ALERT_RESPONSE_EXECUTE_HALT=1`. Admin can clear via `deleteCronState`. | LOW (griefing, not fund loss) |
 
 ### 4.2 · Agent-manipulation threats
 
@@ -145,6 +164,9 @@ Each threat below is CLASSIFIED (S = Spoofing, T = Tampering, R = Repudiation, I
 - **Privacy contracts on testnet only.** `zk_hedge_commitment`, `zk_proxy_vault`, `zk_verifier` are deployed on testnet at `0xb1442796...`. Mainnet deploy pending — audit should verify the mainnet package IDs in `docs/SUI_DEPLOYMENT.md` do not yet include the privacy contract types.
 - **`SettlementAgent` is x402-only.** Correctly excluded on SUI cycles. On Cronos it runs but x402 flows are not live in production either.
 - **Custody attestor Move contract not deployed.** Code + tests + off-chain SDK are shipped. Deploy pending per `scripts/deploy-custody-attestor.md`.
+- **v0.3.0 execution gates default OFF.** `PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `ALERT_RESPONSE_EXECUTE`, `ALERT_RESPONSE_EXECUTE_HALT` unset in production at time of audit. Defense stack log-observes only. Rollout order per `docs/MAINNET_READINESS.md § Scale & Security Hardening`.
+- **`alert-response-loop` QStash schedule not yet created.** Route exists at `/api/cron/alert-response-loop` but no upstream cron. Cannot exercise T20 in production until scheduled.
+- **`AdminCap` still on hot key.** MSafe holds `FeeManagerCap` only. Migration doc: `docs/MSAFE_ADMINCAP_MIGRATION.md`. This is TA5 in the tranche plan and Phase 1.2 in the hardening plan.
 
 ## 6 · Test coverage summary
 
@@ -187,6 +209,9 @@ Prioritized list of questions we cannot answer ourselves:
 3. **Consensus semantics:** Is our automated-vote consensus (all 3 agent votes derived from the same directive cache) actually a meaningful safety layer, or is it security theater? Recommend real independent-LLM-vote pattern if the latter.
 4. **AdminCap blast radius:** Which specific admin functions, if invoked by a compromised key, are (a) instantly draining, (b) griefing-only, (c) recoverable-by-MSafe? Prioritizes which move to MSafe first.
 5. **Oracle staleness edge cases:** Under what sequence of `admin_set_external_nav` + `deposit` + `withdraw` can a strict-mode pool return incorrect share prices? Concrete scenarios needed.
+6. **v0.3.0 execution correctness:** With `PORTFOLIO_DRIVER_EXECUTE=1`, is the dispatcher in `sui-community-pool/route.ts` idempotent under QStash retry? Specifically: if `SELL_SPOT_TO_USDC` partially completes and the cron re-fires, does it double-sell?
+7. **Halt-flag adversarial cases:** If an attacker gains write access to `cron_state` (T-A2 residual), can they set halt flags to freeze the trader indefinitely? What's the recovery workflow if the alert-log ring buffer itself is poisoned?
+8. **PortfolioDriver + drift-close race:** `agent-signal-tick` runs every 2min and `sui-community-pool` every 30min; both can invoke PortfolioDriver on a signal-flip window. Is there a state where the same close is dispatched twice within 30s?
 
 ## 9 · Bounty pre-scope
 
