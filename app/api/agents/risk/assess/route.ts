@@ -152,6 +152,12 @@ export async function POST(request: NextRequest) {
             balance: balanceInToken,
             price: priceData.price,
             value,
+            // calculateRealRiskAssessment reads t.usdValue — the
+            // simulation branch above sets both value + usdValue but
+            // this branch used to only set value. Result: weights ended
+            // up as NaN and every downstream metric ('Risk score: NaN/100',
+            // 'volatility: NaN%') for anyone whose portfolio wasn't empty.
+            usdValue: value,
           };
         } catch (error) {
           logger.warn(`Failed to fetch ${symbol} data:`, error);

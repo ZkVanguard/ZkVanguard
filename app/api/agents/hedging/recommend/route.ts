@@ -255,11 +255,16 @@ export async function POST(request: NextRequest) {
         const balance = parseFloat(t.balance) || 0;
         // Prevent division by zero - use usdValue or 0 as price if balance is 0
         const price = balance > 0 ? t.usdValue / balance : (t.usdValue || 0);
+        const usd = t.usdValue || 0;
         return {
           symbol: t.symbol,
           balance,
           price: isFinite(price) ? price : 0,
-          value: t.usdValue || 0,
+          value: usd,
+          // Downstream (cryptocom-service.calculateRealRiskAssessment,
+          // generateRealHedgeRecommendations) reads t.usdValue. Missing
+          // this field made every weight NaN → NaN cascade in outputs.
+          usdValue: usd,
         };
       }),
       totalValue: realPortfolio.totalValue || 0,
