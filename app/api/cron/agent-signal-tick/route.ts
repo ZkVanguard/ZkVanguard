@@ -21,8 +21,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronRequest } from '@/lib/qstash';
-import { tryClaimCronRun, getCronState, setCronState } from '@/lib/db/cron-state';
+import { tryClaimCronRun, getCronState, setCronState, getCronStateOr, CronKeys } from '@/lib/db/cron-state';
 import { logger } from '@/lib/utils/logger';
+// Static so Graphify sees the signal-tick → defense-dispatch chain.
+// Previously loaded via await import() (9 sites); tree-sitter drops those.
+import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
+import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
+import { BluefinService } from '@/lib/services/sui/BluefinService';
+import { checkAndCloseDrifts } from '@/lib/services/agents/position-drift-monitor';
+import { getSuiCommunityPoolService } from '@/lib/services/sui/SuiCommunityPoolService';
+import { runPortfolioDriverTick } from '@/lib/services/sui/PortfolioDriver';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,7 +61,6 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   await setCronState(HEARTBEAT_KEY, now).catch(() => {});
 
   try {
-    const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
     const current = await Polymarket5MinService.getLatest5MinSignal();
     if (!current) {
       return NextResponse.json({ success: true, reason: 'no current signal' });
@@ -93,7 +101,6 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       now: { dir: current.direction, conf: current.confidence },
     });
 
-    const { getAgentOrchestrator } = await import('@/lib/services/agent-orchestrator');
     const orchestrator = getAgentOrchestrator();
     const cycle = await orchestrator.runAutonomousCycle({
       chain: 'sui',
@@ -108,13 +115,11 @@ async function handle(request: NextRequest): Promise<NextResponse> {
     try {
       const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
       if (adminKey && directionFlipped) {
-        const { BluefinService } = await import('@/lib/services/sui/BluefinService');
         const bf = BluefinService.getInstance();
         // Initialize if needed — BluefinService is a singleton but the
         // signal-tick cron often lives in a fresh Lambda so the shared
         // instance may not be booted.
         await bf.initialize(adminKey, 'mainnet').catch(() => {});
-        const { checkAndCloseDrifts } = await import('@/lib/services/agents/position-drift-monitor');
         driftResult = await checkAndCloseDrifts('sui', bf);
         if (driftResult.drifted > 0) {
           logger.info('[AgentSignalTick] flip-triggered drift close', driftResult);
@@ -134,10 +139,6 @@ async function handle(request: NextRequest): Promise<NextResponse> {
     let spotDriverActions: number = 0;
     try {
       if (directionFlipped) {
-        const { getSuiCommunityPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
-        const { runPortfolioDriverTick } = await import('@/lib/services/sui/PortfolioDriver');
-        const { getCronStateOr } = await import('@/lib/db/cron-state');
-        const { CronKeys } = await import('@/lib/db/cron-state');
         const pool = getSuiCommunityPoolService();
         const stats = (await pool.getPoolStats()) as unknown as { totalNAVUsd?: number; allocation?: { BTC?: number; ETH?: number; SUI?: number } };
         const navUsd = stats.totalNAVUsd || 0;
@@ -190,7 +191,6 @@ async function handle(request: NextRequest): Promise<NextResponse> {
 
     // Discord ping — operators want to see the signal-driven refresh
     try {
-      const { notifyDiscord } = await import('@/lib/utils/discord-notify');
       const headline = directionFlipped
         ? `🔄 Signal FLIP ${last?.direction} → ${current.direction} (conf ${current.confidence.toFixed(0)}%)`
         : `📈 STRONG signal ${current.direction} emerged (conf ${current.confidence.toFixed(0)}%, up from ${last?.confidence?.toFixed(0) ?? '?'}%)`;

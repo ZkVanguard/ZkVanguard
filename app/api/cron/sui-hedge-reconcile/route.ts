@@ -38,9 +38,14 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/types/sui-pool-types';
-import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
+import { BluefinService, type BluefinPosition, BLUEFIN_PAIRS } from '@/lib/services/sui/BluefinService';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { setCronState } from '@/lib/db/cron-state';
+// Static so Graphify sees the stale-hedge dispatch. Left the 3 @mysten/sui
+// SDK dynamic imports alone (cold-start defers, low graph value).
+import { detectStaleHedges } from '@/lib/services/sui/StaleHedgeDetector';
+import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
+import { query } from '@/lib/db/postgres';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -145,9 +150,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       // Discord WARN fires per stale. Env gate STALE_HEDGE_AUTO_CLOSE=1
       // required for the actual close; log-only otherwise.
       try {
-        const { detectStaleHedges } = await import('@/lib/services/sui/StaleHedgeDetector');
-        const { Polymarket5MinService } = await import('@/lib/services/market-data/Polymarket5MinService');
-        const { query } = await import('@/lib/db/postgres');
         const activeRows = await query<{ id: number; asset: string; side: 'LONG' | 'SHORT'; created_at: Date; notional_value: number }>(
           `SELECT id, asset, side, created_at, notional_value FROM hedges
            WHERE chain='sui' AND status='active' AND notional_value >= 1`
@@ -213,7 +215,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
                   try {
                     const positions = await bf.getPositions();
                     const pos = positions.find((p) => p.symbol === symbol);
-                    const { BLUEFIN_PAIRS } = await import('@/lib/services/sui/BluefinService');
                     const pair = BLUEFIN_PAIRS[symbol as keyof typeof BLUEFIN_PAIRS];
                     if (pos && pair) {
                       const currentSize = Math.abs(Number(pos.size ?? 0));

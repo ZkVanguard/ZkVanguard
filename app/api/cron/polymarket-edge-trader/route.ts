@@ -57,12 +57,18 @@ import { errMsg } from '@/lib/utils/error-handler';
 import { computeEdgeStake } from '@/lib/services/trading/edge-sizing';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
-import { safeBluefinSnapshot } from '@/lib/services/sui/bluefin-read-safe';
+import { safeBluefinSnapshot, refreshBluefinCache } from '@/lib/services/sui/bluefin-read-safe';
 import {
   PredictionAggregatorService,
   type AggregatedPrediction,
 } from '@/lib/services/market-data/PredictionAggregatorService';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+// Static so Graphify sees the trader's quality-gate + regret-tracker dispatch.
+// Previously loaded via 8 await import() sites; tree-sitter drops those.
+import { query } from '@/lib/db/postgres';
+import { computeSizeMultiplier, computeRegretScore } from '@/lib/services/ai/regret-tracker';
+import { regretBasedHalt, fundingEdge, exposureCap } from '@/lib/services/trading/trade-quality-gates';
+import { checkBeforeTrade, completeTrade, getPriceAlertedSymbols } from '@/lib/services/agents/agent-trade-guard';
 import {
   SUPPORTED_ASSETS,
   ASSET_MIN_QTY,
@@ -404,7 +410,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         bf.getBalance().catch(() => 0),
         bf.getPositions().catch(() => [] as BluefinPosition[]),
       ]);
-      const { refreshBluefinCache } = await import('@/lib/services/sui/bluefin-read-safe');
       await refreshBluefinCache({
         free: Number(bal) || 0,
         positions: pos as unknown as Array<Record<string, unknown>>,
@@ -757,8 +762,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     let regretScoreForHalt = 0;
     try {
       if ((process.env.REGRET_TRACKER_DISABLE ?? '') !== '1') {
-        const { computeSizeMultiplier, computeRegretScore } = await import('@/lib/services/ai/regret-tracker');
-        const { query } = await import('@/lib/db/postgres');
         const rows = await query<{ open_confidence: number; realized_pnl: number; created_at: Date }>(
           `SELECT COALESCE(open_confidence, 60) as open_confidence,
                   COALESCE(realized_pnl, 0)::float as realized_pnl,
@@ -786,7 +789,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // negative. Env: TRADER_REGRET_HALT_DISABLE=1 to keep trading
     // through losing streaks.
     if ((process.env.TRADER_REGRET_HALT_DISABLE ?? '') !== '1') {
-      const { regretBasedHalt } = await import('@/lib/services/trading/trade-quality-gates');
       const haltDecision = regretBasedHalt({ regretScore: regretScoreForHalt });
       if (haltDecision.halt) {
         logger.warn('[EdgeTrader] regret-based halt', haltDecision);
@@ -1054,7 +1056,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // SOL kept getting picked and blocked while BTC/ETH were fine.
     let alertedAssets = new Set<string>();
     try {
-      const { getPriceAlertedSymbols } = await import('@/lib/services/agents/agent-trade-guard');
       alertedAssets = await getPriceAlertedSymbols();
     } catch {
       /* non-critical — if the helper fails, walk proceeds unfiltered
@@ -1246,7 +1247,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // ("mirrors RiskAgent's invariants without needing the actual agent");
     // this unifies it under the same authoritative path so both crons share
     // limits, cooldowns, and circuit breakers.
-    const { checkBeforeTrade, completeTrade } = await import('@/lib/services/agents/agent-trade-guard');
     const guard = await checkBeforeTrade({
       chain: 'sui',
       asset,
@@ -1287,7 +1287,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       try {
         const md = await bf.getMarketData(symbol).catch(() => null);
         const fundingRate = md?.fundingRate ?? 0;
-        const { fundingEdge } = await import('@/lib/services/trading/trade-quality-gates');
         const edge = fundingEdge(side as 'LONG' | 'SHORT', fundingRate);
         if (edge.advantage === 'PAY' && Math.abs(edge.bonusPct) >= 5) {
           logger.warn('[EdgeTrader] funding-edge headwind — skipping', edge);
@@ -1318,7 +1317,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
           0,
         );
         const traderNav = free + positionsPre.reduce((s, p) => s + Number(p.margin ?? 0), 0);
-        const { exposureCap } = await import('@/lib/services/trading/trade-quality-gates');
         const capDecision = exposureCap({
           navUsd: traderNav,
           currentTotalNotionalUsd: currentTotalNotional,
