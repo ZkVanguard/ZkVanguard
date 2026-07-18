@@ -198,24 +198,6 @@ export const HEDERA_CONTRACT_ADDRESSES = {
 } as const;
 
 // ============================================
-// LEGACY EXPORT (for backward compatibility)
-// ============================================
-
-export const CONTRACT_ADDRESSES = {
-  cronos_testnet: CRONOS_CONTRACT_ADDRESSES.testnet,
-  cronos_mainnet: CRONOS_CONTRACT_ADDRESSES.mainnet,
-  sui_testnet: SUI_CONTRACT_ADDRESSES.testnet,
-  sui_mainnet: SUI_CONTRACT_ADDRESSES.mainnet,
-  sui_devnet: SUI_CONTRACT_ADDRESSES.devnet,
-  oasis_emerald_testnet: OASIS_EMERALD_CONTRACT_ADDRESSES.testnet,
-  oasis_emerald_mainnet: OASIS_EMERALD_CONTRACT_ADDRESSES.mainnet,
-  hedera_testnet: HEDERA_CONTRACT_ADDRESSES.testnet,
-  hedera_mainnet: HEDERA_CONTRACT_ADDRESSES.mainnet,
-  oasis_sapphire_testnet: OASIS_CONTRACT_ADDRESSES.testnet,
-  oasis_sapphire_mainnet: OASIS_CONTRACT_ADDRESSES.mainnet,
-} as const;
-
-// ============================================
 // CHAIN TYPE DETECTION
 // ============================================
 

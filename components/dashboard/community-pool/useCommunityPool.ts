@@ -143,9 +143,6 @@ export function useCommunityPool(propAddress?: string) {
     return address;
   }, [activeWalletType, suiAddress, address]);
   
-  // ERC20 allowance check (for USDT reset-to-zero pattern)
-  // DEPRECATED HOOK: Replaced by imperative check in handleDeposit
-  
   // User's USDT balance (show how much they can deposit) - keep this for UI
   const { data: userUsdtBalance } = useReadContract({
     address: USDT_ADDRESS,
@@ -161,11 +158,8 @@ export function useCommunityPool(propAddress?: string) {
   // Account Abstraction (Gasless) support
   const { depositWithGasless } = useSmartAccount();
   
-  // Pool total shares (to detect first deposit) - DEPRECATED HOOK, assume non-empty or check lazily
-  // const { data: poolTotalShares } = useReadContract({...});
-  
-  // Derived: is first deposit (requires $100 minimum for inflation attack protection)
-  // OPTIMIZATION: Assume false by default to speed up load. API enforces the rule anyway.
+  // First-deposit gate: assumed false — API enforces the $100 inflation-attack
+  // minimum server-side, so the client can render without an extra RPC round-trip.
   const isFirstDeposit = false;
   
   // Helper to lazily fetch permit details only when needed
