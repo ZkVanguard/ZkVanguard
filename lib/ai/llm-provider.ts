@@ -325,11 +325,16 @@ class LLMProvider {
         });
       }
 
-      // SMART FEATURE: Fetch real portfolio data for context-aware responses
+      // SMART FEATURE: Fetch real portfolio data for context-aware responses.
+      // Use the caller's wallet from `context.address` when available so the
+      // LLM sees THEIR portfolio, not the server wallet. Chat callers
+      // (ChatInterface, EnhancedChat, simulator) always pass address in
+      // context; falls back to server wallet for agent-flow callers.
       let portfolioContext = '';
       let portfolioAssets: string[] = [];
       try {
-        const portfolioData = await getPortfolioData();
+        const callerAddress = typeof context?.address === 'string' ? context.address : undefined;
+        const portfolioData = await getPortfolioData(callerAddress);
         if (portfolioData && portfolioData.portfolio) {
           const p = portfolioData.portfolio as Record<string, unknown> & {
             totalValue?: number;
@@ -948,7 +953,8 @@ class LLMProvider {
       let hedgeInfo = '';
       let hedgeActions: HedgeAction[] = [];
       try {
-        const portfolioData = await getPortfolioData();
+        const callerAddress = typeof context?.address === 'string' ? context.address : undefined;
+        const portfolioData = await getPortfolioData(callerAddress);
         const portfolio = portfolioData?.portfolio as Record<string, unknown> | undefined;
         const portfolioValue = Number(portfolio?.totalValue || portfolio?.currentValue || 10000);
         const riskScore = 0.65; // Could be fetched from risk assessment

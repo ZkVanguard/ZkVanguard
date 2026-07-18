@@ -307,28 +307,37 @@ async function generateAnalysisFromOnChainData(
 }
 
 /**
- * Get current portfolio data from on-chain sources ONLY
- * No simulated or mock data - real blockchain data only
+ * Get current portfolio data from on-chain sources ONLY.
+ * Pass `walletAddress` to fetch a specific address's holdings; omit to
+ * fall back to the server-configured wallet (agent context).
+ *
+ * Prior to the walletAddress overload, this function derived the address
+ * exclusively from SERVER_WALLET_PRIVATE_KEY, so any caller that meant to
+ * report on a *user's* portfolio (chat context in llm-provider.ts, the
+ * old reporting endpoint) silently got the server wallet's balances
+ * instead — same output for every caller.
  */
-export async function getPortfolioData(): Promise<Record<string, unknown> | null> {
+export async function getPortfolioData(
+  walletAddress?: string,
+): Promise<Record<string, unknown> | null> {
   try {
     // Import directly to avoid circular fetch issues
     const { getMarketDataService } = await import('./market-data/RealMarketDataService');
     const { ethers } = await import('ethers');
-    
-    // Get wallet address from environment
-    const pk = process.env.PRIVATE_KEY || 
-               process.env.AGENT_PRIVATE_KEY || 
-               process.env.SERVER_WALLET_PRIVATE_KEY;
-    
-    if (!pk) {
-      logger.warn('No wallet private key configured for on-chain portfolio');
-      return null;
+
+    let address = walletAddress;
+    if (!address) {
+      // Fall back to server wallet for agent-context callers (no user address).
+      const pk = process.env.PRIVATE_KEY ||
+                 process.env.AGENT_PRIVATE_KEY ||
+                 process.env.SERVER_WALLET_PRIVATE_KEY;
+      if (!pk) {
+        logger.warn('No wallet address supplied and no server key configured for on-chain portfolio');
+        return null;
+      }
+      address = new ethers.Wallet(pk).address;
     }
 
-    const wallet = new ethers.Wallet(pk);
-    const address = wallet.address;
-    
     // Fetch real on-chain data directly
     const marketData = getMarketDataService();
     const portfolioData = await marketData.getPortfolioData(address);
