@@ -4,7 +4,6 @@
  * Priority: Crypto.com Exchange API → MCP Server → Stale Cache (NO MOCKS)
  */
 
-import axios from 'axios';
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '../CryptocomExchangeService';
@@ -476,24 +475,25 @@ class RealMarketDataService {
    */
   private async getMCPServerPrice(symbol: string): Promise<{ price: number; change24h?: number } | null> {
     try {
-      // MCP Server endpoint (no authentication needed for basic queries)
-      const response = await axios.get('https://mcp.crypto.com/api/v1/price', {
-        params: { symbol: symbol.toUpperCase() },
-        timeout: 5000,
-      });
-
-      if (response.data && response.data.price) {
+      const url = new URL('https://mcp.crypto.com/api/v1/price');
+      url.searchParams.set('symbol', symbol.toUpperCase());
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) {
+        if (response.status !== 404) {
+          logger.debug(`MCP Server query failed for ${symbol}`, { status: response.status });
+        }
+        return null;
+      }
+      const data = await response.json() as { price?: string; change_24h?: string };
+      if (data.price) {
         return {
-          price: parseFloat(response.data.price),
-          change24h: response.data.change_24h ? parseFloat(response.data.change_24h) : undefined,
+          price: parseFloat(data.price),
+          change24h: data.change_24h ? parseFloat(data.change_24h) : undefined,
         };
       }
     } catch (error) {
-      // MCP Server might not support all tokens, fail silently
-      const status = (error as { response?: { status?: number } })?.response?.status;
-      if (status !== 404) {
-        logger.debug(`MCP Server query failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
-      }
+      // Network error or timeout — fail silently, caller has other price sources
+      logger.debug(`MCP Server query failed for ${symbol}`, { error: error instanceof Error ? error.message : String(error) });
     }
     return null;
   }

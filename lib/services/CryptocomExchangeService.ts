@@ -5,7 +5,6 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import axios, { AxiosInstance } from 'axios';
 
 export interface ExchangeTicker {
   instrument_name: string;
@@ -41,10 +40,41 @@ export interface MarketPrice {
 }
 
 class CryptocomExchangeService {
-  private client: AxiosInstance;
   private readonly BASE_URL = 'https://api.crypto.com/exchange/v1';
+  private readonly DEFAULT_TIMEOUT_MS = 2000;
   private priceCache: Map<string, { price: MarketPrice; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 30000; // 30 seconds (aggressive caching for high performance)
+
+  // Small fetch wrapper — carries baseURL, JSON parsing, and status-200-only
+  // enforcement. Replaces the axios.create()+interceptor pattern with the
+  // 3 features we actually used: baseURL, validateStatus, error logging.
+  private async fetchJson<T>(
+    path: string,
+    params?: Record<string, string>,
+    timeoutMs: number = this.DEFAULT_TIMEOUT_MS,
+  ): Promise<T> {
+    const url = new URL(this.BASE_URL + path);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    }
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        redirect: 'error',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err) {
+      logger.error('API Error', err, { component: 'CryptocomExchange' });
+      throw err;
+    }
+    if (response.status !== 200) {
+      const err = new Error(`Crypto.com Exchange returned ${response.status}`);
+      logger.error('API Error', err, { component: 'CryptocomExchange', status: response.status });
+      throw err;
+    }
+    return response.json() as Promise<T>;
+  }
   
   // Symbol mapping: internal symbol → exchange instrument name
   private readonly SYMBOL_MAP: Record<string, string> = {
@@ -77,27 +107,8 @@ class CryptocomExchangeService {
     'DEVUSDC', 'DEVUSDCE', 'TESTUSDC', 'TESTWETH', 'TESTCRO',
   ]);
 
-  constructor() {
-    this.client = axios.create({
-      baseURL: this.BASE_URL,
-      timeout: 2000, // Reduced from 3s to 2s for faster failures
-      headers: {
-        'Content-Type': 'application/json',
-        // Note: Connection header removed - browsers don't allow setting it
-      },
-      maxRedirects: 0, // Don't follow redirects
-      validateStatus: (status) => status === 200, // Only accept 200
-    });
-
-    // Add response interceptor for error handling
-    this.client.interceptors.response.use(
-      response => response,
-      error => {
-        logger.error('API Error', error, { component: 'CryptocomExchange' });
-        throw error;
-      }
-    );
-  }
+  // No axios instance — fetchJson() above bundles baseURL + timeout + JSON
+  // parsing + 200-only status check. Constructor is now defaulted.
 
   /**
    * Get current price for a symbol
@@ -136,17 +147,13 @@ class CryptocomExchangeService {
 
     try {
       const instrumentName = this.getInstrumentName(normalizedSymbol);
-      const response = await this.client.get<ExchangeTickerResponse>(
+      const data = await this.fetchJson<ExchangeTickerResponse>(
         '/public/get-tickers',
-        {
-          params: {
-            instrument_name: instrumentName,
-          },
-        }
+        { instrument_name: instrumentName },
       );
 
-      if (response.data.code === 0 && response.data.result?.data?.length > 0) {
-        const ticker = response.data.result.data[0];
+      if (data.code === 0 && data.result?.data?.length > 0) {
+        const ticker = data.result.data[0];
         const marketData = this.parseTickerData(ticker, normalizedSymbol);
         
         // Cache the result
@@ -214,14 +221,10 @@ class CryptocomExchangeService {
    */
   async getAllTickers(): Promise<ExchangeTicker[]> {
     try {
-      const response = await this.client.get<ExchangeTickerResponse>(
-        '/public/get-tickers'
-      );
-
-      if (response.data.code === 0 && response.data.result?.data) {
-        return response.data.result.data;
+      const data = await this.fetchJson<ExchangeTickerResponse>('/public/get-tickers');
+      if (data.code === 0 && data.result?.data) {
+        return data.result.data;
       }
-
       return [];
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -275,11 +278,12 @@ class CryptocomExchangeService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.client.get('/public/get-tickers', {
-        params: { instrument_name: 'BTC_USD' },
-        timeout: 5000,
-      });
-      return response.data.code === 0;
+      const data = await this.fetchJson<ExchangeTickerResponse>(
+        '/public/get-tickers',
+        { instrument_name: 'BTC_USD' },
+        5000,
+      );
+      return data.code === 0;
     } catch (error) {
       logger.error('Health check failed', error, { component: 'CryptocomExchange' });
       return false;

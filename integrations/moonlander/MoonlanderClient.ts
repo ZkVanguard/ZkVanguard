@@ -3,7 +3,6 @@
  * Integration with Moonlander perpetual futures exchange on Cronos
  */
 
-import axios, { AxiosInstance } from 'axios';
 import { ethers } from 'ethers';
 import { logger } from '../../shared/utils/logger';
 
@@ -84,7 +83,9 @@ export interface LiquidationRisk {
 }
 
 export class MoonlanderClient {
-  private httpClient: AxiosInstance;
+  private readonly baseUrl: string;
+  private readonly defaultTimeoutMs: number = 30_000;
+  private authHeaders: Record<string, string> = {};
   private signer: ethers.Wallet | ethers.Signer;
   private apiKey?: string;
   private apiSecret?: string;
@@ -94,14 +95,7 @@ export class MoonlanderClient {
     private provider: ethers.Provider,
     signerOrPrivateKey: ethers.Wallet | ethers.Signer | string
   ) {
-    // Initialize HTTP client
-    this.httpClient = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_MOONLANDER_API || 'https://api.moonlander.io',
-      timeout: 30000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    this.baseUrl = process.env.NEXT_PUBLIC_MOONLANDER_API || 'https://api.moonlander.io';
 
     // Initialize signer
     if (typeof signerOrPrivateKey === 'string') {
@@ -117,9 +111,41 @@ export class MoonlanderClient {
     this.apiSecret = process.env.MOONLANDER_API_SECRET || '';
 
     logger.info('MoonlanderClient initialized', {
-      apiUrl: this.httpClient.defaults.baseURL,
+      apiUrl: this.baseUrl,
       hasApiKey: !!this.apiKey,
     });
+  }
+
+  // Fetch wrapper — carries baseURL + JSON body/response + auth headers +
+  // timeout. Replaces the axios.create() instance and mutable-defaults
+  // pattern with the two features we actually used: baseURL prefix and
+  // shared auth headers set post-authenticate().
+  private async request<T>(
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    opts: { body?: unknown; params?: Record<string, string | number>; timeoutMs?: number } = {},
+  ): Promise<T> {
+    const url = new URL(this.baseUrl + path);
+    if (opts.params) {
+      for (const [k, v] of Object.entries(opts.params)) url.searchParams.set(k, String(v));
+    }
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.authHeaders,
+      },
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? this.defaultTimeoutMs),
+    });
+    if (!response.ok) {
+      throw new Error(`Moonlander ${method} ${path} failed: ${response.status} ${response.statusText}`);
+    }
+    // DELETE may return empty body; guard against no-content responses.
+    if (response.status === 204 || method === 'DELETE') {
+      return undefined as T;
+    }
+    return response.json() as Promise<T>;
   }
 
   /**
@@ -150,9 +176,12 @@ export class MoonlanderClient {
     // Sign authentication message
     const signature = await this.signer.signMessage(message);
 
-    this.httpClient.defaults.headers.common['X-API-KEY'] = this.apiKey;
-    this.httpClient.defaults.headers.common['X-TIMESTAMP'] = timestamp.toString();
-    this.httpClient.defaults.headers.common['X-SIGNATURE'] = signature;
+    // Auth headers apply to every subsequent request via this.request().
+    this.authHeaders = {
+      'X-API-KEY': this.apiKey!,
+      'X-TIMESTAMP': timestamp.toString(),
+      'X-SIGNATURE': signature,
+    };
 
     logger.info('Authenticated with Moonlander API');
   }
@@ -247,8 +276,7 @@ export class MoonlanderClient {
     } catch (error) {
       // Last resort: try original Moonlander API with short timeout
       try {
-        const response = await this.httpClient.get(`/v1/markets/${market}`, { timeout: 3000 });
-        return response.data;
+        return await this.request<MarketInfo>('GET', `/v1/markets/${market}`, { timeoutMs: 3000 });
       } catch {
         logger.error('All market info sources failed', { market, error });
         throw new Error(`Cannot get market info for ${market}: all data sources unavailable`);
@@ -261,8 +289,7 @@ export class MoonlanderClient {
    */
   async getAllMarkets(): Promise<MarketInfo[]> {
     try {
-      const response = await this.httpClient.get('/v1/markets');
-      return response.data;
+      return await this.request<MarketInfo[]>('GET', '/v1/markets');
     } catch (error) {
       logger.warn('Moonlander API unavailable, returning Exchange API fallback markets', { error });
       return [await this.getMarketInfo('BTC-USD-PERP')];
@@ -287,8 +314,7 @@ export class MoonlanderClient {
     try {
       logger.info('Placing order', { orderRequest });
 
-      const response = await this.httpClient.post('/v1/orders', orderRequest);
-      const order = response.data;
+      const order = await this.request<OrderResult>('POST', '/v1/orders', { body: orderRequest });
 
       logger.info('Order placed successfully', { orderId: order.orderId });
       return order;
@@ -305,7 +331,7 @@ export class MoonlanderClient {
     this.ensureInitialized();
 
     try {
-      await this.httpClient.delete(`/v1/orders/${orderId}`);
+      await this.request<void>('DELETE', `/v1/orders/${orderId}`);
       logger.info('Order cancelled', { orderId });
     } catch (error) {
       logger.error('Failed to cancel order', { orderId, error });
@@ -320,8 +346,7 @@ export class MoonlanderClient {
     this.ensureInitialized();
 
     try {
-      const response = await this.httpClient.get('/v1/positions');
-      return response.data;
+      return await this.request<PerpetualPosition[]>('GET', '/v1/positions');
     } catch (error) {
       logger.warn('Moonlander API unavailable, no open positions available', { error });
       // Return empty array — no simulated/hardcoded positions
@@ -509,11 +534,10 @@ export class MoonlanderClient {
 
       // Absolute last resort: try Moonlander API
       try {
-        const response = await this.httpClient.get(`/v1/markets/${market}/funding`, {
+        return await this.request<FundingPayment[]>('GET', `/v1/markets/${market}/funding`, {
           params: { limit },
-          timeout: 3000,
+          timeoutMs: 3000,
         });
-        return response.data;
       } catch {
         logger.error('All funding data sources failed', { market, error: exchangeError });
         throw new Error(`Cannot get funding data for ${market}: all sources unavailable`);
@@ -574,9 +598,7 @@ export class MoonlanderClient {
     this.ensureInitialized();
 
     try {
-      await this.httpClient.post(`/v1/positions/${market}/leverage`, {
-        leverage,
-      });
+      await this.request<void>('POST', `/v1/positions/${market}/leverage`, { body: { leverage } });
       logger.info('Leverage adjusted', { market, leverage });
     } catch (error) {
       logger.error('Failed to adjust leverage', { market, leverage, error });
@@ -591,9 +613,7 @@ export class MoonlanderClient {
     this.ensureInitialized();
 
     try {
-      await this.httpClient.post(`/v1/positions/${market}/margin`, {
-        amount,
-      });
+      await this.request<void>('POST', `/v1/positions/${market}/margin`, { body: { amount } });
       logger.info('Margin added', { market, amount });
     } catch (error) {
       logger.error('Failed to add margin', { market, amount, error });
@@ -608,8 +628,10 @@ export class MoonlanderClient {
     this.ensureInitialized();
 
     try {
-      const response = await this.httpClient.get('/v1/account/balance');
-      return response.data;
+      return await this.request<{ available: string; total: string; margin: string }>(
+        'GET',
+        '/v1/account/balance',
+      );
     } catch (error) {
       logger.error('Failed to get balance', { error });
       throw error;

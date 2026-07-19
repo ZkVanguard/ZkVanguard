@@ -11,16 +11,14 @@
 import { getSimulatedPortfolioManager, resetSimulatedPortfolioManager } from '../lib/services/SimulatedPortfolioManager';
 import { getCryptocomAIService } from '../lib/ai/cryptocom-service';
 import { getAgentOrchestrator } from '../lib/services/agent-orchestrator';
-import axios from 'axios';
-
 describe('Real System Validation', () => {
-  
+
   // Check if server is running
   let serverRunning = false;
-  
+
   beforeAll(async () => {
     try {
-      const response = await axios.get('http://localhost:3000/api/health', { timeout: 2000 });
+      const response = await fetch('http://localhost:3000/api/health', { signal: AbortSignal.timeout(2000) });
       serverRunning = response.status === 200;
     } catch {
       serverRunning = false;
@@ -40,20 +38,21 @@ describe('Real System Validation', () => {
         return;
       }
       
-      const response = await axios.get(
+      const response = await fetch(
         'http://localhost:3000/api/prices?symbols=BTC,ETH&source=exchange'
       );
-      
-      expect(response.data).toBeDefined();
-      expect(response.data.prices).toBeDefined();
-      expect(response.data.prices.BTC).toBeGreaterThan(0);
-      expect(response.data.prices.ETH).toBeGreaterThan(0);
-      
+      const data = await response.json();
+
+      expect(data).toBeDefined();
+      expect(data.prices).toBeDefined();
+      expect(data.prices.BTC).toBeGreaterThan(0);
+      expect(data.prices.ETH).toBeGreaterThan(0);
+
       // Prices should be in realistic ranges
-      expect(response.data.prices.BTC).toBeGreaterThan(20000); // BTC > $20k
-      expect(response.data.prices.BTC).toBeLessThan(200000); // BTC < $200k
-      expect(response.data.prices.ETH).toBeGreaterThan(1000); // ETH > $1k
-      expect(response.data.prices.ETH).toBeLessThan(10000); // ETH < $10k
+      expect(data.prices.BTC).toBeGreaterThan(20000); // BTC > $20k
+      expect(data.prices.BTC).toBeLessThan(200000); // BTC < $200k
+      expect(data.prices.ETH).toBeGreaterThan(1000); // ETH > $1k
+      expect(data.prices.ETH).toBeLessThan(10000); // ETH < $10k
     }, 10000);
 
     it('should get different prices at different times', async () => {
