@@ -22,6 +22,9 @@ import {
 } from '@/lib/services/sui/BluefinAggregatorService';
 import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
 import { canonicalizeCoinType } from '@/lib/services/sui/coin-type';
+import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
+import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 /**
  * Minimum USDC value for a meaningful on-chain hedge.
@@ -1264,3 +1267,122 @@ export async function attestExternalNav(
     return { pushed: false, error: msg };
   }
 }
+
+/**
+ * AI-driven on-chain daily-cap reset.
+ *
+ * The Move contract caps `daily_hedge_total` at 50% of NAV per UTC day to
+ * prevent runaway hedge spend. That cap is too restrictive when the AI +
+ * prediction-market signal flips strongly mid-day: the pool sits idle until
+ * midnight UTC instead of acting on a high-confidence directional move.
+ *
+ * `admin_reset_daily_hedge(AdminCap, &mut state, &Clock)` zeros the counter
+ * without touching active positions. We invoke it sparingly — only when the
+ * AI says it's worth the additional risk — and we cap usage to a small
+ * number per UTC day so a buggy or compromised signal source can't drain
+ * the pool.
+ *
+ * Reset is allowed when ALL hold:
+ *   • on-chain dailyHedgedToday >= 50% of NAV (cap actually exhausted)
+ *   • AI urgency in {HIGH, CRITICAL} OR confidence >= 75
+ *   • resets-used-today < HEDGE_DAILY_MAX_RESETS (default 4)
+ */
+
+export async function aiDrivenResetDailyHedge(
+  network: 'mainnet' | 'testnet',
+  signal: { urgency?: string; confidence?: number },
+): Promise<{ reset: boolean; reason?: string; txDigest?: string; error?: string; resetsUsed?: number }> {
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  const adminCapId = (process.env.SUI_ADMIN_CAP_ID || '').trim();
+  const poolConfig = SUI_USDC_POOL_CONFIG[network];
+
+  if (!adminKey) return { reset: false, reason: 'no admin key' };
+  if (!adminCapId) return { reset: false, reason: 'SUI_ADMIN_CAP_ID not configured' };
+  if (!poolConfig.packageId || !poolConfig.poolStateId) {
+    return { reset: false, reason: 'pool not configured' };
+  }
+
+  const urgency = (signal.urgency || '').toUpperCase();
+  const confidence = Number(signal.confidence || 0);
+  const minConfidence = Number(process.env.HEDGE_RESET_MIN_CONFIDENCE || 75);
+  if (!isStrongHedgeSignal(urgency, confidence, minConfidence)) {
+    return { reset: false, reason: `weak signal (urgency=${urgency || 'NONE'} conf=${confidence})` };
+  }
+
+  // Bound resets per UTC day so the cap still has teeth.
+  const dayKey = `hedgeDailyReset:${Math.floor(Date.now() / 86_400_000)}`;
+  const maxResets = Number(process.env.HEDGE_DAILY_MAX_RESETS || 4);
+  const usedSoFar = await getCronStateOr<number>(dayKey, 0);
+  if (usedSoFar >= maxResets) {
+    return { reset: false, reason: `reset budget exhausted (${usedSoFar}/${maxResets})`, resetsUsed: usedSoFar };
+  }
+
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { Transaction } = await import('@mysten/sui/transactions');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    const suiClient = new SuiClient({ url: rpcUrl });
+
+    // Pre-flight: confirm the cron's hot key still owns the AdminCap.
+    // Once the cap is transferred to the MSafe multisig, the cron MUST stop
+    // attempting auto-resets (each tx would fail noisily and burn gas budget).
+    // We treat "not owned" as a clean no-op: daily cap acts as hard-stop until
+    // a human runs collect-fees / reset via the multisig.
+    const capObj = await suiClient.getObject({ id: adminCapId, options: { showOwner: true } });
+    const capOwner = capObj.data?.owner;
+    const cronSigner = keypair.toSuiAddress();
+    if (!capOwner || typeof capOwner !== 'object' || !('AddressOwner' in capOwner)) {
+      return { reset: false, reason: 'AdminCap owner unreadable — skipping auto-reset' };
+    }
+    if (capOwner.AddressOwner.toLowerCase() !== cronSigner.toLowerCase()) {
+      return {
+        reset: false,
+        reason: `AdminCap owned by ${capOwner.AddressOwner} (not cron signer ${cronSigner}) — multisig-gated, daily cap is hard-stop`,
+      };
+    }
+
+    const tx = new Transaction();
+    const usdcType = SUI_USDC_COIN_TYPE[network];
+    tx.moveCall({
+      target: `${poolConfig.packageId}::${poolConfig.moduleName}::admin_reset_daily_hedge`,
+      typeArguments: [usdcType],
+      arguments: [
+        tx.object(adminCapId),
+        tx.object(poolConfig.poolStateId!),
+        tx.object('0x6'),
+      ],
+    });
+    tx.setGasBudget(20_000_000);
+
+    const result = await suiClient.signAndExecuteTransaction({
+      signer: keypair, transaction: tx, options: { showEffects: true },
+    });
+    const ok = result.effects?.status?.status === 'success';
+    if (ok) {
+      await setCronState(dayKey, usedSoFar + 1);
+      logger.info('[SUI Cron] AI-driven daily-cap reset SUCCESS', {
+        urgency, confidence, resetsUsed: usedSoFar + 1, maxResets, txDigest: result.digest,
+      });
+      await notifyDiscord(
+        `Daily hedge cap RESET (${usedSoFar + 1}/${maxResets} resets used today, urgency=${urgency}, conf=${confidence}). Pool can now hedge again before UTC midnight.`,
+        'WARN',
+        { network, urgency, confidence, resetsUsed: usedSoFar + 1, maxResets, txDigest: result.digest },
+      );
+      return { reset: true, txDigest: result.digest, resetsUsed: usedSoFar + 1 };
+    }
+    logger.warn('[SUI Cron] AI-driven daily-cap reset FAILED', {
+      error: result.effects?.status?.error,
+    });
+    return { reset: false, reason: 'tx failed', error: result.effects?.status?.error };
+  } catch (err) {
+    return { reset: false, reason: 'exception', error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
