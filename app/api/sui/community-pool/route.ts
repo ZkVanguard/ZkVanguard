@@ -1209,7 +1209,7 @@ export async function POST(request: NextRequest) {
       // succeed until the pool is topped up. Do that here before letting the
       // client sign.
       try {
-        const { readPoolLiquidityState, ensurePoolLiquidityForWithdraw } = await import('@/lib/services/sui/cron/hedge-treasury');
+        const { readPoolLiquidityState, ensurePoolLiquidityForWithdraw } = await import('@/lib/services/sui/cron/pool-liquidity');
         const liq = await readPoolLiquidityState(network);
         if (liq && liq.totalSharesRaw > 0n) {
           // Mirror Move calculate_assets_for_shares exactly:

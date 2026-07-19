@@ -20,11 +20,9 @@
 import { logger } from '@/lib/utils/logger';
 import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
 import { SUI_USDC_POOL_CONFIG } from '@/lib/services/sui/SuiCommunityPoolService';
-import {
-  getAdminUsdcBalance,
-  transferUsdcFromPoolToAdmin,
-  aiDrivenResetDailyHedge,
-} from '@/lib/services/sui/cron/hedge-treasury';
+import { getAdminUsdcBalance } from '@/lib/services/sui/cron/admin-swaps';
+import { transferUsdcFromPoolToAdmin } from '@/lib/services/sui/cron/pool-transfer';
+import { aiDrivenResetDailyHedge } from '@/lib/services/sui/cron/nav-oracle';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 
 /**

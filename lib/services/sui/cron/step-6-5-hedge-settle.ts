@@ -19,13 +19,12 @@
  */
 import { logger } from '@/lib/utils/logger';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { getActiveHedges, settleActiveHedges } from '@/lib/services/sui/cron/hedge-lifecycle';
 import {
-  getActiveHedges,
-  settleActiveHedges,
   getAdminUsdcBalance,
   getAdminNonUsdcUsdValue,
   replenishAdminUsdc,
-} from '@/lib/services/sui/cron/hedge-treasury';
+} from '@/lib/services/sui/cron/admin-swaps';
 
 export interface HedgeSettlementResult {
   settled: number;

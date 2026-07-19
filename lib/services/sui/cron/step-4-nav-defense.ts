@@ -32,7 +32,8 @@ import { clampAllocationsToHedgeable } from '@/lib/services/sui/cron/hedgeable-a
 import { applyProfitLock } from '@/lib/services/sui/cron/profit-lock-guard';
 import { runPortfolioDriverTick } from '@/lib/services/sui/PortfolioDriver';
 import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
-import { attestExternalNav, replenishAdminUsdc } from '@/lib/services/sui/cron/hedge-treasury';
+import { attestExternalNav } from '@/lib/services/sui/cron/nav-oracle';
+import { replenishAdminUsdc } from '@/lib/services/sui/cron/admin-swaps';
 import { recordPoolNavSnapshot } from '@/lib/services/sui/cron/persistence';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import type { SuiUsdcPoolStats } from '@/lib/types/sui-pool-types';

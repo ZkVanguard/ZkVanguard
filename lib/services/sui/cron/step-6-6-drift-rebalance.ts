@@ -16,10 +16,7 @@ import { logger } from '@/lib/utils/logger';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { POOL_ASSETS, type PoolAsset } from '@/lib/services/sui/cron/allocation';
 import type { PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
-import {
-  getAdminAssetValuesUsd,
-  sellAssetForUsdc,
-} from '@/lib/services/sui/cron/hedge-treasury';
+import { getAdminAssetValuesUsd, sellAssetForUsdc } from '@/lib/services/sui/cron/admin-swaps';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 
 // Tunables. Bound per-tick blast radius: at most MAX_REBALANCE_SELL_USD of
