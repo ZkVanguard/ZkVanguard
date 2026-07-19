@@ -3,7 +3,7 @@
  * @module agents/core/AgentRegistry
  */
 
-import { EventEmitter } from 'eventemitter3';
+import { EventEmitter } from 'node:events';
 import { BaseAgent } from './BaseAgent';
 import { logger } from '@shared/utils/logger';
 import { AgentType, AgentStatus } from '@shared/types/agent';

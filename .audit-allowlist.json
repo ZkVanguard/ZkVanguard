@@ -1,13 +1,6 @@
 {
   "_readme": "Vulnerabilities documented + risk-accepted. See docs/SUPPLY_CHAIN_POLICY.md for waiver process. Each entry MUST have: reason, reviewedBy, reviewedAt (ISO date), expires (ISO date, max 90 days out).",
   "waived": {
-    "@bluefin-exchange/bluefin-v2-client": {
-      "reason": "Transitive dep of BluefinService; no upstream fix available. Only invoked server-side with our own signed requests, not exposed to user input.",
-      "reviewedBy": "ashishregmi2017@gmail.com",
-      "reviewedAt": "2026-06-30",
-      "expires": "2026-09-28",
-      "ticket": null
-    },
     "@firefly-exchange/library-sui": {
       "reason": "Bundled with BluefinService for order signing. Server-only. Same risk profile as parent SDK.",
       "reviewedBy": "ashishregmi2017@gmail.com",

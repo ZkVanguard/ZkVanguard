@@ -3,8 +3,7 @@
  * @module agents/core/BaseAgent
  */
 
-import { EventEmitter } from 'eventemitter3';
-import { v4 as uuidv4 } from 'uuid';
+import { EventEmitter } from 'node:events';
 import { logger } from '@shared/utils/logger';
 import { AgentConfig, AgentStatus, AgentMessage, AgentTask, AgentType, TaskResult } from '@shared/types/agent';
 
@@ -40,7 +39,7 @@ export abstract class BaseAgent extends EventEmitter {
     // Detect which constructor pattern is being used
     if (messageBus && typeof configOrCapabilities === 'object' && !Array.isArray(configOrCapabilities)) {
       // Full constructor: (name, type, config, messageBus)
-      this.id = uuidv4();
+      this.id = crypto.randomUUID();
       this.agentId = this.id;
       this.name = nameOrId;
       this.type = typeOrName;

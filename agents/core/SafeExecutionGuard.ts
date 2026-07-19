@@ -10,7 +10,6 @@
  */
 
 import { logger } from '@shared/utils/logger';
-import { v4 as uuidv4 } from 'uuid';
 
 // ============================================================================
 // TYPES
@@ -348,7 +347,7 @@ export class SafeExecutionGuard {
     }
 
     const auditLog: AuditLog = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       timestamp: new Date(),
       action,
       agentId,

@@ -6,7 +6,7 @@
  * No API key required.
  */
 
-import { EventEmitter } from 'eventemitter3';
+import { EventEmitter } from 'node:events';
 import { logger } from '../../shared/utils/logger';
 import config from '../../shared/utils/config';
 import { RealMarketDataService } from '../../lib/services/market-data/RealMarketDataService';

@@ -3,7 +3,7 @@
  * @module agents/communication/MessageBus
  */
 
-import { EventEmitter } from 'eventemitter3';
+import { EventEmitter } from 'node:events';
 import { logger } from '@shared/utils/logger';
 import { AgentMessage } from '@shared/types/agent';
 
