@@ -39,8 +39,8 @@ import { notifyDiscord } from '@/lib/utils/discord-notify';
 // so the entire defense pipeline was invisible in graph queries.
 // Enclosing try-blocks handle runtime failures; converting the imports
 // doesn't change error semantics (they still swallow throws).
-import { checkAndCloseDrifts } from '@/lib/services/agents/position-drift-monitor';
 import { runStep8AutoHedge } from '@/lib/services/sui/cron/step-8-auto-hedge';
+import { runStep7_9DriftClose } from '@/lib/services/sui/cron/step-7-9-drift-close';
 import { runStep4NavDefense } from '@/lib/services/sui/cron/step-4-nav-defense';
 import { runStep7Rebalance } from '@/lib/services/sui/cron/step-7-rebalance';
 import { runStep65HedgeSettle } from '@/lib/services/sui/cron/step-6-5-hedge-settle';
@@ -465,28 +465,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     });
 
 
-    // Step 7.9: Position-Drift Auto-Close (AG10) — self-correct misalignment
+    // Step 7.9: Position-Drift Auto-Close (AG10)
     // ═══════════════════════════════════════════════════════════════
-    // For each active real hedge (collateral ≥ $1), ask AgentTradeGuard
-    // whether re-opening the SAME side would now be approved. If not
-    // (agent-directive stage: agent recommends opposite side or HOLD, or
-    // risk-gate stage: systemic risk-ceiling breach), close the position.
-    // Runs BEFORE Step 8 so freed capital can immediately re-hedge on the
-    // correct side in the same tick — pool self-corrects in one cycle.
-    // Kill switch: HEDGE_DRIFT_AUTO_CLOSE_DISABLE=1
-    // ═══════════════════════════════════════════════════════════════
-    let driftResult: { checked: number; drifted: number; closed: number; skipped: number; errors: number; actions: unknown[] } | null = null;
-    try {
-      const bluefinService = BluefinService.getInstance();
-      driftResult = await checkAndCloseDrifts('sui', bluefinService);
-      if (driftResult.drifted > 0) {
-        logger.info('[SUI Cron] Drift monitor summary', driftResult);
-      }
-    } catch (driftErr) {
-      logger.warn('[SUI Cron] Drift monitor threw (non-critical — Step 8 continues)', {
-        error: driftErr instanceof Error ? driftErr.message : String(driftErr),
-      });
-    }
+    // Extracted to lib/services/sui/cron/step-7-9-drift-close.ts.
+    const driftResult = await runStep7_9DriftClose();
 
     // Step 8: Auto-Hedge via BlueFin perpetuals — BTC, ETH, SUI
     // ═══════════════════════════════════════════════════════════════
