@@ -15,23 +15,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
-import { getSuiUsdcPoolService, validateSuiMainnetConfig, SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/services/sui/SuiCommunityPoolService';
-import {
-  initCommunityPoolTables,
-  addPoolTransactionToDb,
-} from '@/lib/db/community-pool';
+import { getSuiUsdcPoolService, validateSuiMainnetConfig } from '@/lib/services/sui/SuiCommunityPoolService';
+import { initCommunityPoolTables } from '@/lib/db/community-pool';
 import { query } from '@/lib/db/postgres';
-import { getCronStateOr, setCronState, tryClaimCronRun, getCronHalt, setCronHalt, endOfUtcDayMs, CronKeys } from '@/lib/db/cron-state';
+import { setCronState, tryClaimCronRun } from '@/lib/db/cron-state';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
-import { getBluefinAggregatorService, type PoolAsset as BluefinPoolAsset } from '@/lib/services/sui/BluefinAggregatorService';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
 import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, scaledReserves } from '@/lib/services/sui/cron/hedge-sizing';
-import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 // v0.3.0 defense dispatch — statically imported so the graph sees the
 // call chain. Previously loaded via `await import()` inside try-blocks
