@@ -20,7 +20,7 @@ import {
   getBluefinAggregatorService,
   type PoolAsset as BluefinPoolAsset,
 } from '@/lib/services/sui/BluefinAggregatorService';
-import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
+import { POOL_ASSETS, type PoolAsset } from '@/lib/services/sui/cron/allocation';
 import { canonicalizeCoinType } from '@/lib/services/sui/coin-type';
 import { isStrongHedgeSignal } from '@/lib/services/sui/cron/signal-gating';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
@@ -1386,3 +1386,153 @@ export async function aiDrivenResetDailyHedge(
   }
 }
 
+
+
+/**
+ * Read per-asset USD values held by the admin wallet (spot leg of the
+ * dual-leg strategy). SUI is counted minus the 1-SUI gas reserve. USDC
+ * and BlueFin margin are NOT counted here — this function returns only
+ * the asset-spot values that the drift-rebalance compares against AI
+ * target percentages.
+ */
+export async function getAdminAssetValuesUsd(
+  network: 'mainnet' | 'testnet',
+  pricesUSD: Record<string, number>,
+): Promise<Record<PoolAsset, number>> {
+  const empty: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  if (!adminKey) return empty;
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const address = keypair.getPublicKey().toSuiAddress();
+    const rpcUrl = network === 'mainnet'
+      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
+      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+    const suiClient = new SuiClient({ url: rpcUrl });
+    const aggregator = getBluefinAggregatorService(network);
+    const allBalances = await suiClient.getAllBalances({ owner: address });
+    const result: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+    // Build canonical lookup of {canonicalCoinType → PoolAsset} once.
+    const canonMap = new Map<string, PoolAsset>();
+    for (const a of POOL_ASSETS) {
+      const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
+      if (assetType) canonMap.set(canonicalizeCoinType(assetType), a as PoolAsset);
+    }
+    for (const bal of allBalances) {
+      const raw = Number(bal.totalBalance);
+      if (raw <= 0) continue;
+      const a = canonMap.get(canonicalizeCoinType(bal.coinType));
+      if (!a) continue;
+      const decimals = a === 'SUI' ? 9 : 8;
+      const amount = raw / Math.pow(10, decimals);
+      const price = pricesUSD[a] || 0;
+      let usd = 0;
+      if (a === 'SUI') {
+        const swappable = Math.max(0, amount - 1.0);
+        usd = swappable * price;
+      } else {
+        usd = amount * price;
+      }
+      result[a] = (result[a] || 0) + usd;
+    }
+    return result;
+  } catch (err) {
+    logger.warn('[SUI Cron] getAdminAssetValuesUsd failed', { error: err instanceof Error ? err.message : String(err) });
+    return empty;
+  }
+}
+
+/**
+ * Sell a specific dollar amount of a single asset to USDC via the 7k
+ * aggregator. Used by Step 6.6 drift rebalance to free USDC from
+ * overweight asset(s) for Step 7 to buy underweight ones. Unlike
+ * replenishAdminUsdc (which iterates largest-first to cover a shortfall),
+ * this targets one specific asset with one targeted swap.
+ */
+export async function sellAssetForUsdc(
+  network: 'mainnet' | 'testnet',
+  asset: BluefinPoolAsset,
+  targetUsdc: number,
+  pricesUSD: Record<string, number>,
+): Promise<{ swapped: number; txDigest?: string; error?: string }> {
+  if (targetUsdc < 0.10) return { swapped: 0, error: 'target below $0.10 minimum' };
+  const price = pricesUSD[asset] || 0;
+  if (price <= 0) return { swapped: 0, error: 'no price' };
+  try {
+    const aggregator = getBluefinAggregatorService(network);
+    // Compute asset amount to swap (with 5% slippage buffer baked in)
+    const assetAmountToSwap = (targetUsdc * 1.05) / price;
+    const quote = await aggregator.getReverseSwapQuote(asset, assetAmountToSwap);
+    if (!quote.canSwapOnChain || !quote.routerData) {
+      return { swapped: 0, error: 'No on-chain route' };
+    }
+    const swapResult = await aggregator.executeSwap(quote, 0.02); // 2% slippage tolerance
+    const usdcReceived = Number(swapResult.amountOut || '0') / 1e6;
+    if (swapResult.success) {
+      return { swapped: usdcReceived, txDigest: swapResult.txDigest };
+    }
+    return { swapped: 0, error: swapResult.error };
+  } catch (err) {
+    return { swapped: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+
+/**
+ * Sum the USD value of admin wallet's non-USDC, non-SUI-gas holdings.
+ *
+ * Used as a guard before settleActiveHedges: if replenishAdminUsdc only
+ * partially converted wBTC/wETH/SUI back to USDC (e.g. aggregator route
+ * missing for one asset, slippage tripped, RPC hiccup), settling hedges
+ * with whatever USDC made it back writes a fake "realized loss" to the
+ * hedge rows while the real value sits idle in the admin wallet. Skip the
+ * settlement tick when residual non-USDC value > $1 so the loss path only
+ * triggers after a clean replenish.
+ *
+ * SUI is excluded up to a small gas-reserve threshold — the cron always
+ * keeps ~1 SUI for gas, not because replenishment failed.
+ */
+export async function getAdminNonUsdcUsdValue(
+  network: 'mainnet' | 'testnet',
+  prices: Record<string, number>,
+): Promise<number> {
+  const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+  if (!adminKey) return 0;
+  try {
+    const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
+    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const keypair = adminKey.startsWith('suiprivkey')
+      ? Ed25519Keypair.fromSecretKey(adminKey)
+      : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
+    const address = keypair.getPublicKey().toSuiAddress();
+    const rpcUrl = network === 'mainnet'
+      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
+      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
+    const suiClient = new SuiClient({ url: rpcUrl });
+    const aggregator = getBluefinAggregatorService(network);
+    const all = await suiClient.getAllBalances({ owner: address });
+    let usdResidual = 0;
+    const SUI_GAS_RESERVE = 1.5; // 1 SUI floor + 0.5 buffer
+    for (const bal of all) {
+      const raw = Number(bal.totalBalance);
+      if (raw <= 0) continue;
+      for (const asset of POOL_ASSETS) {
+        const t = aggregator.getAssetCoinType(asset as BluefinPoolAsset);
+        if (!t || bal.coinType !== t) continue;
+        const decimals = asset === 'SUI' ? 9 : 8;
+        const amount = raw / Math.pow(10, decimals);
+        const swappable = asset === 'SUI' ? Math.max(0, amount - SUI_GAS_RESERVE) : amount;
+        const price = prices[asset] || 0;
+        usdResidual += swappable * price;
+        break;
+      }
+    }
+    return usdResidual;
+  } catch {
+    return 0;
+  }
+}
