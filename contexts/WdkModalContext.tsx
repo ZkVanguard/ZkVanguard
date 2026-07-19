@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { useWdk } from '@/lib/wdk/wdk-context';
-
 type ModalMode = 'none' | 'connect' | 'import' | 'backup' | 'unlock' | 'setup-passkey';
 
 interface WdkModalContextType {
@@ -56,7 +55,15 @@ function WdkModalOverlay({
   onClose: () => void;
   onModeChange: (mode: ModalMode) => void;
 }) {
-  const { state: wdkState, createWallet, importWallet, loginWithPasskey, registerPasskey, lockWallet, unlockWallet } = useWdk();
+  const {
+    state: wdkState,
+    createWallet,
+    importWallet,
+    loginWithPasskey,
+    registerPasskey,
+    lockWallet,
+    unlockWallet,
+  } = useWdk();
   const [seedPhrase, setSeedPhrase] = useState('');
   const [seedCopied, setSeedCopied] = useState(false);
   const [seedConfirmed, setSeedConfirmed] = useState(false);
@@ -196,16 +203,20 @@ function WdkModalOverlay({
             )}
 
             <div className="space-y-3">
-              {(wdkState.hasPasskey || localStorage.getItem('wdk-wallet-storage') || true) && !wdkState.isUnlocked && (
-                <button
-                  onClick={() => onModeChange('unlock')}
-                  className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
-                >
-                  <span className="text-lg">🔐</span> 
-                  {(wdkState.hasPasskey || (typeof window !== 'undefined' && localStorage.getItem('wdk-wallet-storage'))) ? 'Sign In with Passkey' : 'Recover with Passkey'}
-                </button>
-              )}
-              
+              {(wdkState.hasPasskey || localStorage.getItem('wdk-wallet-storage') || true) &&
+                !wdkState.isUnlocked && (
+                  <button
+                    onClick={() => onModeChange('unlock')}
+                    className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center justify-center gap-2"
+                  >
+                    <span className="text-lg">🔐</span>
+                    {wdkState.hasPasskey ||
+                    (typeof window !== 'undefined' && localStorage.getItem('wdk-wallet-storage'))
+                      ? 'Sign In with Passkey'
+                      : 'Recover with Passkey'}
+                  </button>
+                )}
+
               <button
                 onClick={handleCreate}
                 disabled={loading}
@@ -228,71 +239,71 @@ function WdkModalOverlay({
             </div>
           </>
         )}
-
         {mode === 'unlock' && (
-            <>
-              <h2 className="text-xl font-bold text-white mb-2">Welcome Back!</h2>
-              <p className="text-gray-400 text-sm mb-4">
-                Unlock your WDK wallet using your secured passkey (FaceID / TouchID).
-              </p>
-  
-              {error && (
-                <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
-                  {error}
+          <>
+            <h2 className="text-xl font-bold text-white mb-2">Welcome Back!</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              Unlock your WDK wallet using your secured passkey (FaceID / TouchID).
+            </p>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <button
+                onClick={handleUnlock}
+                disabled={loading}
+                className="w-full px-4 py-6 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex flex-col items-center justify-center gap-2"
+              >
+                <span className="text-2xl">🔐</span>
+                <span>
+                  {loading && !showPasswordFallback ? 'Verifying...' : 'Authenticate with Passkey'}
+                </span>
+              </button>
+
+              {/* Password fallback — shown when passkey fails */}
+              {showPasswordFallback && (
+                <div className="p-3 bg-gray-800 rounded-lg space-y-2">
+                  <p className="text-gray-400 text-xs">Or unlock with password:</p>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handlePasswordUnlock()}
+                    placeholder="Enter password"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handlePasswordUnlock}
+                    disabled={loading || !password.trim()}
+                    className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium"
+                  >
+                    {loading ? 'Unlocking...' : 'Unlock with Password'}
+                  </button>
                 </div>
               )}
-  
-              <div className="space-y-3">
-                <button
-                  onClick={handleUnlock}
-                  disabled={loading}
-                  className="w-full px-4 py-6 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex flex-col items-center justify-center gap-2"
-                >
-                  <span className="text-2xl">🔐</span>
-                  <span>{loading && !showPasswordFallback ? 'Verifying...' : 'Authenticate with Passkey'}</span>
-                </button>
 
-                {/* Password fallback — shown when passkey fails */}
-                {showPasswordFallback && (
-                  <div className="p-3 bg-gray-800 rounded-lg space-y-2">
-                    <p className="text-gray-400 text-xs">Or unlock with password:</p>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handlePasswordUnlock()}
-                      placeholder="Enter password"
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={handlePasswordUnlock}
-                      disabled={loading || !password.trim()}
-                      className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium"
-                    >
-                      {loading ? 'Unlocking...' : 'Unlock with Password'}
-                    </button>
-                  </div>
-                )}
-                
-                <div className="text-center">
-                    <button
-                    onClick={() => onModeChange('import')}
-                    className="text-gray-400 text-sm hover:text-white underline mt-2"
-                    >
-                    Reset / Import different wallet
-                    </button>
-                </div>
-
+              <div className="text-center">
                 <button
-                  onClick={onClose}
-                  className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
+                  onClick={() => onModeChange('import')}
+                  className="text-gray-400 text-sm hover:text-white underline mt-2"
                 >
-                  Cancel
+                  Reset / Import different wallet
                 </button>
               </div>
-            </>
-          )}
 
+              <button
+                onClick={onClose}
+                className="w-full px-4 py-3 border border-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
         {mode === 'import' && (
           <>
             <h2 className="text-xl font-bold text-white mb-2">Import Wallet</h2>
@@ -329,12 +340,9 @@ function WdkModalOverlay({
             </div>
           </>
         )}
-
         {mode === 'backup' && (
           <>
-            <h2 className="text-xl font-bold text-white mb-2">
-              🔐 Backup Seed Phrase
-            </h2>
+            <h2 className="text-xl font-bold text-white mb-2">🔐 Backup Seed Phrase</h2>
             <p className="text-gray-400 text-sm mb-4">
               Write down these words. This is the ONLY way to recover your wallet.
             </p>
@@ -388,7 +396,8 @@ function WdkModalOverlay({
           <>
             <h2 className="text-xl font-bold text-white mb-2">Enable Passkey</h2>
             <p className="text-gray-400 text-sm mb-4">
-              Secure your wallet with biometric authentication (TouchID, FaceID, or YubiKey) for instant login next time.
+              Secure your wallet with biometric authentication (TouchID, FaceID, or YubiKey) for
+              instant login next time.
             </p>
 
             {error && (
@@ -405,7 +414,7 @@ function WdkModalOverlay({
               >
                 {loading ? 'Activating Browser Prompt...' : 'Add Passkey'}
               </button>
-              
+
               <button
                 onClick={onClose}
                 className="w-full px-4 py-3 text-gray-400 hover:text-white rounded-lg font-medium"
@@ -414,7 +423,8 @@ function WdkModalOverlay({
               </button>
             </div>
           </>
-        )}      </div>
+        )}{' '}
+      </div>
     </div>
   );
 }

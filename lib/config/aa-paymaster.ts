@@ -1,16 +1,15 @@
 /**
  * Account Abstraction (AA) Paymaster Configuration
- * 
+ *
  * Supports ERC-4337 gasless USDT deposits via:
  * - Pimlico public bundler/paymaster
  * - Candide public bundler/paymaster
- * 
+ *
  * Users pay gas fees in USDT instead of native tokens.
  * Paymasters sponsor the actual gas, taking USDT as payment.
  */
 
 import { getRpcUrl } from '../rpc-urls';
-
 export interface AAPaymasterConfig {
   chainId: number;
   chainName: string;
@@ -89,10 +88,10 @@ export const CANDIDE_SEPOLIA: AAPaymasterConfig = {
 export const SAFE_CONFIG = {
   // Sepolia testnet Safe v1.3.0 deployments
   11155111: {
-    safeProxyFactory: '0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2',  // Official Safe proxy factory
-    safeSingleton: '0x3E5c63644E683549055b9Be8653de26E0B4CD36E',     // Official Safe singleton (L2)
-    fallbackHandler: '0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4',   // Official CompatibilityFallbackHandler
-  }
+    safeProxyFactory: '0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2', // Official Safe proxy factory
+    safeSingleton: '0x3E5c63644E683549055b9Be8653de26E0B4CD36E', // Official Safe singleton (L2)
+    fallbackHandler: '0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4', // Official CompatibilityFallbackHandler
+  },
 } as const;
 
 // ============================================================================
@@ -510,7 +509,10 @@ export function parseUSDT(amount: number | string): bigint {
 /**
  * Get USDT token address for a chain
  */
-export function getUSDTAddress(chainId: number, provider: PaymasterProvider = 'pimlico'): string | null {
+export function getUSDTAddress(
+  chainId: number,
+  provider: PaymasterProvider = 'pimlico'
+): string | null {
   const config = getAAConfig(chainId, provider);
   return config?.paymasterToken.address || null;
 }
@@ -523,15 +525,16 @@ export function estimateUSDTGasCost(
   maxFeePerGas: bigint,
   usdtPriceUSD: number = 1.0 // USDT is pegged to USD
 ): bigint {
-  const totalGas = gasEstimate.preVerificationGas + 
-                   gasEstimate.verificationGasLimit + 
-                   gasEstimate.callGasLimit +
-                   (gasEstimate.paymasterVerificationGasLimit || 0n) +
-                   (gasEstimate.paymasterPostOpGasLimit || 0n);
-  
+  const totalGas =
+    gasEstimate.preVerificationGas +
+    gasEstimate.verificationGasLimit +
+    gasEstimate.callGasLimit +
+    (gasEstimate.paymasterVerificationGasLimit || 0n) +
+    (gasEstimate.paymasterPostOpGasLimit || 0n);
+
   // Gas cost in wei
   const gasCostWei = totalGas * maxFeePerGas;
-  
+
   // Convert to USDT (assuming 18 decimals for native token, 6 for USDT)
   // This is a simplified calculation - actual conversion depends on ETH/USDT price
   // Paymaster will provide exact quote

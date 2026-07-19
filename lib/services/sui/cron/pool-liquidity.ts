@@ -13,19 +13,10 @@ import {
   SUI_USDC_POOL_CONFIG,
   SUI_USDC_COIN_TYPE,
 } from '@/lib/services/sui/SuiCommunityPoolService';
-import {
-  returnUsdcToPool,
-  transferUsdcFromPoolToAdmin,
-} from '@/lib/services/sui/cron/pool-transfer';
-import {
-  getAdminUsdcBalance,
-  replenishAdminUsdc,
-} from '@/lib/services/sui/cron/admin-swaps';
+import { returnUsdcToPool } from '@/lib/services/sui/cron/pool-transfer';
+import { getAdminUsdcBalance, replenishAdminUsdc } from '@/lib/services/sui/cron/admin-swaps';
 import { getActiveHedges } from '@/lib/services/sui/cron/hedge-lifecycle';
-import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
-
-
-/**
+import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation'; /**
  * Read pool contract's raw on-chain state relevant to hedge/withdraw sizing.
  * All raw amounts kept as bigint to mirror Move u64 semantics exactly.
  */
@@ -53,23 +44,28 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
 
   try {
     const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
+    const rpcUrl =
+      network === 'mainnet'
+        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
+        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
     const suiClient = new SuiClient({ url: rpcUrl });
 
     type PoolFields = {
       balance?: string | { fields?: { value?: string }; value?: string };
-      hedge_state?: { fields?: {
-        total_hedged_value?: string;
-        current_hedge_day?: string;
-        daily_hedge_total?: string;
-        auto_hedge_config?: { fields?: {
-          max_hedge_ratio_bps?: string;
-          last_hedge_time?: string;
-          cooldown_ms?: string;
-        }};
-      }};
+      hedge_state?: {
+        fields?: {
+          total_hedged_value?: string;
+          current_hedge_day?: string;
+          daily_hedge_total?: string;
+          auto_hedge_config?: {
+            fields?: {
+              max_hedge_ratio_bps?: string;
+              last_hedge_time?: string;
+              cooldown_ms?: string;
+            };
+          };
+        };
+      };
       total_shares?: string;
       max_single_withdrawal_bps?: string;
       daily_withdrawal_cap_bps?: string;
@@ -82,9 +78,10 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
     const fields = (obj.data?.content as { fields?: PoolFields } | null)?.fields;
     if (!fields) return null;
 
-    const balanceValue = typeof fields.balance === 'string'
-      ? fields.balance
-      : (fields.balance?.fields?.value || fields.balance?.value || '0');
+    const balanceValue =
+      typeof fields.balance === 'string'
+        ? fields.balance
+        : fields.balance?.fields?.value || fields.balance?.value || '0';
     const poolBalanceRaw = BigInt(balanceValue || '0');
 
     const hedgeState = fields.hedge_state?.fields || {};
@@ -96,9 +93,8 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
 
     const currentDay = Math.floor(Date.now() / 86400000);
     const onChainDay = Number(hedgeState.current_hedge_day || 0);
-    const dailyHedgedTodayRaw = onChainDay === currentDay
-      ? BigInt(hedgeState.daily_hedge_total || '0')
-      : 0n;
+    const dailyHedgedTodayRaw =
+      onChainDay === currentDay ? BigInt(hedgeState.daily_hedge_total || '0') : 0n;
 
     const totalSharesRaw = BigInt(fields.total_shares || '0');
     const onchainNavRaw = poolBalanceRaw + totalHedgedRaw;
@@ -138,11 +134,12 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
       dailyHedgedTodayRaw,
     };
   } catch (err) {
-    logger.warn('[hedge-treasury] readPoolLiquidityState failed', { error: err instanceof Error ? err.message : err });
+    logger.warn('[hedge-treasury] readPoolLiquidityState failed', {
+      error: err instanceof Error ? err.message : err,
+    });
     return null;
   }
 }
-
 
 /**
  * Open a minimal-size operational hedge from the pool to admin, returning the
@@ -153,7 +150,7 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
  */
 async function openMicroHedgeAndGetId(
   network: 'mainnet' | 'testnet',
-  collateralUsdc: number,
+  collateralUsdc: number
 ): Promise<{ success: boolean; txDigest?: string; hedgeId?: number[]; error?: string }> {
   const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
   // open_hedge Move signature takes `&AgentCap`, NOT `&AdminCap`. Falling back
@@ -163,7 +160,12 @@ async function openMicroHedgeAndGetId(
   const poolConfig = SUI_USDC_POOL_CONFIG[network];
 
   if (!adminKey) return { success: false, error: 'SUI_POOL_ADMIN_KEY not configured' };
-  if (!agentCapId) return { success: false, error: 'SUI_AGENT_CAP_ID not configured (do NOT fall back to SUI_ADMIN_CAP_ID — Move expects AgentCap, not AdminCap)' };
+  if (!agentCapId)
+    return {
+      success: false,
+      error:
+        'SUI_AGENT_CAP_ID not configured (do NOT fall back to SUI_ADMIN_CAP_ID — Move expects AgentCap, not AdminCap)',
+    };
   if (!poolConfig.packageId || !poolConfig.poolStateId) {
     return { success: false, error: 'Pool package or state ID not configured' };
   }
@@ -178,9 +180,10 @@ async function openMicroHedgeAndGetId(
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
 
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
+    const rpcUrl =
+      network === 'mainnet'
+        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
+        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
     const suiClient = new SuiClient({ url: rpcUrl });
 
     const amountRaw = Math.max(1, Math.floor(collateralUsdc * 1e6));
@@ -195,7 +198,7 @@ async function openMicroHedgeAndGetId(
         tx.object(poolConfig.poolStateId!),
         tx.pure.u8(0), // pair_index=0 (operational rebalance/topup)
         tx.pure.u64(amountRaw),
-        tx.pure.u64(1),  // leverage=1x
+        tx.pure.u64(1), // leverage=1x
         tx.pure.bool(true),
         tx.pure.string('Withdraw liquidity top-up: pool<->admin USDC transport'),
         tx.object('0x6'),
@@ -211,14 +214,25 @@ async function openMicroHedgeAndGetId(
 
     const success = result.effects?.status?.status === 'success';
     if (!success) {
-      return { success: false, txDigest: result.digest, error: result.effects?.status?.error || 'open_hedge reverted' };
+      return {
+        success: false,
+        txDigest: result.digest,
+        error: result.effects?.status?.error || 'open_hedge reverted',
+      };
     }
 
-    const evs = (result.events || []) as Array<{ type: string; parsedJson?: Record<string, unknown> }>;
-    const opened = evs.find(e => e.type.endsWith('::UsdcHedgeOpened'));
+    const evs = (result.events || []) as Array<{
+      type: string;
+      parsedJson?: Record<string, unknown>;
+    }>;
+    const opened = evs.find((e) => e.type.endsWith('::UsdcHedgeOpened'));
     const idArr = opened?.parsedJson?.hedge_id;
     if (!Array.isArray(idArr) || idArr.length !== 32) {
-      return { success: false, txDigest: result.digest, error: 'open_hedge succeeded but hedge_id event missing' };
+      return {
+        success: false,
+        txDigest: result.digest,
+        error: 'open_hedge succeeded but hedge_id event missing',
+      };
     }
     return { success: true, txDigest: result.digest, hedgeId: idArr as number[] };
   } catch (err) {
@@ -243,7 +257,7 @@ async function openMicroHedgeAndGetId(
  */
 export async function ensurePoolLiquidityForWithdraw(
   network: 'mainnet' | 'testnet',
-  expectedPayoutUsdc: number,
+  expectedPayoutUsdc: number
 ): Promise<{
   success: boolean;
   alreadyLiquid?: boolean;
@@ -295,8 +309,9 @@ export async function ensurePoolLiquidityForWithdraw(
   // MIN_RESERVE_RATIO_BPS (2000 = 20%) and the state's max_hedge_ratio_bps.
   const MIN_RESERVE_RATIO_BPS = 2000;
   const dailyHedgedTodayUsdc = Number(state.dailyHedgedTodayRaw) / 1e6;
-  const maxByReserve = state.poolBalanceUsdc - (state.onchainNavUsdc * MIN_RESERVE_RATIO_BPS / 10000);
-  const maxHedgeTotal = state.onchainNavUsdc * state.maxHedgeRatioBps / 10000;
+  const maxByReserve =
+    state.poolBalanceUsdc - (state.onchainNavUsdc * MIN_RESERVE_RATIO_BPS) / 10000;
+  const maxHedgeTotal = (state.onchainNavUsdc * state.maxHedgeRatioBps) / 10000;
   const maxByRatio = Math.max(0, maxHedgeTotal - state.totalHedgedUsdc);
   const maxByDaily = Math.max(0, state.onchainNavUsdc * 0.5 - dailyHedgedTodayUsdc);
   const maxCollateral = Math.min(maxByReserve, maxByRatio, maxByDaily);
@@ -307,7 +322,7 @@ export async function ensurePoolLiquidityForWithdraw(
   // Score reusable hedges by admin affordability: cheapest collateral first,
   // filtered to ones we can actually pay off (collateral + shortfall ≤ admin).
   const reusableHedges = [...activeHedges]
-    .filter(h => h.hedgeId.length === 32)
+    .filter((h) => h.hedgeId.length === 32)
     .sort((a, b) => a.collateralUsdc - b.collateralUsdc);
   let reuseTarget: { hedgeId: number[]; collateralUsdc: number } | null = null;
   for (const h of reusableHedges) {
@@ -318,9 +333,9 @@ export async function ensurePoolLiquidityForWithdraw(
   }
 
   // Fallback plan for Strategy B (only relevant if we can't reuse).
-  const bridgeCollateral = Math.min(maxCollateral * 0.5, 0.10);
-  const canRunStrategyB = maxCollateral > 0.000001
-    && Date.now() >= state.lastHedgeTime + state.cooldownMs;
+  const bridgeCollateral = Math.min(maxCollateral * 0.5, 0.1);
+  const canRunStrategyB =
+    maxCollateral > 0.000001 && Date.now() >= state.lastHedgeTime + state.cooldownMs;
 
   // If we can't reuse AND can't open a bridge, try to bring admin USDC up
   // via reverse swaps and re-evaluate reuse (the cheapest existing hedge
@@ -330,14 +345,17 @@ export async function ensurePoolLiquidityForWithdraw(
     const usdcNeeded = cheapest.collateralUsdc + shortfall - adminUsdc;
     if (usdcNeeded > 0) {
       try {
-        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+        const { getMarketDataService } =
+          await import('@/lib/services/market-data/RealMarketDataService');
         const mds = getMarketDataService();
         const prices: Record<string, number> = {};
         for (const a of POOL_ASSETS) {
           try {
             const p = await mds.getTokenPrice(a);
             if (p?.price > 0) prices[a] = p.price;
-          } catch { /* skip missing prices */ }
+          } catch {
+            /* skip missing prices */
+          }
         }
         const swap = await replenishAdminUsdc(network, usdcNeeded, prices);
         logger.info('[hedge-treasury] Replenished admin USDC to afford cheapest existing hedge', {
@@ -379,12 +397,16 @@ export async function ensurePoolLiquidityForWithdraw(
 
   // Nothing viable — surface a clear error.
   if (!reuseTarget && !canRunStrategyB) {
-    const cooldownRemainingS = Math.max(0, Math.ceil((state.lastHedgeTime + state.cooldownMs - Date.now()) / 1000));
+    const cooldownRemainingS = Math.max(
+      0,
+      Math.ceil((state.lastHedgeTime + state.cooldownMs - Date.now()) / 1000)
+    );
     return {
       success: false,
-      error: reusableHedges.length > 0
-        ? `Cannot top up: cheapest existing hedge collateral is $${reusableHedges[0].collateralUsdc.toFixed(4)}, admin has $${adminUsdc.toFixed(4)} (need $${(reusableHedges[0].collateralUsdc + shortfall).toFixed(4)}). Bridge hedge blocked: ${cooldownRemainingS}s cooldown or capacity=$${maxCollateral.toFixed(4)}.`
-        : `Cannot top up: no existing hedge to reuse and bridge hedge blocked (${cooldownRemainingS}s cooldown, maxCollateral=$${maxCollateral.toFixed(4)}).`,
+      error:
+        reusableHedges.length > 0
+          ? `Cannot top up: cheapest existing hedge collateral is $${reusableHedges[0].collateralUsdc.toFixed(4)}, admin has $${adminUsdc.toFixed(4)} (need $${(reusableHedges[0].collateralUsdc + shortfall).toFixed(4)}). Bridge hedge blocked: ${cooldownRemainingS}s cooldown or capacity=$${maxCollateral.toFixed(4)}.`
+          : `Cannot top up: no existing hedge to reuse and bridge hedge blocked (${cooldownRemainingS}s cooldown, maxCollateral=$${maxCollateral.toFixed(4)}).`,
     };
   }
 
@@ -394,14 +416,17 @@ export async function ensurePoolLiquidityForWithdraw(
   if (adminUsdc < adminNeedsUsdc) {
     const usdcShortfall = adminNeedsUsdc - adminUsdc;
     try {
-      const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+      const { getMarketDataService } =
+        await import('@/lib/services/market-data/RealMarketDataService');
       const mds = getMarketDataService();
       const prices: Record<string, number> = {};
       for (const a of POOL_ASSETS) {
         try {
           const p = await mds.getTokenPrice(a);
           if (p?.price > 0) prices[a] = p.price;
-        } catch { /* skip missing prices */ }
+        } catch {
+          /* skip missing prices */
+        }
       }
       const swap = await replenishAdminUsdc(network, usdcShortfall, prices);
       logger.info('[hedge-treasury] Replenished admin USDC for withdraw top-up', {
@@ -451,12 +476,16 @@ export async function ensurePoolLiquidityForWithdraw(
   } else {
     const openResult = await openMicroHedgeAndGetId(network, bridgeCollateral);
     if (!openResult.success || !openResult.hedgeId) {
-      return { success: false, error: openResult.error || 'open_hedge failed', openTxDigest: openResult.txDigest };
+      return {
+        success: false,
+        error: openResult.error || 'open_hedge failed',
+        openTxDigest: openResult.txDigest,
+      };
     }
     hedgeId = openResult.hedgeId;
     openTxDigest = openResult.txDigest;
     closingCollateral = bridgeCollateral;
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   const returnAmount = closingCollateral + shortfall;
@@ -464,8 +493,8 @@ export async function ensurePoolLiquidityForWithdraw(
     network,
     hedgeId,
     returnAmount,
-    shortfall,     // pnl_usdc — treated as profit accrual back to pool
-    true,          // is_profit
+    shortfall, // pnl_usdc — treated as profit accrual back to pool
+    true // is_profit
   );
 
   if (!closeResult.success) {

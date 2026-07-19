@@ -19,11 +19,14 @@ interface CachedInsight {
   hash: string;
   timestamp: number;
 }
-let insightCache: CachedInsight = { data: null, hash: '', timestamp: 0 };
+const insightCache: CachedInsight = { data: null, hash: '', timestamp: 0 };
 const INSIGHT_CACHE_TTL = 45000; // 45 second cache
 
 function createPredictionHash(predictions: PredictionMarket[]): string {
-  return predictions.slice(0, 5).map(p => `${p.id}:${p.probability}`).join('|');
+  return predictions
+    .slice(0, 5)
+    .map((p) => `${p.id}:${p.probability}`)
+    .join('|');
 }
 
 function getCachedInsight(hash: string): unknown | null {
@@ -47,7 +50,9 @@ async function getDbCachedInsight(hash: string): Promise<unknown | null> {
 
 async function setAllInsightCaches(hash: string, data: unknown): Promise<void> {
   setCachedInsight(hash, data);
-  setCached('agent-results', `insight:${hash}`, data, INSIGHT_CACHE_TTL).catch(err => logger.warn('Insight cache write failed', { error: String(err) }));
+  setCached('agent-results', `insight:${hash}`, data, INSIGHT_CACHE_TTL).catch((err) =>
+    logger.warn('Insight cache write failed', { error: String(err) })
+  );
 }
 
 /**
@@ -69,23 +74,23 @@ interface TokenDirection {
   symbol: string;
   direction: 'up' | 'down' | 'sideways';
   confidence: number; // 0-100
-  shortTake: string;  // e.g. "Momentum strong, +9.6% 24h"
+  shortTake: string; // e.g. "Momentum strong, +9.6% 24h"
 }
 
 interface LeverageRecommendation {
   symbol: string;
   direction: 'long' | 'short' | 'neutral';
-  leverage: string;         // e.g. "2x", "3x", "1.5x"
+  leverage: string; // e.g. "2x", "3x", "1.5x"
   riskLevel: 'conservative' | 'moderate' | 'aggressive';
-  rationale: string;        // e.g. "Strong momentum + 85% bullish probability supports leveraged long"
-  confidence: number;       // 0-100
-  allocation: number;       // % of portfolio, e.g. 50
+  rationale: string; // e.g. "Strong momentum + 85% bullish probability supports leveraged long"
+  confidence: number; // 0-100
+  allocation: number; // % of portfolio, e.g. 50
 }
 
 interface UnifiedSummary {
-  overview: string;         // Lead Agent approved market overview
-  riskAgent: string;        // Risk Agent's actual analysis
-  hedgingAgent: string;     // Hedging Agent's actual recommendation
+  overview: string; // Lead Agent approved market overview
+  riskAgent: string; // Risk Agent's actual analysis
+  hedgingAgent: string; // Hedging Agent's actual recommendation
   sentiment: 'bullish' | 'bearish' | 'neutral';
   tokenDirections: TokenDirection[];
   leverageRecommendations: LeverageRecommendation[];
@@ -114,22 +119,19 @@ export async function POST(request: NextRequest) {
     const { predictions } = body;
 
     if (!predictions || !Array.isArray(predictions) || predictions.length === 0) {
-      return NextResponse.json(
-        { error: 'predictions array is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'predictions array is required' }, { status: 400 });
     }
 
     // Two-tier cache check (memory → DB)
     const predictionHash = createPredictionHash(predictions);
-    
+
     // Tier 1: In-memory cache
     const memCached = getCachedInsight(predictionHash);
     if (memCached) {
       logger.info('[InsightSummary] Memory cache HIT');
       return NextResponse.json(memCached);
     }
-    
+
     // Tier 2: DB cache (survives cold starts)
     const dbCached = await getDbCachedInsight(predictionHash);
     if (dbCached) {
@@ -153,14 +155,16 @@ export async function POST(request: NextRequest) {
     const marketData: Record<string, TokenMarketData> = {};
 
     // First pass: extract from crypto-analysis predictions ONLY (real Crypto.com data)
-    const cryptoPreds = predictions.filter(p => p.source === 'crypto-analysis');
+    const cryptoPreds = predictions.filter((p) => p.source === 'crypto-analysis');
     for (const p of cryptoPreds) {
       // Extract 24h change: "+8.84%" or "-3.5%"
       const changeMatch = p.question.match(/24h:\s*([+-]?\d+\.?\d*)%/);
       // Extract price patterns specific to Crypto.com predictions:
       // "Currently $70,479.72" or "ETH: $2,056.04" or "Price: $2,056.04" or "CRO: $0.0795"
       // Handles both comma-separated (107,479.72) and plain (107479.72) formats
-      const priceMatch = p.question.match(/(?:Currently|Price:|[A-Z]{2,5}:)\s*\$([\d,]+(?:\.\d+)?)/);
+      const priceMatch = p.question.match(
+        /(?:Currently|Price:|[A-Z]{2,5}:)\s*\$([\d,]+(?:\.\d+)?)/
+      );
       // Extract volume from the volume field: "$1.2B 24h vol"
       const volMatch = p.volume?.match(/\$([\d.]+[BMK])/);
 
@@ -168,8 +172,8 @@ export async function POST(request: NextRequest) {
         if (!marketData[asset]) marketData[asset] = {};
 
         // Only set data if this prediction is specific to this asset
-        const isSpecific = p.relatedAssets.length <= 2 ||
-          p.id?.toLowerCase().includes(asset.toLowerCase());
+        const isSpecific =
+          p.relatedAssets.length <= 2 || p.id?.toLowerCase().includes(asset.toLowerCase());
 
         if (changeMatch && isSpecific) {
           marketData[asset].change24h = parseFloat(changeMatch[1]);
@@ -191,9 +195,11 @@ export async function POST(request: NextRequest) {
     // Second pass: for any token still missing price, try the BTC $100K prediction format
     // "Will Bitcoin reach $100,000? (Currently $70,479.72, 41.9% away)"
     if (!marketData['BTC']?.price) {
-      const btc100k = cryptoPreds.find(p => p.id === 'crypto-btc-100k');
+      const btc100k = cryptoPreds.find((p) => p.id === 'crypto-btc-100k');
       if (btc100k) {
-        const currentlyMatch = btc100k.question.match(/Currently\s*\$(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/);
+        const currentlyMatch = btc100k.question.match(
+          /Currently\s*\$(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/
+        );
         if (currentlyMatch) {
           if (!marketData['BTC']) marketData['BTC'] = {};
           marketData['BTC'].price = parseFloat(currentlyMatch[1].replace(/,/g, ''));
@@ -205,13 +211,23 @@ export async function POST(request: NextRequest) {
 
     // Extract unique tokens from all predictions — analyze BTC, ETH, and CRO
     const INSIGHT_TOKENS = ['BTC', 'ETH', 'CRO'];
-    const allTokens = [...new Set(predictions.flatMap(p => p.relatedAssets))]
-      .filter(t => INSIGHT_TOKENS.includes(t));
-    const hedgeAlerts = predictions.filter(p => p.recommendation === 'HEDGE').length;
+    const allTokens = [...new Set(predictions.flatMap((p) => p.relatedAssets))].filter((t) =>
+      INSIGHT_TOKENS.includes(t)
+    );
+    const hedgeAlerts = predictions.filter((p) => p.recommendation === 'HEDGE').length;
 
     const agentsPipeline = {
-      riskAgent: { ran: false } as { ran: boolean; riskScore?: number; volatility?: number; sentiment?: string },
-      hedgingAgent: { ran: false } as { ran: boolean; tokensAnalyzed?: number; hedgesRecommended?: number },
+      riskAgent: { ran: false } as {
+        ran: boolean;
+        riskScore?: number;
+        volatility?: number;
+        sentiment?: string;
+      },
+      hedgingAgent: { ran: false } as {
+        ran: boolean;
+        tokensAnalyzed?: number;
+        hedgesRecommended?: number;
+      },
       leadAgent: { ran: false } as { ran: boolean; approved?: boolean; approvalRationale?: string },
     };
 
@@ -290,9 +306,7 @@ export async function POST(request: NextRequest) {
 
       if (hedgingAgent) {
         // Only analyze tokens with directional prediction signals
-        const tokensToHedge = allTokens
-          .filter(t => t !== 'USDC' && t !== 'USDT')
-          .slice(0, 4); // Top 4 tokens
+        const tokensToHedge = allTokens.filter((t) => t !== 'USDC' && t !== 'USDT').slice(0, 4); // Top 4 tokens
 
         logger.info('[InsightSummary] Running HedgingAgent for tokens:', { data: tokensToHedge });
 
@@ -301,10 +315,10 @@ export async function POST(request: NextRequest) {
             // Use market-cap-proportional notional for realistic differentiation
             // BTC dominance ~50%, ETH ~18%, others smaller
             const notionalByAsset: Record<string, number> = {
-              'BTC': 2_000_000,  // $2M — largest, most liquid
-              'ETH': 1_000_000,  // $1M — second largest
-              'CRO': 250_000,    // $250K — mid-cap
-              'SOL': 500_000,    // $500K
+              BTC: 2_000_000, // $2M — largest, most liquid
+              ETH: 1_000_000, // $1M — second largest
+              CRO: 250_000, // $250K — mid-cap
+              SOL: 500_000, // $500K
             };
             const notionalValue = notionalByAsset[symbol] ?? 500_000;
 
@@ -322,7 +336,13 @@ export async function POST(request: NextRequest) {
 
             if (hedgeResult.success && hedgeResult.data) {
               const analysis = hedgeResult.data as {
-                recommendation: { action: string; side: string; leverage: number; reason: string; size: string };
+                recommendation: {
+                  action: string;
+                  side: string;
+                  leverage: number;
+                  reason: string;
+                  size: string;
+                };
                 exposure: { volatility: number };
                 riskMetrics: { portfolioVar: number; hedgeEffectiveness: number };
               };
@@ -345,9 +365,11 @@ export async function POST(request: NextRequest) {
         agentsPipeline.hedgingAgent = {
           ran: hedgeResults.length > 0,
           tokensAnalyzed: hedgeResults.length,
-          hedgesRecommended: hedgeResults.filter(h => h.action === 'OPEN').length,
+          hedgesRecommended: hedgeResults.filter((h) => h.action === 'OPEN').length,
         };
-        logger.info('[InsightSummary] HedgingAgent completed', { data: agentsPipeline.hedgingAgent });
+        logger.info('[InsightSummary] HedgingAgent completed', {
+          data: agentsPipeline.hedgingAgent,
+        });
       }
 
       // ====================================================================
@@ -362,9 +384,9 @@ export async function POST(request: NextRequest) {
           logger.info('[InsightSummary] Running LeadAgent for synthesis + approval...');
 
           // Build the predictions context for the lead agent
-          const predictionsContext = predictions.map(p =>
-            `${p.question} — ${p.probability}% (${p.impact}, ${p.recommendation})`
-          ).join('\n');
+          const predictionsContext = predictions
+            .map((p) => `${p.question} — ${p.probability}% (${p.impact}, ${p.recommendation})`)
+            .join('\n');
 
           // Build risk context from RiskAgent output
           const riskContext = riskAnalysis
@@ -372,11 +394,15 @@ export async function POST(request: NextRequest) {
             : 'RiskAgent: unavailable';
 
           // Build hedge context from HedgingAgent output
-          const hedgeContext = hedgeResults.length > 0
-            ? hedgeResults.map(h =>
-                `${h.symbol}: ${h.action} ${h.side} ${h.leverage}x (effectiveness: ${h.hedgeEffectiveness.toFixed(0)}%, reason: ${h.reason.substring(0, 80)})`
-              ).join('\n')
-            : 'HedgingAgent: no positions analyzed';
+          const hedgeContext =
+            hedgeResults.length > 0
+              ? hedgeResults
+                  .map(
+                    (h) =>
+                      `${h.symbol}: ${h.action} ${h.side} ${h.leverage}x (effectiveness: ${h.hedgeEffectiveness.toFixed(0)}%, reason: ${h.reason.substring(0, 80)})`
+                  )
+                  .join('\n')
+              : 'HedgingAgent: no positions analyzed';
 
           // Use LeadAgent's executeStrategyFromIntent for full pipeline approval
           const report = await leadAgent.executeStrategyFromIntent({
@@ -403,20 +429,28 @@ export async function POST(request: NextRequest) {
 
             // Compute tentative token directions BEFORE sending to LLM,
             // so the LLM overview text aligns with the badges shown in UI
-            const tentativeDirections = allTokens.map(token => {
-              const tokenSpecificPreds = predictions.filter(p => 
-                p.relatedAssets.includes(token) && p.source === 'crypto-analysis' &&
-                (p.relatedAssets.length <= 2 || p.id?.toLowerCase().includes(token.toLowerCase()))
+            const tentativeDirections = allTokens.map((token) => {
+              const tokenSpecificPreds = predictions.filter(
+                (p) =>
+                  p.relatedAssets.includes(token) &&
+                  p.source === 'crypto-analysis' &&
+                  (p.relatedAssets.length <= 2 || p.id?.toLowerCase().includes(token.toLowerCase()))
               );
-              const tAvg = tokenSpecificPreds.length > 0
-                ? tokenSpecificPreds.reduce((s, p) => s + p.probability, 0) / tokenSpecificPreds.length
-                : 50;
-              const tBullish = tokenSpecificPreds.some(p => p.category === 'price' && p.probability > 55) || tAvg > 60;
-              const tHedge = tokenSpecificPreds.filter(p => p.recommendation === 'HEDGE');
+              const tAvg =
+                tokenSpecificPreds.length > 0
+                  ? tokenSpecificPreds.reduce((s, p) => s + p.probability, 0) /
+                    tokenSpecificPreds.length
+                  : 50;
+              const tBullish =
+                tokenSpecificPreds.some((p) => p.category === 'price' && p.probability > 55) ||
+                tAvg > 60;
+              const tHedge = tokenSpecificPreds.filter((p) => p.recommendation === 'HEDGE');
               const tBearish = tHedge.length > 0 && tAvg < 45;
               return { token, direction: tBullish ? 'bullish' : tBearish ? 'bearish' : 'neutral' };
             });
-            const directionHint = tentativeDirections.map(d => `${d.token}: ${d.direction}`).join(', ');
+            const directionHint = tentativeDirections
+              .map((d) => `${d.token}: ${d.direction}`)
+              .join(', ');
 
             const synthesisResponse = await llmProvider.generateDirectResponse(
               `You are the Lead Agent approving a multi-agent market insights analysis. This is a general market analysis focused on BTC, ETH, and CRO — NOT portfolio-specific. Do NOT mention portfolio values, portfolio health, or portfolio allocations.
@@ -485,35 +519,48 @@ Return ONLY valid JSON.`,
         : 'RiskAgent analysis pending — using prediction-based risk estimate.';
 
       // Build hedging agent text from actual HedgingAgent output
-      const openHedges = hedgeResults.filter(h => h.action === 'OPEN');
-      const hedgingAgentText = hedgeResults.length > 0
-        ? `${openHedges.length} hedge position(s) recommended: ${openHedges.map(h => `${h.symbol} ${h.side} ${h.leverage}x`).join(', ') || 'HOLD on all positions'}. Avg hedge effectiveness: ${(hedgeResults.reduce((s, h) => s + h.hedgeEffectiveness, 0) / hedgeResults.length).toFixed(0)}%.`
-        : 'HedgingAgent: no immediate hedge triggers — maintaining monitor mode.';
+      const openHedges = hedgeResults.filter((h) => h.action === 'OPEN');
+      const hedgingAgentText =
+        hedgeResults.length > 0
+          ? `${openHedges.length} hedge position(s) recommended: ${openHedges.map((h) => `${h.symbol} ${h.side} ${h.leverage}x`).join(', ') || 'HOLD on all positions'}. Avg hedge effectiveness: ${(hedgeResults.reduce((s, h) => s + h.hedgeEffectiveness, 0) / hedgeResults.length).toFixed(0)}%.`
+          : 'HedgingAgent: no immediate hedge triggers — maintaining monitor mode.';
 
       // Build token directions from prediction data + hedge agent context
       // Direction is derived from PREDICTION signals, not just hedge action.
       // HedgingAgent HOLD = "no hedge needed" — could still be bullish.
-      const tokenDirections: TokenDirection[] = allTokens.map(token => {
-        const hedge = hedgeResults.find(h => h.symbol === token);
-        const tokenPreds = predictions.filter(p => p.relatedAssets.includes(token));
+      const tokenDirections: TokenDirection[] = allTokens.map((token) => {
+        const hedge = hedgeResults.find((h) => h.symbol === token);
+        const tokenPreds = predictions.filter((p) => p.relatedAssets.includes(token));
 
         // Prefer token-SPECIFIC predictions (where this token is the primary/sole asset)
         // over shared predictions that mention many tokens
-        const specificPreds = tokenPreds.filter(p =>
-          p.relatedAssets.length <= 2 ||
-          p.id?.toLowerCase().includes(token.toLowerCase()) ||
-          p.question.toLowerCase().includes(token.toLowerCase()) ||
-          p.question.toLowerCase().includes(token === 'BTC' ? 'bitcoin' : token === 'ETH' ? 'ethereum' : token === 'CRO' ? 'cronos' : token.toLowerCase())
+        const specificPreds = tokenPreds.filter(
+          (p) =>
+            p.relatedAssets.length <= 2 ||
+            p.id?.toLowerCase().includes(token.toLowerCase()) ||
+            p.question.toLowerCase().includes(token.toLowerCase()) ||
+            p.question
+              .toLowerCase()
+              .includes(
+                token === 'BTC'
+                  ? 'bitcoin'
+                  : token === 'ETH'
+                    ? 'ethereum'
+                    : token === 'CRO'
+                      ? 'cronos'
+                      : token.toLowerCase()
+              )
         );
         const bestPreds = specificPreds.length > 0 ? specificPreds : tokenPreds;
 
-        const avgProb = bestPreds.length > 0
-          ? bestPreds.reduce((s, p) => s + p.probability, 0) / bestPreds.length
-          : 50;
+        const avgProb =
+          bestPreds.length > 0
+            ? bestPreds.reduce((s, p) => s + p.probability, 0) / bestPreds.length
+            : 50;
 
         // Determine direction from prediction probabilities
-        const bullishPreds = bestPreds.filter(p => p.category === 'price' && p.probability > 55);
-        const hedgePreds = bestPreds.filter(p => p.recommendation === 'HEDGE');
+        const bullishPreds = bestPreds.filter((p) => p.category === 'price' && p.probability > 55);
+        const hedgePreds = bestPreds.filter((p) => p.recommendation === 'HEDGE');
         const hasBullishSignal = bullishPreds.length > 0 || avgProb > 60;
         const hasBearishSignal = hedgePreds.length > 0 && avgProb < 45;
 
@@ -522,11 +569,12 @@ Return ONLY valid JSON.`,
         let shortTake: string;
 
         // Get prediction-level confidence (from the prediction data, not hardcoded)
-        const avgPredConfidence = bestPreds.length > 0
-          ? bestPreds.reduce((s, p) => s + (p.confidence ?? 50), 0) / bestPreds.length
-          : 50;
+        const avgPredConfidence =
+          bestPreds.length > 0
+            ? bestPreds.reduce((s, p) => s + (p.confidence ?? 50), 0) / bestPreds.length
+            : 50;
         // Risk agent contribution: lower risk → higher confidence in the direction
-        const riskContrib = riskAnalysis ? (100 - Math.min(riskAnalysis.totalRisk, 100)) : 50;
+        const riskContrib = riskAnalysis ? 100 - Math.min(riskAnalysis.totalRisk, 100) : 50;
 
         if (hedge) {
           if (hedge.action === 'OPEN' && hedge.side === 'SHORT') {
@@ -538,26 +586,22 @@ Return ONLY valid JSON.`,
           }
           // Weighted composite: prediction probability (40%) + prediction confidence (35%) + risk score (25%)
           // Note: hedge effectiveness measures protection quality, NOT directional confidence
-          confidence = Math.round(
-            avgProb * 0.40 +
-            avgPredConfidence * 0.35 +
-            riskContrib * 0.25
-          );
+          confidence = Math.round(avgProb * 0.4 + avgPredConfidence * 0.35 + riskContrib * 0.25);
         } else {
           direction = hasBullishSignal ? 'up' : hasBearishSignal ? 'down' : 'sideways';
           // Without hedge data: prediction probability (40%) + prediction confidence (35%) + risk score (25%)
-          confidence = Math.round(
-            avgProb * 0.40 +
-            avgPredConfidence * 0.35 +
-            riskContrib * 0.25
-          );
+          confidence = Math.round(avgProb * 0.4 + avgPredConfidence * 0.35 + riskContrib * 0.25);
         }
 
         // Build shortTake using REAL market data extracted from predictions
         const md = marketData[token];
         const parts: string[] = [];
-        if (md?.price) parts.push(`$${md.price.toLocaleString('en-US', { maximumFractionDigits: md.price < 1 ? 4 : 2 })}`);
-        if (md?.change24h !== undefined) parts.push(`${md.change24h > 0 ? '+' : ''}${md.change24h.toFixed(2)}% 24h`);
+        if (md?.price)
+          parts.push(
+            `$${md.price.toLocaleString('en-US', { maximumFractionDigits: md.price < 1 ? 4 : 2 })}`
+          );
+        if (md?.change24h !== undefined)
+          parts.push(`${md.change24h > 0 ? '+' : ''}${md.change24h.toFixed(2)}% 24h`);
         if (md?.volume) parts.push(`${md.volume} vol`);
         if (md?.stakingYield) parts.push(md.stakingYield);
 
@@ -575,8 +619,8 @@ Return ONLY valid JSON.`,
 
       // Derive overall sentiment from computed token directions (majority vote)
       // This ensures the banner is always consistent with individual token cards
-      const upTokens = tokenDirections.filter(t => t.direction === 'up').length;
-      const downTokens = tokenDirections.filter(t => t.direction === 'down').length;
+      const upTokens = tokenDirections.filter((t) => t.direction === 'up').length;
+      const downTokens = tokenDirections.filter((t) => t.direction === 'down').length;
       let overallSentiment: 'bullish' | 'bearish' | 'neutral';
       if (upTokens > downTokens) {
         overallSentiment = 'bullish';
@@ -594,22 +638,36 @@ Return ONLY valid JSON.`,
         .slice(0, 4)
         .map((hedge, _i, arr) => {
           // Cross-reference with prediction data for this token
-          const tokenPreds = predictions.filter(p => p.relatedAssets.includes(hedge.symbol));
+          const tokenPreds = predictions.filter((p) => p.relatedAssets.includes(hedge.symbol));
 
           // Prefer token-SPECIFIC predictions over broad/shared ones
-          const specificPreds = tokenPreds.filter(p =>
-            p.relatedAssets.length <= 2 ||
-            p.id?.toLowerCase().includes(hedge.symbol.toLowerCase()) ||
-            p.question.toLowerCase().includes(hedge.symbol.toLowerCase()) ||
-            p.question.toLowerCase().includes(hedge.symbol === 'BTC' ? 'bitcoin' : hedge.symbol === 'ETH' ? 'ethereum' : hedge.symbol === 'CRO' ? 'cronos' : hedge.symbol.toLowerCase())
+          const specificPreds = tokenPreds.filter(
+            (p) =>
+              p.relatedAssets.length <= 2 ||
+              p.id?.toLowerCase().includes(hedge.symbol.toLowerCase()) ||
+              p.question.toLowerCase().includes(hedge.symbol.toLowerCase()) ||
+              p.question
+                .toLowerCase()
+                .includes(
+                  hedge.symbol === 'BTC'
+                    ? 'bitcoin'
+                    : hedge.symbol === 'ETH'
+                      ? 'ethereum'
+                      : hedge.symbol === 'CRO'
+                        ? 'cronos'
+                        : hedge.symbol.toLowerCase()
+                )
           );
           const bestPreds = specificPreds.length > 0 ? specificPreds : tokenPreds;
 
-          const avgProb = bestPreds.length > 0
-            ? bestPreds.reduce((s, p) => s + p.probability, 0) / bestPreds.length
-            : 50;
-          const bullishPreds = bestPreds.filter(p => p.category === 'price' && p.probability > 55);
-          const hedgePreds = bestPreds.filter(p => p.recommendation === 'HEDGE');
+          const avgProb =
+            bestPreds.length > 0
+              ? bestPreds.reduce((s, p) => s + p.probability, 0) / bestPreds.length
+              : 50;
+          const bullishPreds = bestPreds.filter(
+            (p) => p.category === 'price' && p.probability > 55
+          );
+          const hedgePreds = bestPreds.filter((p) => p.recommendation === 'HEDGE');
           const isBullish = bullishPreds.length > 0 || avgProb > 60;
           const isBearish = hedgePreds.length > 0 && avgProb < 45;
 
@@ -630,8 +688,8 @@ Return ONLY valid JSON.`,
           let riskLevel: 'conservative' | 'moderate' | 'aggressive';
           const hedgeEff = hedge.hedgeEffectiveness;
           const riskScore = riskAnalysis?.totalRisk ?? 50;
-          const lowRisk = riskScore <= 30;       // favorable conditions — allow higher leverage
-          const medRisk = riskScore <= 50;       // normal conditions
+          const lowRisk = riskScore <= 30; // favorable conditions — allow higher leverage
+          const medRisk = riskScore <= 50; // normal conditions
 
           if (direction === 'neutral') {
             leverage = lowRisk ? 1.5 : 1;
@@ -674,7 +732,9 @@ Return ONLY valid JSON.`,
             rationaleParts.push(`24h: ${md.change24h > 0 ? '+' : ''}${md.change24h.toFixed(2)}%`);
           }
           if (md?.price) {
-            rationaleParts.push(`Price: $${md.price.toLocaleString('en-US', { maximumFractionDigits: md.price < 1 ? 4 : 2 })}`);
+            rationaleParts.push(
+              `Price: $${md.price.toLocaleString('en-US', { maximumFractionDigits: md.price < 1 ? 4 : 2 })}`
+            );
           }
           if (hedge.hedgeEffectiveness > 0) {
             rationaleParts.push(`Hedge eff: ${hedge.hedgeEffectiveness.toFixed(0)}%`);
@@ -698,15 +758,13 @@ Return ONLY valid JSON.`,
           }
 
           // Weighted composite confidence from multiple agent signals
-          const avgPredConf = bestPreds.length > 0
-            ? bestPreds.reduce((s, p) => s + (p.confidence ?? 50), 0) / bestPreds.length
-            : 50;
-          const riskContrib = riskAnalysis ? (100 - Math.min(riskAnalysis.totalRisk, 100)) : 50;
+          const avgPredConf =
+            bestPreds.length > 0
+              ? bestPreds.reduce((s, p) => s + (p.confidence ?? 50), 0) / bestPreds.length
+              : 50;
+          const riskContrib = riskAnalysis ? 100 - Math.min(riskAnalysis.totalRisk, 100) : 50;
           const leverageConfidence = Math.round(
-            avgProb * 0.30 +
-            avgPredConf * 0.25 +
-            hedge.hedgeEffectiveness * 0.25 +
-            riskContrib * 0.20
+            avgProb * 0.3 + avgPredConf * 0.25 + hedge.hedgeEffectiveness * 0.25 + riskContrib * 0.2
           );
 
           return {
@@ -722,8 +780,8 @@ Return ONLY valid JSON.`,
 
       // Add fallback entries for tokens not covered by HedgingAgent
       for (const token of allTokens) {
-        if (!leverageRecommendations.find(lr => lr.symbol === token)) {
-          const td = tokenDirections.find(t => t.symbol === token);
+        if (!leverageRecommendations.find((lr) => lr.symbol === token)) {
+          const td = tokenDirections.find((t) => t.symbol === token);
           if (td && td.direction !== 'sideways') {
             leverageRecommendations.push({
               symbol: token,
@@ -739,8 +797,9 @@ Return ONLY valid JSON.`,
       }
 
       // Build overview from Lead Agent or synthesize
-      const overviewText = leadOverview
-        || `Multi-agent analysis across ${allTokens.join(', ')}: Risk score ${riskAnalysis?.totalRisk ?? 'N/A'}/100, ${openHedges.length} hedge(s) recommended. ${leadApproved ? '✅ Lead Agent APPROVED' : '⚠️ Awaiting Lead Agent approval'}.`;
+      const overviewText =
+        leadOverview ||
+        `Multi-agent analysis across ${allTokens.join(', ')}: Risk score ${riskAnalysis?.totalRisk ?? 'N/A'}/100, ${openHedges.length} hedge(s) recommended. ${leadApproved ? '✅ Lead Agent APPROVED' : '⚠️ Awaiting Lead Agent approval'}.`;
 
       summary = {
         overview: overviewText,
@@ -790,25 +849,25 @@ Return ONLY valid JSON.`,
  */
 function cleanAgentText(text: string): string {
   return text
-    .replace(/🤖|📊|🔮|⚠️|✅|❌|🛡️|💸|🚀|⚡|💰|📈|📉|🔒|🔑|💎|🏦/g, '')  // Remove emoji
-    .replace(/\*\*[^*]+\*\*/g, match => match.replace(/\*\*/g, ''))  // Strip bold markdown
-    .replace(/#+\s*/g, '')  // Strip headings
-    .replace(/•\s*[^•\n]*/g, '')  // Strip bullet point items
-    .replace(/\d+(\.\d+)?%\s*\)/g, '')  // Strip "97.4%)" patterns
-    .replace(/\([^)]*%[^)]*\)/g, '')  // Strip "(97.4%)" parenthetical percentages
-    .replace(/[A-Z]{2,5}:\s*\$[\d.,]+/g, '')  // Strip "CRO: $0.79" asset values
-    .replace(/Portfolio\s*Analysis[^.]*\.?/gi, '')  // Strip portfolio analysis text
-    .replace(/Portfolio\s*Value[^.]*\.?/gi, '')  // Strip portfolio value references
-    .replace(/Health\s*Score[^.]*\.?/gi, '')  // Strip health score references
-    .replace(/Risk\s*Score[^.]*\.?/gi, '')  // Strip risk score refs
-    .replace(/across\s+\d+\s+assets?/gi, '')  // Strip "across N assets"
-    .replace(/portfolio[^.]*\.?/gi, '')  // Strip any portfolio mentions
-    .replace(/Risks:\s*/gi, '')  // Strip "Risks:" header
-    .replace(/Low\s+diversificati\w*/gi, '')  // Strip truncated diversification text
-    .replace(/---+/g, '')  // Strip horizontal rules
-    .replace(/\|/g, '')  // Strip table pipes
-    .replace(/\n+/g, ' ')  // Collapse newlines
-    .replace(/\s{2,}/g, ' ')  // Collapse whitespace
+    .replace(/🤖|📊|🔮|⚠️|✅|❌|🛡️|💸|🚀|⚡|💰|📈|📉|🔒|🔑|💎|🏦/g, '') // Remove emoji
+    .replace(/\*\*[^*]+\*\*/g, (match) => match.replace(/\*\*/g, '')) // Strip bold markdown
+    .replace(/#+\s*/g, '') // Strip headings
+    .replace(/•\s*[^•\n]*/g, '') // Strip bullet point items
+    .replace(/\d+(\.\d+)?%\s*\)/g, '') // Strip "97.4%)" patterns
+    .replace(/\([^)]*%[^)]*\)/g, '') // Strip "(97.4%)" parenthetical percentages
+    .replace(/[A-Z]{2,5}:\s*\$[\d.,]+/g, '') // Strip "CRO: $0.79" asset values
+    .replace(/Portfolio\s*Analysis[^.]*\.?/gi, '') // Strip portfolio analysis text
+    .replace(/Portfolio\s*Value[^.]*\.?/gi, '') // Strip portfolio value references
+    .replace(/Health\s*Score[^.]*\.?/gi, '') // Strip health score references
+    .replace(/Risk\s*Score[^.]*\.?/gi, '') // Strip risk score refs
+    .replace(/across\s+\d+\s+assets?/gi, '') // Strip "across N assets"
+    .replace(/portfolio[^.]*\.?/gi, '') // Strip any portfolio mentions
+    .replace(/Risks:\s*/gi, '') // Strip "Risks:" header
+    .replace(/Low\s+diversificati\w*/gi, '') // Strip truncated diversification text
+    .replace(/---+/g, '') // Strip horizontal rules
+    .replace(/\|/g, '') // Strip table pipes
+    .replace(/\n+/g, ' ') // Collapse newlines
+    .replace(/\s{2,}/g, ' ') // Collapse whitespace
     .trim();
 }
 
@@ -816,37 +875,49 @@ function cleanAgentText(text: string): string {
  * Generate a token direction from prediction data when LLM is unavailable
  */
 function generateTokenFallback(token: string, predictions: PredictionMarket[]): TokenDirection {
-  const tokenPreds = predictions.filter(p => p.relatedAssets.includes(token));
+  const tokenPreds = predictions.filter((p) => p.relatedAssets.includes(token));
   if (tokenPreds.length === 0) {
-    return { symbol: token, direction: 'sideways', confidence: 40, shortTake: 'Insufficient data to assess' };
+    return {
+      symbol: token,
+      direction: 'sideways',
+      confidence: 40,
+      shortTake: 'Insufficient data to assess',
+    };
   }
 
   // Prefer token-specific predictions
-  const specificPreds = tokenPreds.filter(p =>
-    p.relatedAssets.length <= 2 ||
-    p.id?.toLowerCase().includes(token.toLowerCase()) ||
-    p.question.toLowerCase().includes(token.toLowerCase()) ||
-    p.question.toLowerCase().includes(token === 'BTC' ? 'bitcoin' : token === 'ETH' ? 'ethereum' : token.toLowerCase())
+  const specificPreds = tokenPreds.filter(
+    (p) =>
+      p.relatedAssets.length <= 2 ||
+      p.id?.toLowerCase().includes(token.toLowerCase()) ||
+      p.question.toLowerCase().includes(token.toLowerCase()) ||
+      p.question
+        .toLowerCase()
+        .includes(token === 'BTC' ? 'bitcoin' : token === 'ETH' ? 'ethereum' : token.toLowerCase())
   );
   const bestPreds = specificPreds.length > 0 ? specificPreds : tokenPreds;
 
   const avgProb = bestPreds.reduce((s, p) => s + p.probability, 0) / bestPreds.length;
-  const hasBullish = bestPreds.some(p => p.category === 'price' && p.probability > 55);
-  const hasHedge = bestPreds.some(p => p.recommendation === 'HEDGE');
+  const hasBullish = bestPreds.some((p) => p.category === 'price' && p.probability > 55);
+  const hasHedge = bestPreds.some((p) => p.recommendation === 'HEDGE');
   // Match main path logic: bearish requires BOTH hedge signals AND low probability
   const hasBearish = hasHedge && avgProb < 45;
 
-  const direction: 'up' | 'down' | 'sideways' = hasBullish ? 'up' : hasBearish ? 'down' : 'sideways';
+  const direction: 'up' | 'down' | 'sideways' = hasBullish
+    ? 'up'
+    : hasBearish
+      ? 'down'
+      : 'sideways';
   const confidence = Math.round(avgProb);
 
   const topPred = bestPreds.sort((a, b) => b.probability - a.probability)[0];
   const shortTake = topPred
     ? `${topPred.probability}% — ${topPred.question.substring(0, 40)}${topPred.question.length > 40 ? '...' : ''}`
     : direction === 'up'
-    ? `Bullish signals at ${confidence}% avg probability`
-    : direction === 'down'
-    ? `Risk elevated — hedge alerts active`
-    : `Mixed signals, monitoring recommended`;
+      ? `Bullish signals at ${confidence}% avg probability`
+      : direction === 'down'
+        ? `Risk elevated — hedge alerts active`
+        : `Mixed signals, monitoring recommended`;
 
   return { symbol: token, direction, confidence, shortTake };
 }
@@ -859,12 +930,14 @@ function generateFallbackSummary(
   tokens: string[],
   hedgeAlerts: number
 ): UnifiedSummary {
-  const highImpact = predictions.filter(p => p.impact === 'HIGH');
+  const highImpact = predictions.filter((p) => p.impact === 'HIGH');
   const avgProb = predictions.reduce((s, p) => s + p.probability, 0) / predictions.length;
-  const hedgePreds = predictions.filter(p => p.recommendation === 'HEDGE');
+  const hedgePreds = predictions.filter((p) => p.recommendation === 'HEDGE');
 
   // Determine overall sentiment
-  const bullishCount = predictions.filter(p => p.category === 'price' && p.probability > 55).length;
+  const bullishCount = predictions.filter(
+    (p) => p.category === 'price' && p.probability > 55
+  ).length;
   const bearishCount = hedgePreds.length;
   const sentiment: 'bullish' | 'bearish' | 'neutral' =
     bullishCount > bearishCount ? 'bullish' : bearishCount > bullishCount ? 'bearish' : 'neutral';
@@ -875,27 +948,29 @@ function generateFallbackSummary(
       : 'No immediate hedge signals — market conditions stable for monitored positions.'
   } Overall agent consensus is ${sentiment}.`;
 
-  const riskAgent = hedgeAlerts > 0
-    ? `Market risk elevated with ${hedgeAlerts} active hedge alert(s). ${highImpact.length} high-impact predictions increase volatility exposure across ${tokens.slice(0, 3).join('/')}.`
-    : `Market risk is moderate. ${highImpact.length} high-impact predictions warrant attention but no immediate protective action required.`;
+  const riskAgent =
+    hedgeAlerts > 0
+      ? `Market risk elevated with ${hedgeAlerts} active hedge alert(s). ${highImpact.length} high-impact predictions increase volatility exposure across ${tokens.slice(0, 3).join('/')}.`
+      : `Market risk is moderate. ${highImpact.length} high-impact predictions warrant attention but no immediate protective action required.`;
 
-  const hedgingAgent = hedgePreds.length > 0
-    ? `Consider protective positions on ${[...new Set(hedgePreds.flatMap(p => p.relatedAssets))].join(', ')}. Recommended hedge ratio: ${avgProb > 60 ? '30-50%' : '15-25%'} via perpetual futures.`
-    : `No hedge triggers activated. Continue monitoring ${tokens.slice(0, 3).join(', ')} for entry signals — set alerts at ±5% deviation.`;
+  const hedgingAgent =
+    hedgePreds.length > 0
+      ? `Consider protective positions on ${[...new Set(hedgePreds.flatMap((p) => p.relatedAssets))].join(', ')}. Recommended hedge ratio: ${avgProb > 60 ? '30-50%' : '15-25%'} via perpetual futures.`
+      : `No hedge triggers activated. Continue monitoring ${tokens.slice(0, 3).join(', ')} for entry signals — set alerts at ±5% deviation.`;
 
-  const tokenDirections: TokenDirection[] = tokens.map(token =>
+  const tokenDirections: TokenDirection[] = tokens.map((token) =>
     generateTokenFallback(token, predictions)
   );
 
   // Generate leverage recommendations from agent logic
   const leverageRecommendations: LeverageRecommendation[] = tokenDirections
-    .filter(td => td.direction !== 'sideways')
+    .filter((td) => td.direction !== 'sideways')
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 3)
     .map((td, i, arr) => {
       const isUp = td.direction === 'up';
       const direction: 'long' | 'short' | 'neutral' = isUp ? 'long' : 'short';
-      const tokenPreds = predictions.filter(p => p.relatedAssets.includes(td.symbol));
+      const tokenPreds = predictions.filter((p) => p.relatedAssets.includes(td.symbol));
       const topPred = tokenPreds.sort((a, b) => b.probability - a.probability)[0];
 
       let leverage: string;

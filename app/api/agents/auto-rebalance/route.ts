@@ -1,9 +1,9 @@
 /**
  * Auto-Rebalancing API Route
- * 
+ *
  * Endpoints:
  * - POST /api/agents/auto-rebalance?action=start
- * - POST /api/agents/auto-rebalance?action=stop  
+ * - POST /api/agents/auto-rebalance?action=stop
  * - POST /api/agents/auto-rebalance?action=enable
  * - POST /api/agents/auto-rebalance?action=disable
  * - POST /api/agents/auto-rebalance?action=trigger_assessment
@@ -12,19 +12,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { autoRebalanceService, type AutoRebalanceConfig, type RebalanceFrequency } from '@/lib/services/AutoRebalanceService';
+import {
+  autoRebalanceService,
+  type AutoRebalanceConfig,
+  type RebalanceFrequency,
+} from '@/lib/services/AutoRebalanceService';
 import { logger } from '@/lib/utils/logger';
 import { requireAuth } from '@/lib/security/auth-middleware';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { 
-  saveAutoRebalanceConfig, 
+import {
+  saveAutoRebalanceConfig,
   getAutoRebalanceConfig,
-  getAutoRebalanceConfigs,
   deleteAutoRebalanceConfig,
-  type AutoRebalanceConfig as StorageAutoRebalanceConfig
+  type AutoRebalanceConfig as StorageAutoRebalanceConfig,
 } from '@/lib/storage/auto-rebalance-storage';
-
 export const runtime = 'nodejs';
 export const maxDuration = 15;
 export const dynamic = 'force-dynamic';
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Authentication required for all auto-rebalance mutations
     const authResult = await requireAuth(request, body as Record<string, unknown>);
     if (authResult instanceof NextResponse) return authResult;
-    
+
     const { portfolioId, walletAddress, config } = body;
 
     switch (action) {
@@ -148,7 +150,10 @@ export async function POST(request: NextRequest) {
 
       default:
         return NextResponse.json(
-          { success: false, error: 'Invalid action. Use: start, stop, enable, disable, or trigger_assessment' },
+          {
+            success: false,
+            error: 'Invalid action. Use: start, stop, enable, disable, or trigger_assessment',
+          },
           { status: 400 }
         );
     }
@@ -191,10 +196,13 @@ export async function GET(request: NextRequest) {
         const assessment = autoRebalanceService.getLastAssessment(parseInt(portfolioId, 10));
 
         if (!assessment) {
-          return NextResponse.json({
-            success: false,
-            error: 'No assessment available for this portfolio',
-          }, { status: 404 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'No assessment available for this portfolio',
+            },
+            { status: 404 }
+          );
         }
 
         return NextResponse.json({
@@ -226,15 +234,12 @@ export async function PATCH(request: NextRequest) {
     const { portfolioId, walletAddress, lossProtection } = body;
 
     if (!portfolioId) {
-      return NextResponse.json(
-        { success: false, error: 'portfolioId required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: 'portfolioId required' }, { status: 400 });
     }
 
     // Get existing config or create new one
     let existingConfig = await getAutoRebalanceConfig(parseInt(portfolioId, 10));
-    
+
     if (!existingConfig && walletAddress) {
       // Create new config with defaults
       existingConfig = {

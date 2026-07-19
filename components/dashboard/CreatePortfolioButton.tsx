@@ -5,13 +5,12 @@ import { logger } from '@/lib/utils/logger';
 import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio, useUserPortfolios } from '../../lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
-
 export function CreatePortfolioButton() {
   const { isConnected, evmAddress, evmConnected, isSUI } = useWallet();
   // Get only portfolios owned by the connected wallet (EVM only)
   const { count: userPortfolioCount } = useUserPortfolios(evmAddress as `0x${string}` | undefined);
   const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();
-  
+
   const [targetYield, setTargetYield] = useState('1000'); // 10% in basis points
   const [riskTolerance, setRiskTolerance] = useState('50'); // 50%
   const [showForm, setShowForm] = useState(false);
@@ -31,7 +30,9 @@ export function CreatePortfolioButton() {
     return (
       <div className="bg-[#4DA2FF]/5 p-6 rounded-xl border border-[#4DA2FF]/20 shadow-sm">
         <p className="text-[#4DA2FF] text-center font-medium">SUI Wallet Connected</p>
-        <p className="text-[#86868B] text-center text-sm mt-1">On-chain portfolios require Cronos (EVM) wallet</p>
+        <p className="text-[#86868B] text-center text-sm mt-1">
+          On-chain portfolios require Cronos (EVM) wallet
+        </p>
       </div>
     );
   }
@@ -52,7 +53,8 @@ export function CreatePortfolioButton() {
           <h3 className="text-xl font-bold text-[#34C759]">Portfolio Created!</h3>
         </div>
         <p className="text-[#1d1d1f] mb-4">
-          Your portfolio has been created on-chain. You now have {userPortfolioCount + 1} portfolio(s).
+          Your portfolio has been created on-chain. You now have {userPortfolioCount + 1}{' '}
+          portfolio(s).
         </p>
         <button
           onClick={() => {
@@ -100,7 +102,7 @@ export function CreatePortfolioButton() {
       ) : (
         <div className="space-y-4">
           <h3 className="text-xl font-bold gradient-text">Create On-Chain Portfolio</h3>
-          
+
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-[#1d1d1f] mb-2">
@@ -114,9 +116,7 @@ export function CreatePortfolioButton() {
                 className="w-full px-4 py-2 bg-[#f5f5f7] border border-[#e8e8ed] rounded-lg text-[#1d1d1f] focus:border-[#007AFF] focus:outline-none"
                 disabled={isPending || isConfirming}
               />
-              <p className="text-xs text-[#86868b] mt-1">
-                Example: 1000 = 10%, 500 = 5%
-              </p>
+              <p className="text-xs text-[#86868b] mt-1">Example: 1000 = 10%, 500 = 5%</p>
             </div>
 
             <div>
@@ -148,7 +148,9 @@ export function CreatePortfolioButton() {
                     {isPending ? 'Waiting for signature...' : 'Confirming transaction...'}
                   </p>
                   <p className="text-xs text-[#86868b] mt-1">
-                    {isPending ? 'Please sign the transaction in your wallet' : 'Transaction is being mined on Cronos Testnet'}
+                    {isPending
+                      ? 'Please sign the transaction in your wallet'
+                      : 'Transaction is being mined on Cronos Testnet'}
                   </p>
                 </div>
               </div>
@@ -172,7 +174,8 @@ export function CreatePortfolioButton() {
 
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
             <p className="text-xs text-amber-400">
-              ⚠️ This will create a real on-chain transaction on Cronos Testnet. You'll need tCRO for gas fees (~0.1-0.2 tCRO).
+              ⚠️ This will create a real on-chain transaction on Cronos Testnet. You'll need tCRO
+              for gas fees (~0.1-0.2 tCRO).
             </p>
           </div>
         </div>

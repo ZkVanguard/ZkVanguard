@@ -9,11 +9,9 @@ import {
   calculateHedgeFee,
   getAnnualSavings,
   formatPrice,
-  type SubscriptionTier,
 } from '@/lib/config/pricing';
 import type { PricingDisplayData } from '@/lib/config/subscription-types';
 import { logger } from '@/lib/utils/logger';
-
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 export const dynamic = 'force-static';
@@ -40,14 +38,14 @@ export async function GET() {
         description: tier.description,
         monthlyPrice: formatPrice(tier.priceMonthly),
         annualPrice: formatPrice(tier.priceAnnual),
-        annualSavings: tier.priceMonthly > 0
-          ? `Save $${getAnnualSavings(tier.tier).toLocaleString()}/year`
-          : '',
+        annualSavings:
+          tier.priceMonthly > 0 ? `Save $${getAnnualSavings(tier.tier).toLocaleString()}/year` : '',
         features: tier.features,
         limits: {
-          agents: tier.limits.maxAgents === 7
-            ? 'All 7 AI agents'
-            : `${tier.limits.maxAgents} AI agent${tier.limits.maxAgents > 1 ? 's' : ''}`,
+          agents:
+            tier.limits.maxAgents === 7
+              ? 'All 7 AI agents'
+              : `${tier.limits.maxAgents} AI agent${tier.limits.maxAgents > 1 ? 's' : ''}`,
           zkProofs: isUnlimitedZk ? 'Unlimited' : `${tier.limits.zkProofsPerMonth}/month`,
           hedging: hedgeLabel,
           support: tier.limits.dedicatedSupport
@@ -57,14 +55,13 @@ export async function GET() {
               : 'Email',
         },
         isPopular: tier.tier === 'pro',
-        ctaText: tier.tier === 'free'
-          ? 'Start free'
-          : tier.tier === 'enterprise'
-            ? 'Contact sales'
-            : 'Subscribe',
-        ctaLink: tier.tier === 'enterprise'
-          ? '/contact'
-          : `/subscribe?tier=${tier.tier}`,
+        ctaText:
+          tier.tier === 'free'
+            ? 'Start free'
+            : tier.tier === 'enterprise'
+              ? 'Contact sales'
+              : 'Subscribe',
+        ctaLink: tier.tier === 'enterprise' ? '/contact' : `/subscribe?tier=${tier.tier}`,
       };
     });
 

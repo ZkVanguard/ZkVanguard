@@ -5,7 +5,7 @@ import { logger } from '@/lib/utils/logger';
 let pool: Pool | null = null;
 
 // Pool metrics for monitoring
-let _poolMetrics = { queries: 0, errors: 0, slowQueries: 0 };
+const _poolMetrics = { queries: 0, errors: 0, slowQueries: 0 };
 
 export function getPoolMetrics() {
   const p = pool;
@@ -22,9 +22,10 @@ export function getPool(): Pool {
     // Supports Neon serverless, Aiven, and local PostgreSQL.
     // Prefer DATABASE_POOL_URL (Neon pooler endpoint, port 6543) for high concurrency,
     // fall back to DATABASE_URL (direct connection).
-    let connectionString = process.env.DATABASE_POOL_URL
-      || process.env.DATABASE_URL
-      || 'postgresql://postgres:postgres@localhost:5432/zkvanguard';
+    let connectionString =
+      process.env.DATABASE_POOL_URL ||
+      process.env.DATABASE_URL ||
+      'postgresql://postgres:postgres@localhost:5432/zkvanguard';
 
     // Remove channel_binding parameter if present (not supported by pg module)
     connectionString = connectionString.replace(/&?channel_binding=[^&]*/g, '').replace('?&', '?');
@@ -34,21 +35,27 @@ export function getPool(): Pool {
 
     // Ensure sslmode=verify-full for Neon (replaces require/prefer modes)
     if (isNeon) {
-      connectionString = connectionString.replace(/sslmode=require|sslmode=prefer/g, 'sslmode=verify-full');
+      connectionString = connectionString.replace(
+        /sslmode=require|sslmode=prefer/g,
+        'sslmode=verify-full'
+      );
       if (!connectionString.includes('sslmode=')) {
         connectionString += (connectionString.includes('?') ? '&' : '?') + 'sslmode=verify-full';
       }
     }
 
     // Any URL declaring sslmode=require (or providers we know enforce SSL) needs ssl on the pool.
-    const requiresSsl = isNeon || isAiven || /sslmode=(require|verify-full|verify-ca)/.test(connectionString);
+    const requiresSsl =
+      isNeon || isAiven || /sslmode=(require|verify-full|verify-ca)/.test(connectionString);
     // Neon pooler (port 6543) supports up to 10,000 connections
     const isPooler = connectionString.includes(':6543') || connectionString.includes('-pooler.');
 
     // For non-Neon providers (e.g. Aiven) strip `sslmode` from the URL so pg-connection-string
     // doesn't turn it into `ssl: true` (strict verify) and override the explicit ssl config below.
     if (requiresSsl && !isNeon) {
-      connectionString = connectionString.replace(/([?&])sslmode=[^&]+/g, '$1').replace(/[?&]$/, '');
+      connectionString = connectionString
+        .replace(/([?&])sslmode=[^&]+/g, '$1')
+        .replace(/[?&]$/, '');
     }
 
     pool = new Pool({
@@ -56,7 +63,9 @@ export function getPool(): Pool {
       // Neon uses verify-full (rejectUnauthorized: true). Aiven needs SSL but we don't
       // ship its CA cert here, so allow the unverified chain (still encrypted in transit).
       ssl: requiresSsl
-        ? (isNeon ? { rejectUnauthorized: true } : { rejectUnauthorized: false })
+        ? isNeon
+          ? { rejectUnauthorized: true }
+          : { rejectUnauthorized: false }
         : undefined,
       // With Neon pooler: can safely use 25 connections per serverless instance.
       // Aiven plan caps at connection_limit=20 total across the whole project
@@ -70,19 +79,21 @@ export function getPool(): Pool {
       // when scaling to a higher Aiven tier with connection_limit > 20.
       max: isPooler
         ? 25
-        : (isAiven
-            ? (Number(process.env.AIVEN_POOL_MAX) || Number(process.env.DB_POOL_MAX) || 2)
-            : (isNeon ? 8 : 20)),
-      min: isNeon ? 1 : (isAiven ? 0 : 2),
+        : isAiven
+          ? Number(process.env.AIVEN_POOL_MAX) || Number(process.env.DB_POOL_MAX) || 2
+          : isNeon
+            ? 8
+            : 20,
+      min: isNeon ? 1 : isAiven ? 0 : 2,
       // Aiven: release idle connections aggressively. 2s is faster than any
       // realistic cron interval, so a quiet instance frees its slot in seconds.
-      idleTimeoutMillis: isNeon ? 8000 : (isAiven ? 2000 : 20000),
+      idleTimeoutMillis: isNeon ? 8000 : isAiven ? 2000 : 20000,
       connectionTimeoutMillis: isNeon ? 5000 : 3000,
       // Statement timeout: kill queries that run too long (protects pool from hangs)
-      statement_timeout: 15000,              // 15s max per query
-      query_timeout: 20000,                  // 20s max including queue wait
+      statement_timeout: 15000, // 15s max per query
+      query_timeout: 20000, // 20s max including queue wait
       // Allow queued clients to fail fast instead of waiting forever
-      allowExitOnIdle: isNeon,               // Release all connections when idle on serverless
+      allowExitOnIdle: isNeon, // Release all connections when idle on serverless
     });
 
     pool.on('error', (err) => {
@@ -117,10 +128,13 @@ const POOL_EXHAUSTED_PATTERNS = [
 ];
 function isPoolExhausted(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return POOL_EXHAUSTED_PATTERNS.some(re => re.test(msg));
+  return POOL_EXHAUSTED_PATTERNS.some((re) => re.test(msg));
 }
 
-export async function query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]> {
+export async function query<T = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<T[]> {
   const p = getPool();
   _poolMetrics.queries++;
   const start = Date.now();
@@ -130,7 +144,7 @@ export async function query<T = Record<string, unknown>>(text: string, params?: 
     try {
       if (attempt > 0) {
         const backoffMs = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-        await new Promise(r => setTimeout(r, backoffMs));
+        await new Promise((r) => setTimeout(r, backoffMs));
         logger.warn(`[DB] Retry attempt ${attempt}/${MAX_RETRIES} after pool-exhaustion`, {
           component: 'postgres',
           backoffMs,
@@ -140,11 +154,17 @@ export async function query<T = Record<string, unknown>>(text: string, params?: 
       const result = await p.query(text, params);
       const duration = Date.now() - start;
       if (attempt > 0) {
-        logger.info(`[DB] Query recovered after ${attempt} retry(ies)`, { component: 'postgres', totalDurationMs: duration });
+        logger.info(`[DB] Query recovered after ${attempt} retry(ies)`, {
+          component: 'postgres',
+          totalDurationMs: duration,
+        });
       }
       if (duration > SLOW_QUERY_MS) {
         _poolMetrics.slowQueries++;
-        logger.warn(`[DB] Slow query (${duration}ms): ${text.slice(0, 80)}`, { component: 'postgres', duration });
+        logger.warn(`[DB] Slow query (${duration}ms): ${text.slice(0, 80)}`, {
+          component: 'postgres',
+          duration,
+        });
       }
       return result.rows;
     } catch (err) {
@@ -160,7 +180,10 @@ export async function query<T = Record<string, unknown>>(text: string, params?: 
   throw lastErr;
 }
 
-export async function queryOne<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T | null> {
+export async function queryOne<T = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<T | null> {
   const rows = await query<T>(text, params);
   return rows[0] || null;
 }
@@ -169,9 +192,7 @@ export async function queryOne<T = Record<string, unknown>>(text: string, params
  * Execute multiple queries in a single transaction for atomicity + performance.
  * Reduces round-trips to the database.
  */
-export async function withTransaction<T>(
-  fn: (client: PoolClient) => Promise<T>
-): Promise<T> {
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const p = getPool();
   const client = await p.connect();
   try {
@@ -243,10 +264,7 @@ export async function ensureAllTables(): Promise<boolean> {
       const { initCommunityPoolTables } = await import('./community-pool');
       const { ensureHedgesTable } = await import('./hedges');
 
-      await Promise.all([
-        initCommunityPoolTables(),
-        ensureHedgesTable(),
-      ]);
+      await Promise.all([initCommunityPoolTables(), ensureHedgesTable()]);
       _dbReady = true;
       logger.info('[DB] All tables initialized');
     } catch (e) {

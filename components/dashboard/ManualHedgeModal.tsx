@@ -1,9 +1,30 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Shield, TrendingDown, TrendingUp, AlertCircle, CheckCircle, Wallet, Copy, ExternalLink, Check, Coins, Loader2, Zap } from 'lucide-react';
+import {
+  X,
+  Shield,
+  TrendingDown,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle,
+  Wallet,
+  Copy,
+  ExternalLink,
+  Check,
+  Coins,
+  Loader2,
+  Zap,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId, useWalletClient } from '@/lib/wdk/wdk-hooks';
+import {
+  useAccount,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  usePublicClient,
+  useChainId,
+  useWalletClient,
+} from '@/lib/wdk/wdk-hooks';
 import { parseUnits, formatUnits, keccak256, encodePacked } from 'viem';
 import { trackSuccessfulTransaction } from '@/lib/utils/transactionTracker';
 import { logger } from '@/lib/utils/logger';
@@ -15,13 +36,10 @@ import {
   ORACLE_FEE,
   ERC20_ABI,
   HEDGE_EXECUTOR_ABI,
-  type HedgeInitialValues,
   type ManualHedgeModalProps,
   type HedgeSuccess,
   type TxStep,
-} from '@/lib/types/hedge-modal-types';
-
-// ── Tx Hash Display with copy ───────────────────────────────────
+} from '@/lib/types/hedge-modal-types'; // ── Tx Hash Display with copy ───────────────────────────────────
 function TxHashDisplay({ hash, label }: { hash: string; label: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -30,7 +48,9 @@ function TxHashDisplay({ hash, label }: { hash: string; label: string }) {
       await navigator.clipboard.writeText(hash);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
@@ -103,65 +123,74 @@ export function ManualHedgeModal({
   const [currentAllowance, setCurrentAllowance] = useState<bigint>(0n);
 
   // ── EIP-712 Domain for typed signatures ───────────────────────
-  const getEIP712Domain = useCallback(() => ({
-    name: 'ZK Vanguard',
-    version: '1',
-    chainId: chainId,
-  }), [chainId]);
+  const getEIP712Domain = useCallback(
+    () => ({
+      name: 'ZK Vanguard',
+      version: '1',
+      chainId: chainId,
+    }),
+    [chainId]
+  );
 
   // ── Sign hedge opening with EIP-712 ───────────────────────────
-  const signOpenHedge = useCallback(async (
-    assetName: string,
-    side: string,
-    collateral: number,
-    lev: number
-  ): Promise<{ signature: string; timestamp: number } | null> => {
-    try {
-      if (!walletClient) {
-        logger.warn('Wallet not connected for signing', { component: 'ManualHedgeModal' });
+  const signOpenHedge = useCallback(
+    async (
+      assetName: string,
+      side: string,
+      collateral: number,
+      lev: number
+    ): Promise<{ signature: string; timestamp: number } | null> => {
+      try {
+        if (!walletClient) {
+          logger.warn('Wallet not connected for signing', { component: 'ManualHedgeModal' });
+          return null;
+        }
+
+        const timestamp = Math.floor(Date.now() / 1000);
+        const domain = getEIP712Domain();
+        const types = {
+          OpenHedge: [
+            { name: 'asset', type: 'string' },
+            { name: 'side', type: 'string' },
+            { name: 'collateral', type: 'uint256' },
+            { name: 'leverage', type: 'uint256' },
+            { name: 'timestamp', type: 'uint256' },
+          ],
+        } as const;
+        const message = {
+          asset: assetName,
+          side,
+          collateral: BigInt(Math.round(collateral * 1e6)), // USDC 6 decimals
+          leverage: BigInt(lev),
+          timestamp: BigInt(timestamp),
+        };
+
+        logger.info('🔑 Requesting wallet signature', {
+          component: 'ManualHedgeModal',
+          wallet: walletClient.account?.address,
+          asset: assetName,
+          side,
+        });
+
+        const signature = await walletClient.signTypedData({
+          domain,
+          types,
+          primaryType: 'OpenHedge',
+          message,
+        });
+
+        logger.info('✅ Hedge signed', {
+          component: 'ManualHedgeModal',
+          signer: walletClient.account?.address,
+        });
+        return { signature, timestamp };
+      } catch (err) {
+        logger.warn('Wallet signature declined', { component: 'ManualHedgeModal', error: err });
         return null;
       }
-
-      const timestamp = Math.floor(Date.now() / 1000);
-      const domain = getEIP712Domain();
-      const types = {
-        OpenHedge: [
-          { name: 'asset', type: 'string' },
-          { name: 'side', type: 'string' },
-          { name: 'collateral', type: 'uint256' },
-          { name: 'leverage', type: 'uint256' },
-          { name: 'timestamp', type: 'uint256' },
-        ],
-      } as const;
-      const message = {
-        asset: assetName,
-        side,
-        collateral: BigInt(Math.round(collateral * 1e6)), // USDC 6 decimals
-        leverage: BigInt(lev),
-        timestamp: BigInt(timestamp),
-      };
-
-      logger.info('🔑 Requesting wallet signature', {
-        component: 'ManualHedgeModal',
-        wallet: walletClient.account?.address,
-        asset: assetName,
-        side,
-      });
-
-      const signature = await walletClient.signTypedData({
-        domain,
-        types,
-        primaryType: 'OpenHedge',
-        message,
-      });
-
-      logger.info('✅ Hedge signed', { component: 'ManualHedgeModal', signer: walletClient.account?.address });
-      return { signature, timestamp };
-    } catch (err) {
-      logger.warn('Wallet signature declined', { component: 'ManualHedgeModal', error: err });
-      return null;
-    }
-  }, [walletClient, getEIP712Domain]);
+    },
+    [walletClient, getEIP712Domain]
+  );
 
   // ── Transaction state ─────────────────────────────────────────
   const [txStep, setTxStep] = useState<TxStep>('idle');
@@ -183,8 +212,7 @@ export function ManualHedgeModal({
     reset: resetApprove,
   } = useWriteContract();
 
-  const { isSuccess: isApproveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const { isSuccess: isApproveConfirmed } = useWaitForTransactionReceipt({ hash: approveHash });
 
   // ── OpenHedge tx ──────────────────────────────────────────────
   const {
@@ -194,8 +222,7 @@ export function ManualHedgeModal({
     reset: resetOpen,
   } = useWriteContract();
 
-  const { isSuccess: isOpenConfirmed } =
-    useWaitForTransactionReceipt({ hash: openHedgeHash });
+  const { isSuccess: isOpenConfirmed } = useWaitForTransactionReceipt({ hash: openHedgeHash });
 
   // ── Mint tx (inline faucet) ───────────────────────────────────
   const {
@@ -205,8 +232,9 @@ export function ManualHedgeModal({
     reset: resetMint,
   } = useWriteContract();
 
-  const { isLoading: isMintConfirming, isSuccess: isMintConfirmed } =
-    useWaitForTransactionReceipt({ hash: undefined }); // Tracks latest mint
+  const { isLoading: isMintConfirming, isSuccess: isMintConfirmed } = useWaitForTransactionReceipt({
+    hash: undefined,
+  }); // Tracks latest mint
 
   // Actually track the mint hash
   const {
@@ -261,17 +289,9 @@ export function ManualHedgeModal({
       )
     );
     const nullifier = keccak256(
-      encodePacked(
-        ['bytes32', 'uint256'],
-        [commitmentHash, BigInt(timestamp)]
-      )
+      encodePacked(['bytes32', 'uint256'], [commitmentHash, BigInt(timestamp)])
     );
-    const merkleRoot = keccak256(
-      encodePacked(
-        ['bytes32', 'bytes32'],
-        [commitmentHash, nullifier]
-      )
-    );
+    const merkleRoot = keccak256(encodePacked(['bytes32', 'bytes32'], [commitmentHash, nullifier]));
     return { commitmentHash, nullifier, merkleRoot };
   }, [address, asset, hedgeType, collateralInput]);
 
@@ -319,7 +339,10 @@ export function ManualHedgeModal({
   // ── Handle openHedge confirmed ────────────────────────────────
   useEffect(() => {
     if (isOpenConfirmed && openHedgeHash && txStep === 'open-confirming') {
-      logger.info('OpenHedge confirmed!', { component: 'ManualHedgeModal', data: { txHash: openHedgeHash } });
+      logger.info('OpenHedge confirmed!', {
+        component: 'ManualHedgeModal',
+        data: { txHash: openHedgeHash },
+      });
       setTxStep('done');
 
       const collateralAmount = parseFloat(pendingCollateral);
@@ -348,7 +371,17 @@ export function ManualHedgeModal({
       // Trigger UI refresh
       window.dispatchEvent(new Event('hedgeAdded'));
     }
-  }, [isOpenConfirmed, openHedgeHash, txStep, pendingCollateral, asset, hedgeType, leverage, entryPrice, address]);
+  }, [
+    isOpenConfirmed,
+    openHedgeHash,
+    txStep,
+    pendingCollateral,
+    asset,
+    hedgeType,
+    leverage,
+    entryPrice,
+    address,
+  ]);
 
   // ── Handle tx errors ──────────────────────────────────────────
   useEffect(() => {
@@ -380,12 +413,20 @@ export function ManualHedgeModal({
       setError('Please fill in all required fields');
       return;
     }
-    if (collateralAmount < 1) { setError('Minimum collateral is 1 USDC'); return; }
-    if (leverage < 2 || leverage > 100) { setError('Leverage must be between 2x and 100x'); return; }
+    if (collateralAmount < 1) {
+      setError('Minimum collateral is 1 USDC');
+      return;
+    }
+    if (leverage < 2 || leverage > 100) {
+      setError('Leverage must be between 2x and 100x');
+      return;
+    }
 
     const balNum = parseFloat(usdcBalance);
     if (balNum < collateralAmount) {
-      setError(`Insufficient USDC. Have ${balNum.toLocaleString()}, need ${collateralAmount.toLocaleString()}. Mint more below.`);
+      setError(
+        `Insufficient USDC. Have ${balNum.toLocaleString()}, need ${collateralAmount.toLocaleString()}. Mint more below.`
+      );
       return;
     }
 
@@ -491,7 +532,9 @@ export function ManualHedgeModal({
   // per-render state and re-including it would loop on every render.
   useEffect(() => {
     if (isApproveConfirmed && txStep === 'approve-confirming' && useGasless) {
-      logger.info('Approval confirmed, proceeding to gasless open', { component: 'ManualHedgeModal' });
+      logger.info('Approval confirmed, proceeding to gasless open', {
+        component: 'ManualHedgeModal',
+      });
       handleGaslessOpen();
     }
   }, [isApproveConfirmed, txStep, useGasless]);
@@ -555,7 +598,9 @@ export function ManualHedgeModal({
     // Check USDC balance
     const balNum = parseFloat(usdcBalance);
     if (balNum < collateralAmount) {
-      setError(`Insufficient USDC. You have ${balNum.toLocaleString()} but need ${collateralAmount.toLocaleString()}. Mint more below.`);
+      setError(
+        `Insufficient USDC. You have ${balNum.toLocaleString()} but need ${collateralAmount.toLocaleString()}. Mint more below.`
+      );
       return;
     }
 
@@ -567,7 +612,10 @@ export function ManualHedgeModal({
     if (currentAllowance < requiredAmount) {
       logger.info('Approval needed', {
         component: 'ManualHedgeModal',
-        data: { currentAllowance: currentAllowance.toString(), required: requiredAmount.toString() },
+        data: {
+          currentAllowance: currentAllowance.toString(),
+          required: requiredAmount.toString(),
+        },
       });
       setTxStep('approving');
       writeApprove({
@@ -618,9 +666,7 @@ export function ManualHedgeModal({
 
   const calculatePnL = () => {
     if (!collateralInput || !entryPrice || !targetPrice || entryNum === 0) return null;
-    const priceDelta = hedgeType === 'SHORT'
-      ? entryNum - targetNum
-      : targetNum - entryNum;
+    const priceDelta = hedgeType === 'SHORT' ? entryNum - targetNum : targetNum - entryNum;
     const pnl = (priceDelta / entryNum) * notionalValue;
     return pnl.toFixed(2);
   };
@@ -643,8 +689,15 @@ export function ManualHedgeModal({
   };
 
   const stepProgress: Record<TxStep, number> = {
-    idle: 0, signing: 1, checking: 1, approving: 1, 'approve-confirming': 2,
-    opening: 3, 'open-confirming': 3, done: 4, error: 0,
+    idle: 0,
+    signing: 1,
+    checking: 1,
+    approving: 1,
+    'approve-confirming': 2,
+    opening: 3,
+    'open-confirming': 3,
+    done: 4,
+    error: 0,
   };
   const progress = stepProgress[txStep];
 
@@ -673,19 +726,34 @@ export function ManualHedgeModal({
               {/* Header */}
               <div className="sticky top-0 bg-white border-b border-black/5 px-6 py-4 flex items-center justify-between rounded-t-[24px] z-10">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 ${success ? 'bg-[#34C759]' : 'bg-[#007AFF]'} rounded-[12px] flex items-center justify-center`}>
-                    {success ? <CheckCircle className="w-5 h-5 text-white" /> : <Shield className="w-5 h-5 text-white" />}
+                  <div
+                    className={`w-10 h-10 ${success ? 'bg-[#34C759]' : 'bg-[#007AFF]'} rounded-[12px] flex items-center justify-center`}
+                  >
+                    {success ? (
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    ) : (
+                      <Shield className="w-5 h-5 text-white" />
+                    )}
                   </div>
                   <div>
                     <h2 className="text-[17px] font-semibold text-[#1d1d1f]">
                       {success ? 'Hedge Created On-Chain' : 'Create On-Chain Hedge'}
                     </h2>
                     <p className="text-[13px] text-[#86868b]">
-                      {success ? (gaslessSavings ? 'x402 Gasless — Confirmed on Cronos' : `Confirmed on Cronos ${chainId === CHAIN_IDS.CRONOS_MAINNET ? 'Mainnet' : 'Testnet'}`) : (useGasless ? 'x402 Gasless — zero gas fees' : 'Sign with your wallet — on-chain execution')}
+                      {success
+                        ? gaslessSavings
+                          ? 'x402 Gasless — Confirmed on Cronos'
+                          : `Confirmed on Cronos ${chainId === CHAIN_IDS.CRONOS_MAINNET ? 'Mainnet' : 'Testnet'}`
+                        : useGasless
+                          ? 'x402 Gasless — zero gas fees'
+                          : 'Sign with your wallet — on-chain execution'}
                     </p>
                   </div>
                 </div>
-                <button onClick={handleClose} className="p-2 hover:bg-[#f5f5f7] rounded-full transition-colors">
+                <button
+                  onClick={handleClose}
+                  className="p-2 hover:bg-[#f5f5f7] rounded-full transition-colors"
+                >
                   <X className="w-5 h-5 text-[#86868b]" />
                 </button>
               </div>
@@ -697,14 +765,18 @@ export function ManualHedgeModal({
                     <div className="w-16 h-16 bg-[#34C759]/10 rounded-full flex items-center justify-center mb-4">
                       <CheckCircle className="w-10 h-10 text-[#34C759]" />
                     </div>
-                    <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">On-Chain Hedge Active</h3>
+                    <h3 className="text-[17px] font-semibold text-[#1d1d1f] mb-1">
+                      On-Chain Hedge Active
+                    </h3>
                     <p className="text-[13px] text-[#86868b] text-center">
                       Your {success.hedgeType} position on {success.asset} is live on the blockchain
                     </p>
                     {gaslessSavings && (
                       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#AF52DE]/10 rounded-full mt-2">
                         <Zap className="w-3.5 h-3.5 text-[#AF52DE]" />
-                        <span className="text-[11px] font-semibold text-[#AF52DE]">x402 Gasless — You saved {gaslessSavings} in gas!</span>
+                        <span className="text-[11px] font-semibold text-[#AF52DE]">
+                          x402 Gasless — You saved {gaslessSavings} in gas!
+                        </span>
                       </div>
                     )}
                   </div>
@@ -713,7 +785,9 @@ export function ManualHedgeModal({
                   <div className="p-4 bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px] space-y-3">
                     <div className="flex items-center gap-2">
                       <span className="text-[14px]">⛓</span>
-                      <span className="text-[13px] font-semibold text-[#FF9500]">ON-CHAIN VERIFIED</span>
+                      <span className="text-[13px] font-semibold text-[#FF9500]">
+                        ON-CHAIN VERIFIED
+                      </span>
                     </div>
                     <TxHashDisplay hash={success.txHash} label="Transaction" />
                     <a
@@ -730,21 +804,29 @@ export function ManualHedgeModal({
                   <div className="p-4 bg-[#f5f5f7] rounded-[12px] space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">Type:</span>
-                      <span className={`text-[12px] font-bold ${success.hedgeType === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#34C759]'}`}>
+                      <span
+                        className={`text-[12px] font-bold ${success.hedgeType === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#34C759]'}`}
+                      >
                         {success.hedgeType}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">Asset:</span>
-                      <span className="text-[12px] font-semibold text-[#1d1d1f]">{success.asset}-PERP</span>
+                      <span className="text-[12px] font-semibold text-[#1d1d1f]">
+                        {success.asset}-PERP
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">Collateral:</span>
-                      <span className="text-[12px] font-semibold text-[#1d1d1f]">{parseFloat(success.collateral).toLocaleString()} USDC</span>
+                      <span className="text-[12px] font-semibold text-[#1d1d1f]">
+                        {parseFloat(success.collateral).toLocaleString()} USDC
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">Leverage:</span>
-                      <span className="text-[12px] font-semibold text-[#1d1d1f]">{success.leverage}x</span>
+                      <span className="text-[12px] font-semibold text-[#1d1d1f]">
+                        {success.leverage}x
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">Notional:</span>
@@ -755,12 +837,16 @@ export function ManualHedgeModal({
                     <div className="flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">Signed by:</span>
                       <code className="text-[11px] font-mono bg-white px-2 py-0.5 rounded text-[#1d1d1f]">
-                        {address?.substring(0, 8)}...{address?.substring((address?.length || 0) - 6)}
+                        {address?.substring(0, 8)}...
+                        {address?.substring((address?.length || 0) - 6)}
                       </code>
                     </div>
                   </div>
 
-                  <button onClick={handleClose} className="w-full px-4 py-3 bg-[#007AFF] text-white rounded-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all">
+                  <button
+                    onClick={handleClose}
+                    className="w-full px-4 py-3 bg-[#007AFF] text-white rounded-[12px] font-semibold hover:opacity-90 active:scale-[0.98] transition-all"
+                  >
                     Done
                   </button>
                 </div>
@@ -797,7 +883,10 @@ export function ManualHedgeModal({
                         <p className="text-[13px] text-[#FF3B30] font-medium">{error}</p>
                         {txStep === 'error' && (
                           <button
-                            onClick={() => { setTxStep('idle'); setError(null); }}
+                            onClick={() => {
+                              setTxStep('idle');
+                              setError(null);
+                            }}
                             className="text-[12px] text-[#007AFF] mt-1 hover:underline"
                           >
                             Try again
@@ -819,19 +908,27 @@ export function ManualHedgeModal({
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Zap className={`w-4 h-4 ${useGasless ? 'text-[#AF52DE]' : 'text-[#86868b]'}`} />
+                      <Zap
+                        className={`w-4 h-4 ${useGasless ? 'text-[#AF52DE]' : 'text-[#86868b]'}`}
+                      />
                       <div className="text-left">
-                        <span className={`text-[13px] font-semibold ${useGasless ? 'text-[#AF52DE]' : 'text-[#1d1d1f]'}`}>
+                        <span
+                          className={`text-[13px] font-semibold ${useGasless ? 'text-[#AF52DE]' : 'text-[#1d1d1f]'}`}
+                        >
                           x402 Gasless Mode
                         </span>
                         <p className="text-[11px] text-[#86868b]">
-                          {useGasless ? 'Zero gas fees — server relays your transaction' : 'You pay gas from your CRO balance'}
+                          {useGasless
+                            ? 'Zero gas fees — server relays your transaction'
+                            : 'You pay gas from your CRO balance'}
                         </p>
                       </div>
                     </div>
-                    <div className={`w-10 h-6 rounded-full transition-all flex items-center ${
-                      useGasless ? 'bg-[#AF52DE] justify-end' : 'bg-[#e8e8ed] justify-start'
-                    }`}>
+                    <div
+                      className={`w-10 h-6 rounded-full transition-all flex items-center ${
+                        useGasless ? 'bg-[#AF52DE] justify-end' : 'bg-[#e8e8ed] justify-start'
+                      }`}
+                    >
                       <div className="w-5 h-5 bg-white rounded-full shadow-sm mx-0.5" />
                     </div>
                   </button>
@@ -841,10 +938,15 @@ export function ManualHedgeModal({
                     <Wallet className="w-4 h-4 text-[#007AFF]" />
                     <div className="flex-1 flex items-center justify-between">
                       <span className="text-[12px] text-[#86868b]">
-                        {address ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}` : 'Not connected'}
+                        {address
+                          ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}`
+                          : 'Not connected'}
                       </span>
                       <span className="text-[12px] font-semibold text-[#1d1d1f]">
-                        {parseFloat(usdcBalance).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDC
+                        {parseFloat(usdcBalance).toLocaleString('en-US', {
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        USDC
                       </span>
                     </div>
                   </div>
@@ -860,11 +962,19 @@ export function ManualHedgeModal({
                         onClick={() => setHedgeType('SHORT')}
                         disabled={isBusy}
                         className={`p-3 rounded-[12px] border-2 transition-all ${
-                          hedgeType === 'SHORT' ? 'border-[#FF3B30] bg-[#FF3B30]/10' : 'border-[#e8e8ed] hover:border-[#FF3B30]/30'
+                          hedgeType === 'SHORT'
+                            ? 'border-[#FF3B30] bg-[#FF3B30]/10'
+                            : 'border-[#e8e8ed] hover:border-[#FF3B30]/30'
                         }`}
                       >
-                        <TrendingDown className={`w-5 h-5 mx-auto mb-1 ${hedgeType === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#86868b]'}`} />
-                        <div className={`text-[15px] font-semibold ${hedgeType === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#1d1d1f]'}`}>SHORT</div>
+                        <TrendingDown
+                          className={`w-5 h-5 mx-auto mb-1 ${hedgeType === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#86868b]'}`}
+                        />
+                        <div
+                          className={`text-[15px] font-semibold ${hedgeType === 'SHORT' ? 'text-[#FF3B30]' : 'text-[#1d1d1f]'}`}
+                        >
+                          SHORT
+                        </div>
                         <div className="text-[11px] text-[#86868b]">Profit from price drop</div>
                       </button>
                       <button
@@ -872,11 +982,19 @@ export function ManualHedgeModal({
                         onClick={() => setHedgeType('LONG')}
                         disabled={isBusy}
                         className={`p-3 rounded-[12px] border-2 transition-all ${
-                          hedgeType === 'LONG' ? 'border-[#34C759] bg-[#34C759]/10' : 'border-[#e8e8ed] hover:border-[#34C759]/30'
+                          hedgeType === 'LONG'
+                            ? 'border-[#34C759] bg-[#34C759]/10'
+                            : 'border-[#e8e8ed] hover:border-[#34C759]/30'
                         }`}
                       >
-                        <TrendingUp className={`w-5 h-5 mx-auto mb-1 ${hedgeType === 'LONG' ? 'text-[#34C759]' : 'text-[#86868b]'}`} />
-                        <div className={`text-[15px] font-semibold ${hedgeType === 'LONG' ? 'text-[#34C759]' : 'text-[#1d1d1f]'}`}>LONG</div>
+                        <TrendingUp
+                          className={`w-5 h-5 mx-auto mb-1 ${hedgeType === 'LONG' ? 'text-[#34C759]' : 'text-[#86868b]'}`}
+                        />
+                        <div
+                          className={`text-[15px] font-semibold ${hedgeType === 'LONG' ? 'text-[#34C759]' : 'text-[#1d1d1f]'}`}
+                        >
+                          LONG
+                        </div>
                         <div className="text-[11px] text-[#86868b]">Profit from price rise</div>
                       </button>
                     </div>
@@ -894,7 +1012,9 @@ export function ManualHedgeModal({
                       className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] bg-white text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                     >
                       {availableAssets.map((a) => (
-                        <option key={a} value={a}>{a}-PERP</option>
+                        <option key={a} value={a}>
+                          {a}-PERP
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -963,7 +1083,9 @@ export function ManualHedgeModal({
                         step="0.01"
                         value={targetPrice}
                         onChange={(e) => setTargetPrice(e.target.value)}
-                        placeholder={hedgeType === 'SHORT' ? 'Lower than entry' : 'Higher than entry'}
+                        placeholder={
+                          hedgeType === 'SHORT' ? 'Lower than entry' : 'Higher than entry'
+                        }
                         disabled={isBusy}
                         className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                       />
@@ -977,7 +1099,9 @@ export function ManualHedgeModal({
                         step="0.01"
                         value={stopLoss}
                         onChange={(e) => setStopLoss(e.target.value)}
-                        placeholder={hedgeType === 'SHORT' ? 'Higher than entry' : 'Lower than entry'}
+                        placeholder={
+                          hedgeType === 'SHORT' ? 'Higher than entry' : 'Lower than entry'
+                        }
                         disabled={isBusy}
                         className="w-full px-4 py-3 rounded-[12px] border border-[#e8e8ed] text-[15px] focus:outline-none focus:border-[#007AFF] transition-colors text-[#86868b]"
                       />
@@ -1003,14 +1127,24 @@ export function ManualHedgeModal({
                   {potentialPnL && (
                     <div className="p-4 bg-[#f5f5f7] rounded-[12px] space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-semibold text-[#86868b]">Potential P&L at Target:</span>
-                        <span className={`text-[17px] font-bold ${parseFloat(potentialPnL) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}>
-                          {parseFloat(potentialPnL) >= 0 ? '+' : ''}{parseFloat(potentialPnL).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDC
+                        <span className="text-[13px] font-semibold text-[#86868b]">
+                          Potential P&L at Target:
+                        </span>
+                        <span
+                          className={`text-[17px] font-bold ${parseFloat(potentialPnL) >= 0 ? 'text-[#34C759]' : 'text-[#FF3B30]'}`}
+                        >
+                          {parseFloat(potentialPnL) >= 0 ? '+' : ''}
+                          {parseFloat(potentialPnL).toLocaleString('en-US', {
+                            maximumFractionDigits: 2,
+                          })}{' '}
+                          USDC
                         </span>
                       </div>
                       <div className="text-[10px] text-[#86868b] space-y-0.5">
                         <div>Collateral: {collateralNum.toLocaleString()} USDC</div>
-                        <div>Notional ({leverage}x): ${notionalValue.toLocaleString()} USDC</div>
+                        <div>
+                          Notional ({leverage}x): ${notionalValue.toLocaleString()} USDC
+                        </div>
                         <div>Oracle Fee: 0.06 tCRO (paid as msg.value)</div>
                       </div>
                     </div>
@@ -1020,7 +1154,9 @@ export function ManualHedgeModal({
                   <div className="p-3 bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px] space-y-2">
                     <div className="flex items-center gap-2">
                       <Coins className="w-4 h-4 text-[#FF9500]" />
-                      <span className="text-[12px] font-semibold text-[#FF9500]">Need Test USDC?</span>
+                      <span className="text-[12px] font-semibold text-[#FF9500]">
+                        Need Test USDC?
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       {[
@@ -1040,10 +1176,14 @@ export function ManualHedgeModal({
                       ))}
                     </div>
                     {isMintConfirmedTracked && (
-                      <p className="text-[10px] text-[#34C759] font-medium">Minted successfully! Balance updated.</p>
+                      <p className="text-[10px] text-[#34C759] font-medium">
+                        Minted successfully! Balance updated.
+                      </p>
                     )}
                     {mintErrorTracked && (
-                      <p className="text-[10px] text-[#FF3B30] truncate">{mintErrorTracked.message.split('\n')[0]}</p>
+                      <p className="text-[10px] text-[#FF3B30] truncate">
+                        {mintErrorTracked.message.split('\n')[0]}
+                      </p>
                     )}
                   </div>
 
@@ -1067,12 +1207,18 @@ export function ManualHedgeModal({
                           {txStep === 'signing'
                             ? 'Signing...'
                             : txStep === 'approving' || txStep === 'approve-confirming'
-                            ? 'Approving...'
-                            : useGasless ? 'Creating (Gasless)...' : 'Creating...'}
+                              ? 'Approving...'
+                              : useGasless
+                                ? 'Creating (Gasless)...'
+                                : 'Creating...'}
                         </>
                       ) : (
                         <>
-                          {useGasless ? <Zap className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                          {useGasless ? (
+                            <Zap className="w-4 h-4" />
+                          ) : (
+                            <Shield className="w-4 h-4" />
+                          )}
                           {useGasless ? '⚡ Create Gasless Hedge' : 'Create On-Chain Hedge'}
                         </>
                       )}

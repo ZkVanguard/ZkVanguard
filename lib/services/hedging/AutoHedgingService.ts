@@ -1,6 +1,6 @@
 /**
  * Auto-Hedging Service
- * 
+ *
  * Background service that:
  * 1. Continuously monitors portfolio risk
  * 2. Updates hedge PnL with live prices
@@ -11,7 +11,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { riskToleranceToThreshold, computeRiskScore } from '@/lib/services/hedging/risk-scoring';
-import { getActiveHedges, createHedge, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges, createHedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { getAgentOrchestrator } from '../agent-orchestrator';
 import { ethers } from 'ethers';
@@ -19,13 +19,24 @@ import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
-import { getUnifiedPriceProvider, getHedgeExecutionPrice } from '../market-data/unified-price-provider';
+import {
+  getUnifiedPriceProvider,
+  getHedgeExecutionPrice,
+} from '../market-data/unified-price-provider';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
-import { COMMUNITY_POOL_PORTFOLIO_ID, COMMUNITY_POOL_ADDRESS, SUI_COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
+import {
+  COMMUNITY_POOL_PORTFOLIO_ID,
+  COMMUNITY_POOL_ADDRESS,
+  SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+  isCommunityPoolPortfolio,
+} from '@/lib/constants';
 import { calculatePoolNAV } from '../cronos/CommunityPoolService';
 import { getPoolStats as getUnifiedPoolStats } from '../CommunityPoolStatsService';
 import { getCentralizedHedgeManager } from './CentralizedHedgeManager';
-import { PredictionAggregatorService, type AggregatedPrediction } from '../market-data/PredictionAggregatorService';
+import {
+  PredictionAggregatorService,
+  type AggregatedPrediction,
+} from '../market-data/PredictionAggregatorService';
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 import {
   HEDGE_CONFIG as CONFIG,
@@ -34,14 +45,7 @@ import {
   calculateConcentrationRisk,
   generateHedgeRecommendations,
 } from './hedge-risk-math';
-import {
-  SIZING_LIMITS,
-  isPriceFreshEnough,
-  safeLeverage,
-  buildDecisionToken,
-} from './calibration';
-
-// Re-export shared types for existing consumers
+import { SIZING_LIMITS, isPriceFreshEnough, safeLeverage, buildDecisionToken } from './calibration'; // Re-export shared types for existing consumers
 export type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 class AutoHedgingService {
@@ -81,9 +85,9 @@ class AutoHedgingService {
 
     // Initial PnL update - Wrap in try/catch and log error but don't crash
     try {
-        await this.updateAllHedgePnL();
+      await this.updateAllHedgePnL();
     } catch (e: any) {
-        logger.error('[AutoHedging] Initial PnL update failed (quota limit?)', { error: e?.message });
+      logger.error('[AutoHedging] Initial PnL update failed (quota limit?)', { error: e?.message });
     }
 
     // Start PnL update loop — with overlap guard
@@ -97,9 +101,11 @@ class AutoHedgingService {
         await this.updateAllHedgePnL();
       } catch (error: any) {
         if (error?.message?.includes('usage limit') || error?.message?.includes('quota')) {
-            logger.warn('[AutoHedging] Database quota reached, pausing updates temporarily...');
+          logger.warn('[AutoHedging] Database quota reached, pausing updates temporarily...');
         } else {
-            logger.error('[AutoHedging] PnL update error', { error: error instanceof Error ? error.message : error });
+          logger.error('[AutoHedging] PnL update error', {
+            error: error instanceof Error ? error.message : error,
+          });
         }
       } finally {
         this.pnlUpdateInProgress = false;
@@ -116,7 +122,9 @@ class AutoHedgingService {
       try {
         await this.checkAllPortfolioRisks();
       } catch (error) {
-        logger.error('[AutoHedging] Risk check error', { error: error instanceof Error ? error.message : error });
+        logger.error('[AutoHedging] Risk check error', {
+          error: error instanceof Error ? error.message : error,
+        });
       } finally {
         this.riskCheckInProgress = false;
       }
@@ -134,7 +142,7 @@ class AutoHedgingService {
   /**
    * Load all enabled portfolio configurations from storage
    * This replaces hardcoded portfolio IDs with dynamic database-driven configuration
-   * 
+   *
    * NOTE: Community Pool is ALWAYS auto-enrolled for protective monitoring
    */
   private async loadPortfoliosFromStorage(): Promise<void> {
@@ -158,16 +166,18 @@ class AutoHedgingService {
 
       // Load additional portfolios from storage
       const storedConfigs = await getAutoHedgeConfigs();
-      
+
       // Filter out community pool from stored configs (we already enrolled it above)
-      const otherConfigs = storedConfigs.filter(c => c.portfolioId !== COMMUNITY_POOL_PORTFOLIO_ID);
-      
+      const otherConfigs = storedConfigs.filter(
+        (c) => c.portfolioId !== COMMUNITY_POOL_PORTFOLIO_ID
+      );
+
       if (otherConfigs.length > 0) {
         logger.info('[AutoHedging] Loading additional configurations from storage', {
           count: otherConfigs.length,
-          portfolios: otherConfigs.map(c => c.portfolioId)
+          portfolios: otherConfigs.map((c) => c.portfolioId),
         });
-        
+
         for (const config of otherConfigs) {
           // Convert storage format to service format
           this.enableForPortfolio({
@@ -180,14 +190,14 @@ class AutoHedgingService {
           });
         }
       }
-      
+
       logger.info('[AutoHedging] All portfolios loaded (including Community Pool)', {
         activeCount: this.autoHedgeConfigs.size,
         portfolioIds: Array.from(this.autoHedgeConfigs.keys()),
       });
     } catch (error) {
       logger.error('[AutoHedging] Failed to load configurations from storage', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       // Even on error, Community Pool should still be enrolled from the code above
       // Service continues running with at least the community pool
@@ -237,28 +247,33 @@ class AutoHedgingService {
     });
 
     // Then asynchronously refine settings from on-chain data (non-blocking)
-    this.loadPortfolioSettings(config).then(updatedConfig => {
-      // Only apply if this is still the latest version (no newer enableForPortfolio call)
-      if (this.configVersions.get(config.portfolioId) === version) {
-        this.autoHedgeConfigs.set(updatedConfig.portfolioId, updatedConfig);
-        logger.info('[AutoHedging] Portfolio settings refined from on-chain', {
-          portfolioId: updatedConfig.portfolioId,
-          riskThreshold: updatedConfig.riskThreshold,
-        });
-      } else {
-        logger.debug('[AutoHedging] Skipping stale on-chain config update', {
-          portfolioId: config.portfolioId,
-          staleVersion: version,
-          currentVersion: this.configVersions.get(config.portfolioId),
-        });
-      }
-    }).catch(error => {
-      // Config already set above, just log the warning
-      logger.warn('[AutoHedging] Failed to load on-chain portfolio settings, using stored defaults', {
-        portfolioId: config.portfolioId,
-        error: error instanceof Error ? error.message : String(error),
+    this.loadPortfolioSettings(config)
+      .then((updatedConfig) => {
+        // Only apply if this is still the latest version (no newer enableForPortfolio call)
+        if (this.configVersions.get(config.portfolioId) === version) {
+          this.autoHedgeConfigs.set(updatedConfig.portfolioId, updatedConfig);
+          logger.info('[AutoHedging] Portfolio settings refined from on-chain', {
+            portfolioId: updatedConfig.portfolioId,
+            riskThreshold: updatedConfig.riskThreshold,
+          });
+        } else {
+          logger.debug('[AutoHedging] Skipping stale on-chain config update', {
+            portfolioId: config.portfolioId,
+            staleVersion: version,
+            currentVersion: this.configVersions.get(config.portfolioId),
+          });
+        }
+      })
+      .catch((error) => {
+        // Config already set above, just log the warning
+        logger.warn(
+          '[AutoHedging] Failed to load on-chain portfolio settings, using stored defaults',
+          {
+            portfolioId: config.portfolioId,
+            error: error instanceof Error ? error.message : String(error),
+          }
+        );
       });
-    });
   }
 
   /**
@@ -284,12 +299,12 @@ class AutoHedgingService {
       // Risk tolerance will be fetched from RWAManager in fetchPortfolioData
       // For now, use the config's default or set a reasonable default
       const riskTolerance = config.riskThreshold || 50; // Default medium risk
-      
+
       // Map risk tolerance (0-100) to risk threshold (1-10)
       // Lower tolerance = lower threshold = more aggressive hedging
       // Higher tolerance = higher threshold = less hedging
       const calculatedThreshold = riskToleranceToThreshold(riskTolerance);
-      
+
       logger.info('[AutoHedging] Using portfolio settings', {
         portfolioId: config.portfolioId,
         riskTolerance,
@@ -331,9 +346,9 @@ class AutoHedgingService {
     try {
       const manager = getCentralizedHedgeManager();
       let snapshot = manager.getLastSnapshot();
-      
+
       // Use existing snapshot if fresh (< 15s), else fetch new one
-      if (!snapshot || (Date.now() - snapshot.timestamp) > 15_000) {
+      if (!snapshot || Date.now() - snapshot.timestamp > 15_000) {
         snapshot = await manager.fetchMarketSnapshot();
       }
 
@@ -349,18 +364,18 @@ class AutoHedgingService {
    */
   private async updateAllHedgePnLLegacy(): Promise<{ updated: number; errors: number }> {
     const activeHedges = await getActiveHedges();
-    
+
     if (activeHedges.length === 0) {
       return { updated: 0, errors: 0 };
     }
 
     // Get unique assets
-    const uniqueAssets = [...new Set(activeHedges.map(h => h.asset))];
-    
+    const uniqueAssets = [...new Set(activeHedges.map((h) => h.asset))];
+
     // Use unified price provider for real-time prices
     const priceProvider = getUnifiedPriceProvider();
     await priceProvider.initialize();
-    
+
     // Fetch all prices from unified provider (instant, non-blocking)
     const priceMap = new Map<string, number>();
     for (const asset of uniqueAssets) {
@@ -450,7 +465,9 @@ class AutoHedgingService {
         durationMs: result.durationMs,
       });
     } catch (error) {
-      logger.error('[AutoHedging] Centralized risk check failed, falling back to serial', { error });
+      logger.error('[AutoHedging] Centralized risk check failed, falling back to serial', {
+        error,
+      });
       // Fallback to serial per-portfolio assessment
       await this.checkAllPortfolioRisksSerial();
     }
@@ -491,7 +508,11 @@ class AutoHedgingService {
    * Assess risk for a portfolio using comprehensive data
    * Fetches positions, allocations, risk metrics, and active hedges
    */
-  async assessPortfolioRisk(portfolioId: number, walletAddress: string, chain?: string): Promise<RiskAssessment> {
+  async assessPortfolioRisk(
+    portfolioId: number,
+    walletAddress: string,
+    chain?: string
+  ): Promise<RiskAssessment> {
     // Special handling for CommunityPool (portfolioId = COMMUNITY_POOL_PORTFOLIO_ID or SUI_COMMUNITY_POOL_PORTFOLIO_ID)
     if (isCommunityPoolPortfolio(portfolioId)) {
       // SUI pool uses dedicated SUI risk assessment path
@@ -504,7 +525,7 @@ class AutoHedgingService {
     try {
       // Fetch comprehensive portfolio data from database
       const portfolioData = await this.fetchPortfolioData(portfolioId, walletAddress);
-      
+
       // Get AI agent analysis with full context
       const orchestrator = getAgentOrchestrator();
       const analysisResult = await orchestrator.analyzePortfolio({
@@ -526,15 +547,14 @@ class AutoHedgingService {
 
       // Combine database data with AI analysis
       const totalValue = portfolioData.totalValue || aiAnalysis?.totalValue || 0;
-      const positions = portfolioData.positions.length > 0 
-        ? portfolioData.positions 
-        : (aiAnalysis?.positions || []);
+      const positions =
+        portfolioData.positions.length > 0 ? portfolioData.positions : aiAnalysis?.positions || [];
 
       // Calculate risk metrics
       const drawdownPercent = calculateDrawdown(positions, totalValue);
       const volatility = calculateVolatility(positions);
       const concentrationRisk = calculateConcentrationRisk(positions, totalValue);
-      
+
       // Calculate comprehensive risk score (1-10) — see lib/services/hedging/risk-scoring.ts
       const riskScore = computeRiskScore({ drawdownPercent, volatility, concentrationRisk });
 
@@ -569,7 +589,10 @@ class AutoHedgingService {
         timestamp: Date.now(),
       };
     } catch (error) {
-      logger.error('[AutoHedging] Risk assessment error — treating as elevated risk', { portfolioId, error });
+      logger.error('[AutoHedging] Risk assessment error — treating as elevated risk', {
+        portfolioId,
+        error,
+      });
       // Unknown state = elevated risk, not safe default
       return {
         portfolioId,
@@ -593,35 +616,50 @@ class AutoHedgingService {
       const poolStats = await getUnifiedPoolStats();
       const totalShares = poolStats.totalShares;
       const onChainNAV = poolStats.totalNAV;
-      
+
       // Get market-adjusted NAV and share price from CommunityPoolService
       // This uses actual token holdings multiplied by live prices
       const marketData = await calculatePoolNAV();
-      const { totalValueUSD: marketNAV, sharePrice: marketSharePrice, allocations: marketAllocations } = marketData;
+      const {
+        totalValueUSD: marketNAV,
+        sharePrice: marketSharePrice,
+        allocations: marketAllocations,
+      } = marketData;
 
       // Build positions from market allocations with REAL volatility
-      const positions: Array<{ symbol: string; value: number; change24h: number; balance: number; volatility?: number }> = [];
+      const positions: Array<{
+        symbol: string;
+        value: number;
+        change24h: number;
+        balance: number;
+        volatility?: number;
+      }> = [];
       const marketDataService = getMarketDataService();
-      
+
       // Fetch extended prices with high/low for real volatility calculation
       const allocKeys = Object.keys(marketAllocations) as Array<keyof typeof marketAllocations>;
-      const symbols = allocKeys.filter(sym => marketAllocations[sym].valueUSD > 0);
+      const symbols = allocKeys.filter((sym) => marketAllocations[sym].valueUSD > 0);
       const extendedPrices = await marketDataService.getExtendedPrices(symbols);
-      
+
       for (const [symbol, data] of Object.entries(marketAllocations)) {
-        const alloc = data as { amount: number; price: number; valueUSD: number; percentage: number };
+        const alloc = data as {
+          amount: number;
+          price: number;
+          valueUSD: number;
+          percentage: number;
+        };
         if (alloc.valueUSD > 0) {
           const priceData = extendedPrices.get(symbol.toUpperCase());
-          
+
           // Calculate real volatility from 24h range if available
-          let volatility = 0.30; // Default 30%
+          let volatility = 0.3; // Default 30%
           if (priceData && priceData.price > 0 && priceData.high24h > 0 && priceData.low24h > 0) {
             const range = priceData.high24h - priceData.low24h;
             const intradayVol = range / priceData.price;
             volatility = intradayVol * Math.sqrt(365); // Annualized
             volatility = Math.max(0.01, Math.min(2.0, volatility)); // Clamp 1%-200%
           }
-          
+
           positions.push({
             symbol,
             value: alloc.valueUSD,
@@ -640,7 +678,7 @@ class AutoHedgingService {
         const { getNavHistory } = await import('@/lib/db/community-pool');
         const navHistory = await getNavHistory(30, 'cronos'); // Cronos pool only
         if (navHistory && navHistory.length > 0) {
-          const historicalPeak = Math.max(...navHistory.map(h => h.share_price || 0));
+          const historicalPeak = Math.max(...navHistory.map((h) => h.share_price || 0));
           peakSharePrice = Math.max(peakSharePrice, historicalPeak, marketSharePrice);
         } else {
           peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
@@ -648,9 +686,10 @@ class AutoHedgingService {
       } catch {
         peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
       }
-      const drawdownPercent = marketSharePrice < peakSharePrice
-        ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
-        : 0;
+      const drawdownPercent =
+        marketSharePrice < peakSharePrice
+          ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
+          : 0;
 
       // ==========================================
       // CRITICAL: Share Price vs Par Value Check
@@ -668,13 +707,13 @@ class AutoHedgingService {
         });
       }
 
-      logger.info('[AutoHedging] Community Pool market NAV', { 
+      logger.info('[AutoHedging] Community Pool market NAV', {
         onChainNAV,
         marketNAV,
         totalShares,
-        marketSharePrice, 
+        marketSharePrice,
         peakSharePrice,
-        inceptionPrice: INCEPTION_SHARE_PRICE, 
+        inceptionPrice: INCEPTION_SHARE_PRICE,
         drawdownPercent: drawdownPercent.toFixed(2) + '%',
         sharePriceLossFromPar: sharePriceLossPercent.toFixed(2) + '%',
         isBelowPar,
@@ -689,31 +728,35 @@ class AutoHedgingService {
       // Goal: Keep share price at or above $1.00
       // ANY deviation below $1.00 requires immediate hedging action
       let riskScore = 1;
-      
+
       // MOST IMPORTANT: Share price below par
       if (isBelowPar) {
-        if (sharePriceLossPercent >= 5) riskScore += 4;      // 5%+ below par = CRITICAL
-        else if (sharePriceLossPercent >= 3) riskScore += 3; // 3%+ below par = HIGH
-        else if (sharePriceLossPercent >= 2) riskScore += 3; // 2%+ below par = HIGH
-        else if (sharePriceLossPercent >= 1) riskScore += 2; // 1%+ below par = ELEVATED
-        else riskScore += 1;                                  // Any loss = WARNING
+        if (sharePriceLossPercent >= 5)
+          riskScore += 4; // 5%+ below par = CRITICAL
+        else if (sharePriceLossPercent >= 3)
+          riskScore += 3; // 3%+ below par = HIGH
+        else if (sharePriceLossPercent >= 2)
+          riskScore += 3; // 2%+ below par = HIGH
+        else if (sharePriceLossPercent >= 1)
+          riskScore += 2; // 1%+ below par = ELEVATED
+        else riskScore += 1; // Any loss = WARNING
       }
-      
+
       // Drawdown from peak (additional)
-      if (drawdownPercent > 0.5) riskScore += 1;  // Even small losses matter
-      if (drawdownPercent > 1.5) riskScore += 1;  // Moderate loss
-      if (drawdownPercent > 4) riskScore += 1;    // Significant loss
-      
+      if (drawdownPercent > 0.5) riskScore += 1; // Even small losses matter
+      if (drawdownPercent > 1.5) riskScore += 1; // Moderate loss
+      if (drawdownPercent > 4) riskScore += 1; // Significant loss
+
       // Volatility
-      if (volatility > 1.5) riskScore += 1;       // Lower vol threshold
-      if (volatility > 3) riskScore += 1;         // High volatility
-      
+      if (volatility > 1.5) riskScore += 1; // Lower vol threshold
+      if (volatility > 3) riskScore += 1; // High volatility
+
       // Concentration risk
       if (concentrationRisk > 30) riskScore += 1; // Any concentration risk
       if (concentrationRisk > 45) riskScore += 1; // High concentration
-      
+
       // Any negative 24h change across positions adds risk
-      const anyNegative = positions.some(p => p.change24h < -1);
+      const anyNegative = positions.some((p) => p.change24h < -1);
       if (anyNegative) riskScore += 1;
 
       // 🔮 MULTI-SOURCE PREDICTION AGGREGATION: Combine multiple markets for optimal hedging
@@ -721,13 +764,17 @@ class AutoHedgingService {
       let aggregatedPrediction: AggregatedPrediction | null = null;
       try {
         aggregatedPrediction = await PredictionAggregatorService.getAggregatedPrediction();
-        
+
         if (aggregatedPrediction && aggregatedPrediction.consensus > 50) {
           // High consensus + bearish direction = elevated risk
           if (aggregatedPrediction.direction === 'DOWN') {
             // Scale risk increase by confidence and consensus
-            const riskIncrease = aggregatedPrediction.confidence >= 70 ? 2 : 
-                                 aggregatedPrediction.confidence >= 55 ? 1 : 0;
+            const riskIncrease =
+              aggregatedPrediction.confidence >= 70
+                ? 2
+                : aggregatedPrediction.confidence >= 55
+                  ? 1
+                  : 0;
             if (riskIncrease > 0) {
               riskScore += riskIncrease;
               logger.info('[AutoHedging] Aggregated prediction elevated risk (bearish consensus)', {
@@ -742,18 +789,23 @@ class AutoHedgingService {
             }
           }
           // Strong bullish consensus with high confidence can reduce risk
-          else if (aggregatedPrediction.direction === 'UP' && 
-                   aggregatedPrediction.confidence >= 65 && 
-                   aggregatedPrediction.consensus >= 70) {
+          else if (
+            aggregatedPrediction.direction === 'UP' &&
+            aggregatedPrediction.confidence >= 65 &&
+            aggregatedPrediction.consensus >= 70
+          ) {
             riskScore = Math.max(1, riskScore - 1);
-            logger.info('[AutoHedging] Aggregated prediction reduced risk (strong bullish consensus)', {
-              direction: aggregatedPrediction.direction,
-              confidence: aggregatedPrediction.confidence,
-              consensus: aggregatedPrediction.consensus,
-            });
+            logger.info(
+              '[AutoHedging] Aggregated prediction reduced risk (strong bullish consensus)',
+              {
+                direction: aggregatedPrediction.direction,
+                confidence: aggregatedPrediction.confidence,
+                consensus: aggregatedPrediction.consensus,
+              }
+            );
           }
         }
-        
+
         logger.info('[AutoHedging] Multi-source prediction aggregation complete', {
           direction: aggregatedPrediction?.direction,
           confidence: aggregatedPrediction?.confidence,
@@ -763,15 +815,20 @@ class AutoHedgingService {
           sourceCount: aggregatedPrediction?.sources.length,
         });
       } catch (predictionErr) {
-        logger.debug('[AutoHedging] Prediction aggregation unavailable (non-critical)', { 
-          error: predictionErr instanceof Error ? predictionErr.message : String(predictionErr) 
+        logger.debug('[AutoHedging] Prediction aggregation unavailable (non-critical)', {
+          error: predictionErr instanceof Error ? predictionErr.message : String(predictionErr),
         });
       }
 
       riskScore = Math.min(riskScore, 10);
 
       // Fetch active hedges for community pool (gracefully handle DB unavailability)
-      let activeHedges: Array<{ asset: string; side: string; size: number; notionalValue: number }> = [];
+      let activeHedges: Array<{
+        asset: string;
+        side: string;
+        size: number;
+        notionalValue: number;
+      }> = [];
       try {
         const hedgesResult = await query(
           `SELECT asset, side, size, notional_value
@@ -780,7 +837,7 @@ class AutoHedgingService {
           [COMMUNITY_POOL_PORTFOLIO_ID]
         );
 
-        activeHedges = hedgesResult.map(h => ({
+        activeHedges = hedgesResult.map((h) => ({
           asset: String(h.asset || ''),
           side: String(h.side || ''),
           size: parseFloat(String(h.size)) || 0,
@@ -795,10 +852,15 @@ class AutoHedgingService {
       // Generate recommendations - convert allocations to Record<string, number>
       const allocationPercentages: Record<string, number> = {};
       for (const [symbol, data] of Object.entries(marketAllocations)) {
-        const alloc = data as { amount: number; price: number; valueUSD: number; percentage: number };
+        const alloc = data as {
+          amount: number;
+          price: number;
+          valueUSD: number;
+          percentage: number;
+        };
         allocationPercentages[symbol] = alloc.percentage;
       }
-      
+
       const recommendations = generateHedgeRecommendations(
         positions,
         marketNAV,
@@ -815,14 +877,16 @@ class AutoHedgingService {
         drawdownPercent: drawdownPercent.toFixed(2),
         volatility: volatility.toFixed(2),
         riskScore,
-        aggregatedPrediction: aggregatedPrediction ? {
-          direction: aggregatedPrediction.direction,
-          confidence: aggregatedPrediction.confidence,
-          consensus: aggregatedPrediction.consensus,
-          recommendation: aggregatedPrediction.recommendation,
-          sizeMultiplier: aggregatedPrediction.sizeMultiplier,
-          sourceCount: aggregatedPrediction.sources.length,
-        } : null,
+        aggregatedPrediction: aggregatedPrediction
+          ? {
+              direction: aggregatedPrediction.direction,
+              confidence: aggregatedPrediction.confidence,
+              consensus: aggregatedPrediction.consensus,
+              recommendation: aggregatedPrediction.recommendation,
+              sizeMultiplier: aggregatedPrediction.sizeMultiplier,
+              sourceCount: aggregatedPrediction.sources.length,
+            }
+          : null,
         recommendations: recommendations.length,
       });
 
@@ -830,7 +894,7 @@ class AutoHedgingService {
       // This engages RiskAgent, HedgingAgent, and other specialized agents
       try {
         const orchestrator = getAgentOrchestrator();
-        
+
         // Run parallel agent analysis for comprehensive pool management
         const [riskAnalysis, hedgeAnalysis] = await Promise.all([
           orchestrator.assessRisk({
@@ -862,7 +926,9 @@ class AutoHedgingService {
 
         // Enhance recommendations with agent insights if available
         if (hedgeAnalysis.success && hedgeAnalysis.data) {
-          const agentHedgeData = hedgeAnalysis.data as { recommendations?: Array<{ asset: string; action: string; confidence: number }> };
+          const agentHedgeData = hedgeAnalysis.data as {
+            recommendations?: Array<{ asset: string; action: string; confidence: number }>;
+          };
           if (agentHedgeData.recommendations?.length) {
             logger.info('[AutoHedging] HedgingAgent provided recommendations for pool', {
               count: agentHedgeData.recommendations.length,
@@ -871,9 +937,12 @@ class AutoHedgingService {
         }
       } catch (agentError) {
         // Non-critical: manual analysis still valid, agents are enhancement
-        logger.warn('[AutoHedging] Agent orchestrator analysis failed (continuing with manual assessment)', {
-          error: agentError instanceof Error ? agentError.message : String(agentError),
-        });
+        logger.warn(
+          '[AutoHedging] Agent orchestrator analysis failed (continuing with manual assessment)',
+          {
+            error: agentError instanceof Error ? agentError.message : String(agentError),
+          }
+        );
       }
 
       return {
@@ -883,24 +952,29 @@ class AutoHedgingService {
         volatility,
         riskScore,
         recommendations,
-        aggregatedPrediction: aggregatedPrediction ? {
-          direction: aggregatedPrediction.direction,
-          confidence: aggregatedPrediction.confidence,
-          consensus: aggregatedPrediction.consensus,
-          recommendation: aggregatedPrediction.recommendation,
-          sizeMultiplier: aggregatedPrediction.sizeMultiplier,
-          sources: aggregatedPrediction.sources.map(s => ({
-            name: s.name,
-            available: true, // All sources in the array have been fetched
-            weight: s.weight,
-            direction: s.direction,
-            confidence: s.confidence,
-          })),
-        } : null,
+        aggregatedPrediction: aggregatedPrediction
+          ? {
+              direction: aggregatedPrediction.direction,
+              confidence: aggregatedPrediction.confidence,
+              consensus: aggregatedPrediction.consensus,
+              recommendation: aggregatedPrediction.recommendation,
+              sizeMultiplier: aggregatedPrediction.sizeMultiplier,
+              sources: aggregatedPrediction.sources.map((s) => ({
+                name: s.name,
+                available: true, // All sources in the array have been fetched
+                weight: s.weight,
+                direction: s.direction,
+                confidence: s.confidence,
+              })),
+            }
+          : null,
         timestamp: Date.now(),
       };
     } catch (error) {
-      logger.error('[AutoHedging] CommunityPool risk assessment failed — treating as ELEVATED risk', { error });
+      logger.error(
+        '[AutoHedging] CommunityPool risk assessment failed — treating as ELEVATED risk',
+        { error }
+      );
       // CRITICAL: Unknown state = elevated risk, NOT safe default
       // If we can't assess the pool, assume something is wrong
       return {
@@ -924,7 +998,9 @@ class AutoHedgingService {
       const { getSuiUsdcPoolService } = await import('@/lib/services/sui/SuiCommunityPoolService');
       const { getNavHistory } = await import('@/lib/db/community-pool');
 
-      const network = ((process.env.SUI_NETWORK || 'mainnet').trim().replace(/[\r\n]+/g, '')) as 'mainnet' | 'testnet';
+      const network = (process.env.SUI_NETWORK || 'mainnet').trim().replace(/[\r\n]+/g, '') as
+        | 'mainnet'
+        | 'testnet';
       const suiService = getSuiUsdcPoolService(network);
       const poolStats = await suiService.getPoolStats();
 
@@ -938,7 +1014,7 @@ class AutoHedgingService {
       try {
         const navHistory = await getNavHistory(30, 'sui');
         if (navHistory && navHistory.length > 0) {
-          const historicalPeak = Math.max(...navHistory.map(h => h.share_price || 0));
+          const historicalPeak = Math.max(...navHistory.map((h) => h.share_price || 0));
           peakSharePrice = Math.max(peakSharePrice, historicalPeak, marketSharePrice);
         } else {
           peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
@@ -946,12 +1022,19 @@ class AutoHedgingService {
       } catch {
         peakSharePrice = Math.max(INCEPTION_SHARE_PRICE, marketSharePrice);
       }
-      const drawdownPercent = marketSharePrice < peakSharePrice
-        ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
-        : 0;
+      const drawdownPercent =
+        marketSharePrice < peakSharePrice
+          ? ((peakSharePrice - marketSharePrice) / peakSharePrice) * 100
+          : 0;
 
       // Build positions from pool allocations
-      const positions: Array<{ symbol: string; value: number; change24h: number; balance: number; volatility?: number }> = [];
+      const positions: Array<{
+        symbol: string;
+        value: number;
+        change24h: number;
+        balance: number;
+        volatility?: number;
+      }> = [];
       const marketDataService = getMarketDataService();
       const suiAssets = ['BTC', 'ETH', 'SUI', 'CRO'];
       const extendedPrices = await marketDataService.getExtendedPrices(suiAssets);
@@ -961,7 +1044,7 @@ class AutoHedgingService {
         if (priceData && priceData.price > 0) {
           const allocation = (poolStats as any).allocations?.[asset] || 25;
           const valueUSD = marketNAV * (allocation / 100);
-          let volatility = 0.30;
+          let volatility = 0.3;
           if (priceData.high24h > 0 && priceData.low24h > 0) {
             const range = priceData.high24h - priceData.low24h;
             const intradayVol = range / priceData.price;
@@ -994,18 +1077,23 @@ class AutoHedgingService {
       if (drawdownPercent > 4) riskScore += 1;
       if (volatility > 1.5) riskScore += 1;
       if (concentrationRisk > 30) riskScore += 1;
-      const anyNegative = positions.some(p => p.change24h < -1);
+      const anyNegative = positions.some((p) => p.change24h < -1);
       if (anyNegative) riskScore += 1;
       riskScore = Math.min(riskScore, 10);
 
       // Active hedges for SUI pool
-      let activeHedges: Array<{ asset: string; side: string; size: number; notionalValue: number }> = [];
+      let activeHedges: Array<{
+        asset: string;
+        side: string;
+        size: number;
+        notionalValue: number;
+      }> = [];
       try {
         const hedgesResult = await query(
           `SELECT asset, side, size, notional_value FROM hedges WHERE portfolio_id = $1 AND status = 'active' AND chain = 'sui'`,
           [SUI_COMMUNITY_POOL_PORTFOLIO_ID]
         );
-        activeHedges = hedgesResult.map(h => ({
+        activeHedges = hedgesResult.map((h) => ({
           asset: String(h.asset || ''),
           side: String(h.side || ''),
           size: parseFloat(String(h.size)) || 0,
@@ -1021,7 +1109,12 @@ class AutoHedgingService {
       }
 
       const recommendations = generateHedgeRecommendations(
-        positions, marketNAV, allocationPercentages, activeHedges, drawdownPercent, concentrationRisk
+        positions,
+        marketNAV,
+        allocationPercentages,
+        activeHedges,
+        drawdownPercent,
+        concentrationRisk
       );
 
       logger.info('[AutoHedging] SUI CommunityPool risk assessment', {
@@ -1061,7 +1154,10 @@ class AutoHedgingService {
    * Fetch comprehensive portfolio data from on-chain sources (blockchain)
    * Uses RWAManager contract for trustless data retrieval
    */
-  private async fetchPortfolioData(portfolioId: number, walletAddress: string): Promise<{
+  private async fetchPortfolioData(
+    portfolioId: number,
+    _walletAddress: string
+  ): Promise<{
     totalValue: number;
     positions: Array<{ symbol: string; value: number; change24h: number; balance: number }>;
     allocations: Record<string, number>;
@@ -1077,8 +1173,9 @@ class AutoHedgingService {
 
       // Read portfolio data from blockchain
       const portfolioData = await rwaManager.portfolios(portfolioId);
-      const [owner, totalValueBN, targetYield, riskTolerance, lastRebalance, isActive] = portfolioData;
-      
+      const [owner, totalValueBN, targetYield, riskTolerance, lastRebalance, isActive] =
+        portfolioData;
+
       if (!isActive) {
         logger.warn('[AutoHedging] Portfolio inactive on-chain', { portfolioId });
         return this.emptyPortfolioData(portfolioId);
@@ -1086,19 +1183,24 @@ class AutoHedgingService {
 
       // Get portfolio assets from contract
       const assetAddresses = await rwaManager.getPortfolioAssets(portfolioId);
-      
+
       let totalValue = 0;
-      let positions: Array<{ symbol: string; value: number; change24h: number; balance: number }> = [];
+      const positions: Array<{
+        symbol: string;
+        value: number;
+        change24h: number;
+        balance: number;
+      }> = [];
 
       // Read asset allocations from contract
       for (const assetAddress of assetAddresses) {
         const allocation = await rwaManager.getAssetAllocation(portfolioId, assetAddress);
         const addr = assetAddress.toLowerCase();
-        
+
         // USDT = institutional portfolio with virtual allocations
         if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') {
           const usdtValue = Number(allocation) / 1e6; // 6 decimals
-          
+
           // Large portfolio? Create virtual BTC/ETH/CRO/SUI allocations
           if (usdtValue > 1000000) {
             totalValue = usdtValue;
@@ -1108,7 +1210,7 @@ class AutoHedgingService {
               { symbol: 'CRO', percentage: 20 },
               { symbol: 'SUI', percentage: 15 },
             ];
-            
+
             // Fetch live prices and calculate positions
             for (const alloc of virtualAllocations) {
               try {
@@ -1117,7 +1219,7 @@ class AutoHedgingService {
                 const change24h = priceData.change24h || 0;
                 const value = usdtValue * (alloc.percentage / 100);
                 const balance = value / price;
-                
+
                 positions.push({
                   symbol: alloc.symbol,
                   value,
@@ -1134,7 +1236,7 @@ class AutoHedgingService {
 
       // Calculate allocations
       const allocations: Record<string, number> = {};
-      positions.forEach(p => {
+      positions.forEach((p) => {
         allocations[p.symbol] = (p.value / totalValue) * 100;
       });
 
@@ -1154,8 +1256,8 @@ class AutoHedgingService {
          WHERE portfolio_id = $1 AND status = 'active'`,
         [portfolioId]
       );
-      
-      const activeHedges = hedgesResult.map(h => ({
+
+      const activeHedges = hedgesResult.map((h) => ({
         asset: String(h.asset || ''),
         side: String(h.side || ''),
         size: parseFloat(String(h.size)) || 0,
@@ -1193,13 +1295,13 @@ class AutoHedgingService {
        WHERE portfolio_id = $1 AND status = 'active'`,
       [portfolioId]
     );
-    
+
     return {
       totalValue: 0,
       positions: [],
       allocations: {},
       riskMetrics: { volatility: 0, sharpeRatio: 0, maxDrawdown: 0 },
-      activeHedges: hedgesResult.map(h => ({
+      activeHedges: hedgesResult.map((h) => ({
         asset: String(h.asset || ''),
         side: String(h.side || ''),
         size: parseFloat(String(h.size)) || 0,
@@ -1369,13 +1471,17 @@ class AutoHedgingService {
    * Manual trigger for risk assessment
    * When triggered (e.g., after rebalancing), also executes hedges if needed
    */
-  async triggerRiskAssessment(portfolioId: number, walletAddress: string, chain?: string): Promise<RiskAssessment> {
+  async triggerRiskAssessment(
+    portfolioId: number,
+    walletAddress: string,
+    chain?: string
+  ): Promise<RiskAssessment> {
     const assessment = await this.assessPortfolioRisk(portfolioId, walletAddress, chain);
     this.lastRiskAssessments.set(portfolioId, assessment);
-    
+
     // Get portfolio config
     const config = this.autoHedgeConfigs.get(portfolioId);
-    
+
     // If auto-hedging is enabled for this portfolio and risk threshold exceeded, execute hedges
     if (config && config.enabled && assessment.riskScore >= config.riskThreshold) {
       logger.info('[AutoHedging] Risk threshold exceeded in triggered assessment', {
@@ -1384,7 +1490,7 @@ class AutoHedgingService {
         threshold: config.riskThreshold,
         recommendations: assessment.recommendations.length,
       });
-      
+
       // Execute recommended hedges with high confidence
       for (const recommendation of assessment.recommendations) {
         if (recommendation.confidence >= 0.7) {
@@ -1403,7 +1509,7 @@ class AutoHedgingService {
         threshold: config.riskThreshold,
       });
     }
-    
+
     return assessment;
   }
 }
@@ -1415,7 +1521,7 @@ export const autoHedgingService = new AutoHedgingService();
 // This ensures hedging is active as soon as the app starts
 if (typeof window === 'undefined') {
   // Server-side only
-  autoHedgingService.start().catch(error => {
+  autoHedgingService.start().catch((error) => {
     logger.error('[AutoHedging] Failed to auto-start service:', error);
   });
 }

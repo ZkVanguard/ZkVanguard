@@ -1,15 +1,15 @@
 /**
  * Auto-Rebalancing Service
- * 
+ *
  * Monitors portfolios and automatically rebalances when allocations drift beyond threshold
- * 
+ *
  * Features:
  * - Periodic monitoring of portfolio allocations
  * - Drift detection and threshold-based triggering
  * - Agent-driven rebalancing execution
  * - Integration with ZK proof generation
  * - Risk-aware rebalancing logic
- * 
+ *
  * Usage:
  * ```ts
  * const service = AutoRebalanceService.getInstance();
@@ -26,9 +26,7 @@
  * ```
  */
 
-import { logger } from '../utils/logger';
-
-// Configuration
+import { logger } from '../utils/logger'; // Configuration
 const CONFIG = {
   CHECK_INTERVAL_MS: 60 * 60 * 1000, // Check every hour
   DEFAULT_THRESHOLD: 5, // 5% drift threshold
@@ -123,8 +121,8 @@ class AutoRebalanceService {
       try {
         await this.checkAllPortfolios();
       } catch (error) {
-        logger.error('[AutoRebalance] Check error', { 
-          error: error instanceof Error ? error.message : error 
+        logger.error('[AutoRebalance] Check error', {
+          error: error instanceof Error ? error.message : error,
         });
       }
     }, CONFIG.CHECK_INTERVAL_MS);
@@ -159,7 +157,7 @@ class AutoRebalanceService {
     }
 
     this.rebalanceConfigs.set(config.portfolioId, config);
-    logger.info('[AutoRebalance] Enabled for portfolio', { 
+    logger.info('[AutoRebalance] Enabled for portfolio', {
       portfolioId: config.portfolioId,
       threshold: `${config.threshold}%`,
       frequency: config.frequency,
@@ -180,8 +178,8 @@ class AutoRebalanceService {
    * Check all enabled portfolios
    */
   private async checkAllPortfolios(): Promise<void> {
-    logger.info('[AutoRebalance] Checking portfolios', { 
-      count: this.rebalanceConfigs.size 
+    logger.info('[AutoRebalance] Checking portfolios', {
+      count: this.rebalanceConfigs.size,
     });
 
     for (const [portfolioId, config] of this.rebalanceConfigs) {
@@ -191,9 +189,9 @@ class AutoRebalanceService {
         // Check cooldown period
         const lastRebalance = this.lastRebalances.get(portfolioId) || 0;
         const timeSinceLastRebalance = Date.now() - lastRebalance;
-        
+
         if (timeSinceLastRebalance < CONFIG.COOLDOWN_PERIOD_MS) {
-          logger.debug('[AutoRebalance] Portfolio in cooldown', { 
+          logger.debug('[AutoRebalance] Portfolio in cooldown', {
             portfolioId,
             remainingMs: CONFIG.COOLDOWN_PERIOD_MS - timeSinceLastRebalance,
           });
@@ -229,14 +227,15 @@ class AutoRebalanceService {
     try {
       // Fetch current portfolio state
       const portfolio = await this.fetchPortfolioData(portfolioId, config.walletAddress);
-      
+
       if (!portfolio) {
         throw new Error('Portfolio not found');
       }
 
       // Calculate allocation drifts
       const drifts: AllocationDrift[] = [];
-      const targetAllocations = config.targetAllocations || this.getDefaultTargetAllocations(portfolio);
+      const targetAllocations =
+        config.targetAllocations || this.getDefaultTargetAllocations(portfolio);
 
       for (const [asset, targetPercent] of Object.entries(targetAllocations)) {
         const currentValue = portfolio.assets[asset] || 0;
@@ -255,7 +254,7 @@ class AutoRebalanceService {
       }
 
       // Check if rebalance is needed
-      const requiresRebalance = drifts.some(d => d.shouldRebalance);
+      const requiresRebalance = drifts.some((d) => d.shouldRebalance);
 
       // Generate proposed actions
       const proposedActions = requiresRebalance
@@ -279,7 +278,7 @@ class AutoRebalanceService {
         logger.info('[AutoRebalance] Rebalance needed', {
           portfolioId,
           totalValue: portfolio.totalValue,
-          maxDrift: Math.max(...drifts.map(d => d.driftPercent)).toFixed(2) + '%',
+          maxDrift: Math.max(...drifts.map((d) => d.driftPercent)).toFixed(2) + '%',
           actions: proposedActions.length,
         });
       }
@@ -320,8 +319,8 @@ class AutoRebalanceService {
 
     try {
       // Check auto-approval threshold
-      const requiresApproval = !config.autoApprovalEnabled || 
-                              assessment.totalValue > config.autoApprovalThreshold;
+      const requiresApproval =
+        !config.autoApprovalEnabled || assessment.totalValue > config.autoApprovalThreshold;
 
       if (requiresApproval) {
         logger.info('[AutoRebalance] Rebalance requires manual approval', {
@@ -336,8 +335,8 @@ class AutoRebalanceService {
       }
 
       // Generate ZK proof for rebalancing
-      const newAllocations = assessment.drifts.map(d => Math.round(d.target));
-      const oldAllocations = assessment.drifts.map(d => Math.round(d.current));
+      const newAllocations = assessment.drifts.map((d) => Math.round(d.target));
+      const oldAllocations = assessment.drifts.map((d) => Math.round(d.current));
 
       // Call rebalancing API
       const response = await fetch('/api/agents/portfolio/rebalance', {
@@ -382,7 +381,7 @@ class AutoRebalanceService {
     try {
       const response = await fetch(`/api/portfolios/${portfolioId}?wallet=${walletAddress}`);
       const data = await response.json();
-      
+
       if (!data.success) {
         return null;
       }
@@ -409,7 +408,9 @@ class AutoRebalanceService {
   /**
    * Get default target allocations if not specified
    */
-  private getDefaultTargetAllocations(portfolio: { assets: Record<string, number> }): Record<string, number> {
+  private getDefaultTargetAllocations(portfolio: {
+    assets: Record<string, number>;
+  }): Record<string, number> {
     // Equal-weight allocation as default
     const assetCount = Object.keys(portfolio.assets).length;
     const equalWeight = 100 / assetCount;
@@ -429,7 +430,12 @@ class AutoRebalanceService {
     drifts: AllocationDrift[],
     totalValue: number
   ): Array<{ asset: string; action: 'BUY' | 'SELL'; amount: number; reason: string }> {
-    const actions: Array<{ asset: string; action: 'BUY' | 'SELL'; amount: number; reason: string }> = [];
+    const actions: Array<{
+      asset: string;
+      action: 'BUY' | 'SELL';
+      amount: number;
+      reason: string;
+    }> = [];
 
     for (const drift of drifts) {
       if (!drift.shouldRebalance) continue;
@@ -454,7 +460,9 @@ class AutoRebalanceService {
   /**
    * Estimate rebalancing cost
    */
-  private estimateRebalanceCost(actions: Array<{ asset: string; action: string; amount: number }>): number {
+  private estimateRebalanceCost(
+    actions: Array<{ asset: string; action: string; amount: number }>
+  ): number {
     // Rough estimate: $0.50 gas per swap + 0.1% slippage
     const gasPerSwap = 0.5;
     const slippageBps = 10; // 0.1%
@@ -495,9 +503,12 @@ class AutoRebalanceService {
   /**
    * Manual trigger for rebalance assessment
    */
-  async triggerAssessment(portfolioId: number, walletAddress: string): Promise<RebalanceAssessment> {
+  async triggerAssessment(
+    portfolioId: number,
+    _walletAddress: string
+  ): Promise<RebalanceAssessment> {
     const config = this.rebalanceConfigs.get(portfolioId);
-    
+
     if (!config) {
       throw new Error(`Portfolio ${portfolioId} not configured for auto-rebalancing`);
     }

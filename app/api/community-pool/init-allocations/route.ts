@@ -1,8 +1,8 @@
 /**
  * Initialize Pool Allocations API Endpoint
- * 
+ *
  * POST /api/community-pool/init-allocations
- * 
+ *
  * Sets the Community Pool's target allocations to enable hedging.
  * Protected by CRON_SECRET.
  */
@@ -13,7 +13,6 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
 import { mutationLimiter } from '@/lib/security/rate-limiter';
 import { getCronosRpcUrl } from '@/lib/throttled-provider';
-
 export const runtime = 'nodejs';
 
 export const maxDuration = 15;
@@ -31,16 +30,16 @@ export async function POST(request: NextRequest) {
   if (rateLimited) return rateLimited;
 
   const startTime = Date.now();
-  
+
   try {
     // Auth check
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    
+
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
+
     // Parse optional custom allocations from body
     let targetAllocations = { BTC: 25, ETH: 25, SUI: 25, CRO: 25 };
     try {
@@ -48,30 +47,39 @@ export async function POST(request: NextRequest) {
       if (body.allocations) {
         targetAllocations = body.allocations;
       }
-    } catch { /* Use defaults */ }
-    
-    // Validate allocations sum to 100%
-    const total = targetAllocations.BTC + targetAllocations.ETH + targetAllocations.SUI + targetAllocations.CRO;
-    if (total !== 100) {
-      return NextResponse.json({ 
-        error: `Allocations must sum to 100%, got ${total}%` 
-      }, { status: 400 });
+    } catch {
+      /* Use defaults */
     }
-    
+
+    // Validate allocations sum to 100%
+    const total =
+      targetAllocations.BTC + targetAllocations.ETH + targetAllocations.SUI + targetAllocations.CRO;
+    if (total !== 100) {
+      return NextResponse.json(
+        {
+          error: `Allocations must sum to 100%, got ${total}%`,
+        },
+        { status: 400 }
+      );
+    }
+
     logger.info('[Init Allocations] Starting with target allocations', targetAllocations);
-    
+
     // Get agent signer key
     const signerKey = process.env.AGENT_SIGNER_KEY;
     if (!signerKey) {
-      return NextResponse.json({ 
-        error: 'AGENT_SIGNER_KEY not configured on server' 
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: 'AGENT_SIGNER_KEY not configured on server',
+        },
+        { status: 500 }
+      );
     }
-    
+
     const provider = new ethers.JsonRpcProvider(CRONOS_RPC);
     const wallet = new ethers.Wallet(signerKey, provider);
     const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, wallet);
-    
+
     // Check current allocations
     const stats = await pool.getPoolStats();
     const currentAllocations = {
@@ -80,13 +88,13 @@ export async function POST(request: NextRequest) {
       SUI: Number(stats._allocations[2]) / 100,
       CRO: Number(stats._allocations[3]) / 100,
     };
-    
+
     logger.info('[Init Allocations] Current allocations', currentAllocations);
-    
+
     // Check if already allocated (skip if force not set)
     const url = new URL(request.url);
     const force = url.searchParams.get('force') === 'true';
-    
+
     const isAlreadyAllocated = currentAllocations.BTC > 0 || currentAllocations.ETH > 0;
     if (isAlreadyAllocated && !force) {
       return NextResponse.json({
@@ -96,19 +104,22 @@ export async function POST(request: NextRequest) {
         skipped: true,
       });
     }
-    
+
     // Check rebalancer role
     const REBALANCER_ROLE = await pool.REBALANCER_ROLE();
     const hasRole = await pool.hasRole(REBALANCER_ROLE, wallet.address);
-    
+
     if (!hasRole) {
-      return NextResponse.json({
-        error: 'Wallet does not have REBALANCER_ROLE',
-        walletAddress: wallet.address,
-        rebalancerRole: REBALANCER_ROLE,
-      }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: 'Wallet does not have REBALANCER_ROLE',
+          walletAddress: wallet.address,
+          rebalancerRole: REBALANCER_ROLE,
+        },
+        { status: 403 }
+      );
     }
-    
+
     // Convert to BPS
     const allocationsBps: [number, number, number, number] = [
       targetAllocations.BTC * 100,
@@ -116,21 +127,21 @@ export async function POST(request: NextRequest) {
       targetAllocations.SUI * 100,
       targetAllocations.CRO * 100,
     ];
-    
+
     const reasoning = `Initial allocation: ${targetAllocations.BTC}% BTC, ${targetAllocations.ETH}% ETH, ${targetAllocations.SUI}% SUI, ${targetAllocations.CRO}% CRO for diversified hedging`;
-    
+
     logger.info('[Init Allocations] Setting allocations', { allocationsBps, reasoning });
-    
+
     // Execute transaction
     const tx = await pool.setTargetAllocation(allocationsBps, reasoning);
     logger.info('[Init Allocations] Transaction submitted', { txHash: tx.hash });
-    
+
     const receipt = await tx.wait();
-    logger.info('[Init Allocations] Transaction confirmed', { 
+    logger.info('[Init Allocations] Transaction confirmed', {
       blockNumber: receipt.blockNumber,
       gasUsed: receipt.gasUsed.toString(),
     });
-    
+
     // Verify new allocations
     const newStats = await pool.getPoolStats();
     const newAllocations = {
@@ -139,9 +150,9 @@ export async function POST(request: NextRequest) {
       SUI: Number(newStats._allocations[2]) / 100,
       CRO: Number(newStats._allocations[3]) / 100,
     };
-    
+
     const duration = Date.now() - startTime;
-    
+
     return NextResponse.json({
       success: true,
       message: 'Pool allocations initialized successfully',
@@ -151,28 +162,30 @@ export async function POST(request: NextRequest) {
       blockNumber: receipt.blockNumber,
       duration: `${duration}ms`,
     });
-    
   } catch (error) {
     logger.error('[Init Allocations] Failed', error);
-    
+
     // Check for rebalance cooldown error
     if (error instanceof Error && error.message.includes('RebalanceCooldown')) {
-      return NextResponse.json({
-        error: 'Rebalance cooldown active. Try again later.',
-        details: 'Rate limited - please try again later',
-      }, { status: 429 });
+      return NextResponse.json(
+        {
+          error: 'Rebalance cooldown active. Try again later.',
+          details: 'Rate limited - please try again later',
+        },
+        { status: 429 }
+      );
     }
-    
+
     return safeErrorResponse(error, 'Failed to initialize allocations');
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   // Allow GET to check current status
   try {
     const provider = new ethers.JsonRpcProvider(CRONOS_RPC);
     const pool = new ethers.Contract(COMMUNITY_POOL_ADDRESS, POOL_ABI, provider);
-    
+
     const stats = await pool.getPoolStats();
     const allocations = {
       BTC: Number(stats._allocations[0]) / 100,
@@ -180,10 +193,10 @@ export async function GET(request: NextRequest) {
       SUI: Number(stats._allocations[2]) / 100,
       CRO: Number(stats._allocations[3]) / 100,
     };
-    
+
     const totalNAV = parseFloat(ethers.formatUnits(stats._totalNAV, 6));
     const sharePrice = parseFloat(ethers.formatUnits(stats._sharePrice, 6));
-    
+
     return NextResponse.json({
       success: true,
       allocations,

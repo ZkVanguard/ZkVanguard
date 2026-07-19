@@ -1,9 +1,9 @@
 /**
  * Account Abstraction (AA) Client Service
- * 
+ *
  * Handles ERC-4337 UserOperation creation, signing, and submission
  * for gasless USDT deposits via Pimlico/Candide paymasters.
- * 
+ *
  * Flow:
  * 1. User signs approval for USDT transfer to paymaster
  * 2. Create UserOperation for deposit to community pool
@@ -25,9 +25,7 @@ import {
   SAFE_4337_MODULE,
 } from '@/lib/config/aa-paymaster';
 import { logger } from '@/lib/utils/logger';
-import { SafeUtils } from '@/lib/services/safe-utils';
-
-// ============================================================================
+import { SafeUtils } from '@/lib/services/safe-utils'; // ============================================================================
 // ABI DEFINITIONS
 // ============================================================================
 
@@ -72,12 +70,12 @@ const COMMUNITY_POOL_ABI = [
 class BundlerRPCClient {
   private bundlerUrl: string;
   private paymasterUrl: string;
-  
+
   constructor(config: AAPaymasterConfig) {
     this.bundlerUrl = config.bundlerUrl;
     this.paymasterUrl = config.paymasterUrl;
   }
-  
+
   /**
    * Make a JSON-RPC call to the bundler
    */
@@ -92,21 +90,21 @@ class BundlerRPCClient {
         params,
       }),
     });
-    
+
     const result = await response.json();
     if (result.error) {
       throw new Error(`RPC Error: ${result.error.message || JSON.stringify(result.error)}`);
     }
     return result.result;
   }
-  
+
   /**
    * Get supported entry points from bundler
    */
   async getSupportedEntryPoints(): Promise<string[]> {
     return this.rpc(this.bundlerUrl, 'eth_supportedEntryPoints', []) as Promise<string[]>;
   }
-  
+
   /**
    * Estimate UserOperation gas
    */
@@ -114,30 +112,30 @@ class BundlerRPCClient {
     userOp: Partial<UserOperation>,
     entryPoint: string
   ): Promise<GasEstimation> {
-    const result = await this.rpc(this.bundlerUrl, 'eth_estimateUserOperationGas', [
+    const result = (await this.rpc(this.bundlerUrl, 'eth_estimateUserOperationGas', [
       this.serializeUserOp(userOp),
       entryPoint,
-    ]) as {
+    ])) as {
       preVerificationGas: string;
       verificationGasLimit: string;
       callGasLimit: string;
       paymasterVerificationGasLimit?: string;
       paymasterPostOpGasLimit?: string;
     };
-    
+
     return {
       preVerificationGas: BigInt(result.preVerificationGas),
       verificationGasLimit: BigInt(result.verificationGasLimit),
       callGasLimit: BigInt(result.callGasLimit),
-      paymasterVerificationGasLimit: result.paymasterVerificationGasLimit 
-        ? BigInt(result.paymasterVerificationGasLimit) 
+      paymasterVerificationGasLimit: result.paymasterVerificationGasLimit
+        ? BigInt(result.paymasterVerificationGasLimit)
         : undefined,
       paymasterPostOpGasLimit: result.paymasterPostOpGasLimit
         ? BigInt(result.paymasterPostOpGasLimit)
         : undefined,
     };
   }
-  
+
   /**
    * Get paymaster quote for USDT gas payment
    */
@@ -147,14 +145,14 @@ class BundlerRPCClient {
     tokenAddress: string
   ): Promise<PaymasterQuote> {
     // Pimlico paymaster sponsorship request
-    const result = await this.rpc(this.paymasterUrl, 'pm_sponsorUserOperation', [
+    const result = (await this.rpc(this.paymasterUrl, 'pm_sponsorUserOperation', [
       this.serializeUserOp(userOp),
       entryPoint,
       {
         token: tokenAddress,
         sponsorshipPolicyId: 'sp_usdt_gas', // Optional policy ID
       },
-    ]) as {
+    ])) as {
       paymaster: string;
       paymasterData: string;
       paymasterVerificationGasLimit: string;
@@ -163,7 +161,7 @@ class BundlerRPCClient {
       verificationGasLimit?: string;
       callGasLimit?: string;
     };
-    
+
     return {
       paymaster: result.paymaster,
       paymasterData: result.paymasterData,
@@ -173,20 +171,17 @@ class BundlerRPCClient {
       tokenSymbol: 'USDT',
     };
   }
-  
+
   /**
    * Submit UserOperation to bundler
    */
-  async sendUserOperation(
-    userOp: UserOperation,
-    entryPoint: string
-  ): Promise<string> {
+  async sendUserOperation(userOp: UserOperation, entryPoint: string): Promise<string> {
     return this.rpc(this.bundlerUrl, 'eth_sendUserOperation', [
       this.serializeUserOp(userOp),
       entryPoint,
     ]) as Promise<string>;
   }
-  
+
   /**
    * Get UserOperation receipt by hash
    */
@@ -200,9 +195,9 @@ class BundlerRPCClient {
       status: number;
     };
   } | null> {
-    const result = await this.rpc(this.bundlerUrl, 'eth_getUserOperationReceipt', [
+    const result = (await this.rpc(this.bundlerUrl, 'eth_getUserOperationReceipt', [
       userOpHash,
-    ]) as {
+    ])) as {
       success: boolean;
       actualGasCost: string;
       actualGasUsed: string;
@@ -212,9 +207,9 @@ class BundlerRPCClient {
         status: string;
       };
     } | null;
-    
+
     if (!result) return null;
-    
+
     return {
       success: result.success,
       actualGasCost: BigInt(result.actualGasCost),
@@ -226,7 +221,7 @@ class BundlerRPCClient {
       },
     };
   }
-  
+
   /**
    * Wait for UserOperation to be included on-chain
    */
@@ -240,10 +235,10 @@ class BundlerRPCClient {
     gasCost: bigint;
   }> {
     const startTime = Date.now();
-    
+
     while (Date.now() - startTime < timeoutMs) {
       const receipt = await this.getUserOperationReceipt(userOpHash);
-      
+
       if (receipt) {
         return {
           success: receipt.success && receipt.receipt.status === 1,
@@ -251,35 +246,43 @@ class BundlerRPCClient {
           gasCost: receipt.actualGasCost,
         };
       }
-      
-      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
-    
+
     throw new Error(`UserOperation timeout after ${timeoutMs}ms`);
   }
-  
+
   /**
    * Serialize UserOperation for RPC
    */
   private serializeUserOp(userOp: Partial<UserOperation>): Record<string, string> {
     const serialized: Record<string, string> = {};
-    
+
     if (userOp.sender) serialized.sender = userOp.sender;
     if (userOp.nonce !== undefined) serialized.nonce = '0x' + userOp.nonce.toString(16);
     if (userOp.factory) serialized.factory = userOp.factory;
     if (userOp.factoryData) serialized.factoryData = userOp.factoryData;
     if (userOp.callData) serialized.callData = userOp.callData;
-    if (userOp.callGasLimit !== undefined) serialized.callGasLimit = '0x' + userOp.callGasLimit.toString(16);
-    if (userOp.verificationGasLimit !== undefined) serialized.verificationGasLimit = '0x' + userOp.verificationGasLimit.toString(16);
-    if (userOp.preVerificationGas !== undefined) serialized.preVerificationGas = '0x' + userOp.preVerificationGas.toString(16);
-    if (userOp.maxFeePerGas !== undefined) serialized.maxFeePerGas = '0x' + userOp.maxFeePerGas.toString(16);
-    if (userOp.maxPriorityFeePerGas !== undefined) serialized.maxPriorityFeePerGas = '0x' + userOp.maxPriorityFeePerGas.toString(16);
+    if (userOp.callGasLimit !== undefined)
+      serialized.callGasLimit = '0x' + userOp.callGasLimit.toString(16);
+    if (userOp.verificationGasLimit !== undefined)
+      serialized.verificationGasLimit = '0x' + userOp.verificationGasLimit.toString(16);
+    if (userOp.preVerificationGas !== undefined)
+      serialized.preVerificationGas = '0x' + userOp.preVerificationGas.toString(16);
+    if (userOp.maxFeePerGas !== undefined)
+      serialized.maxFeePerGas = '0x' + userOp.maxFeePerGas.toString(16);
+    if (userOp.maxPriorityFeePerGas !== undefined)
+      serialized.maxPriorityFeePerGas = '0x' + userOp.maxPriorityFeePerGas.toString(16);
     if (userOp.paymaster) serialized.paymaster = userOp.paymaster;
-    if (userOp.paymasterVerificationGasLimit !== undefined) serialized.paymasterVerificationGasLimit = '0x' + userOp.paymasterVerificationGasLimit.toString(16);
-    if (userOp.paymasterPostOpGasLimit !== undefined) serialized.paymasterPostOpGasLimit = '0x' + userOp.paymasterPostOpGasLimit.toString(16);
+    if (userOp.paymasterVerificationGasLimit !== undefined)
+      serialized.paymasterVerificationGasLimit =
+        '0x' + userOp.paymasterVerificationGasLimit.toString(16);
+    if (userOp.paymasterPostOpGasLimit !== undefined)
+      serialized.paymasterPostOpGasLimit = '0x' + userOp.paymasterPostOpGasLimit.toString(16);
     if (userOp.paymasterData) serialized.paymasterData = userOp.paymasterData;
     if (userOp.signature) serialized.signature = userOp.signature;
-    
+
     return serialized;
   }
 }
@@ -295,33 +298,32 @@ export class AAClient {
   private config: AAPaymasterConfig;
   private provider: ethers.JsonRpcProvider;
   private bundlerClient: BundlerRPCClient;
-  
+
   constructor(config: AAPaymasterConfig) {
     this.config = config;
     this.provider = new ethers.JsonRpcProvider(config.provider);
     this.bundlerClient = new BundlerRPCClient(config);
   }
-  
+
   /**
    * Create an AA client for a specific chain
    */
-  static forChain(chainId: number, paymasterProvider: 'pimlico' | 'candide' = 'pimlico'): AAClient | null {
+  static forChain(
+    chainId: number,
+    paymasterProvider: 'pimlico' | 'candide' = 'pimlico'
+  ): AAClient | null {
     const config = getAAConfig(chainId, paymasterProvider);
     if (!config) return null;
     return new AAClient(config);
   }
-  
+
   /**
    * Get the USDT contract
    */
   getUSDTContract(): ethers.Contract {
-    return new ethers.Contract(
-      this.config.paymasterToken.address,
-      ERC20_ABI,
-      this.provider
-    );
+    return new ethers.Contract(this.config.paymasterToken.address, ERC20_ABI, this.provider);
   }
-  
+
   /**
    * Check USDT balance
    */
@@ -329,7 +331,7 @@ export class AAClient {
     const usdt = this.getUSDTContract();
     return usdt.balanceOf(address);
   }
-  
+
   /**
    * Check USDT allowance for paymaster
    */
@@ -337,19 +339,15 @@ export class AAClient {
     const usdt = this.getUSDTContract();
     return usdt.allowance(owner, this.config.paymasterAddress);
   }
-  
+
   /**
    * Get current nonce for a smart account
    */
   async getNonce(smartAccountAddress: string): Promise<bigint> {
-    const entryPoint = new ethers.Contract(
-      ENTRY_POINT_V07,
-      ENTRY_POINT_ABI,
-      this.provider
-    );
+    const entryPoint = new ethers.Contract(ENTRY_POINT_V07, ENTRY_POINT_ABI, this.provider);
     return entryPoint.getNonce(smartAccountAddress, 0);
   }
-  
+
   /**
    * Get current gas prices
    */
@@ -363,7 +361,7 @@ export class AAClient {
       maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || BigInt(2e9), // 2 gwei fallback
     };
   }
-  
+
   /**
    * Build USDT approval calldata
    */
@@ -371,7 +369,7 @@ export class AAClient {
     const iface = new ethers.Interface(ERC20_ABI);
     return iface.encodeFunctionData('approve', [spender, amount]);
   }
-  
+
   /**
    * Build USDT transfer calldata
    */
@@ -379,7 +377,7 @@ export class AAClient {
     const iface = new ethers.Interface(ERC20_ABI);
     return iface.encodeFunctionData('transfer', [to, amount]);
   }
-  
+
   /**
    * Build community pool deposit calldata
    */
@@ -387,7 +385,7 @@ export class AAClient {
     const iface = new ethers.Interface(COMMUNITY_POOL_ABI);
     return iface.encodeFunctionData('depositUSDT', [amountUSD]);
   }
-  
+
   async createDepositUserOp(params: {
     smartAccountAddress: string;
     communityPoolAddress: string;
@@ -401,55 +399,63 @@ export class AAClient {
     estimatedGas: GasEstimation;
     paymasterQuote: PaymasterQuote;
   }> {
-    const { smartAccountAddress, communityPoolAddress, amountUSDT, approveFirst, factory, factoryData, permit } = params;
-    
+    const {
+      smartAccountAddress,
+      communityPoolAddress,
+      amountUSDT,
+      approveFirst,
+      factory,
+      factoryData,
+      permit,
+    } = params;
+
     // Safety check for unsignable permit requests
     if (permit) {
-        throw new Error("Permit-based deposits require funding Safe account first.");
+      throw new Error('Permit-based deposits require funding Safe account first.');
     }
-    
+
     let callData: string;
-    
+
     // Standard Safe execution: batch Approve + Deposit using MultiSend
     // Safe 4337 Module expects: executeUserOp(to, value, data, operation)
-    
+
     // 1. Build transactions
-    const txs: Array<{to: string, value: bigint, data: string, operation?: number}> = [];
-    
+    const txs: Array<{ to: string; value: bigint; data: string; operation?: number }> = [];
+
     // Approve tx
     txs.push({
-        to: this.config.paymasterToken.address,
-        value: 0n,
-        data: this.buildApprovalCallData(communityPoolAddress, amountUSDT),
-        operation: 0 // Call
+      to: this.config.paymasterToken.address,
+      value: 0n,
+      data: this.buildApprovalCallData(communityPoolAddress, amountUSDT),
+      operation: 0, // Call
     });
-    
+
     // Deposit tx
     txs.push({
-        to: communityPoolAddress,
-        value: 0n,
-        data: this.buildDepositCallData(communityPoolAddress, amountUSDT),
-        operation: 0 // Call
+      to: communityPoolAddress,
+      value: 0n,
+      data: this.buildDepositCallData(communityPoolAddress, amountUSDT),
+      operation: 0, // Call
     });
-    
+
     // 2. Encode MultiSend
     const multiSendData = SafeUtils.encodeMultiSend(txs);
-    
+
     // 3. Wrap in executeUserOp targeting MultiSend via DelegateCall
     // MultiSend address must be called with DelegateCall (Success if txs succeed)
     callData = SafeUtils.encodeExecuteUserOp(
-        SAFE_4337_MODULE.multiSend, 
-        0n, 
-        multiSendData, 
-        1 // DelegateCall
+      SAFE_4337_MODULE.multiSend,
+      0n,
+      multiSendData,
+      1 // DelegateCall
     );
 
     // Get nonce
     const nonce = await this.getNonce(smartAccountAddress);
-    
+
     // Get gas prices
     const gasPrices = await this.getGasPrices();
-    
+
     // Build partial UserOp
     const userOp: Partial<UserOperation> = {
       sender: smartAccountAddress,
@@ -461,56 +467,56 @@ export class AAClient {
       factory,
       factoryData,
     };
-    
+
     // Estimate gas
-    const estimatedGas = await this.bundlerClient.estimateUserOperationGas(
-      userOp,
-      ENTRY_POINT_V07
-    );
-    
+    const estimatedGas = await this.bundlerClient.estimateUserOperationGas(userOp, ENTRY_POINT_V07);
+
     // Add gas limits to userOp
     userOp.preVerificationGas = estimatedGas.preVerificationGas;
     userOp.verificationGasLimit = estimatedGas.verificationGasLimit;
     userOp.callGasLimit = estimatedGas.callGasLimit;
-    
+
     // Get paymaster quote
     const paymasterQuote = await this.bundlerClient.getPaymasterQuote(
       userOp,
       ENTRY_POINT_V07,
       this.config.paymasterToken.address
     );
-    
+
     // Add paymaster data to userOp
     userOp.paymaster = paymasterQuote.paymaster;
     userOp.paymasterData = paymasterQuote.paymasterData;
     userOp.paymasterVerificationGasLimit = paymasterQuote.paymasterVerificationGasLimit;
     userOp.paymasterPostOpGasLimit = paymasterQuote.paymasterPostOpGasLimit;
-    
+
     return {
       userOp,
       estimatedGas,
       paymasterQuote,
     };
   }
-  
+
   /**
    * Submit a signed UserOperation
    */
   async submitUserOp(userOp: UserOperation): Promise<string> {
     return this.bundlerClient.sendUserOperation(userOp, ENTRY_POINT_V07);
   }
-  
+
   /**
    * Wait for UserOperation to complete
    */
-  async waitForUserOp(userOpHash: string, timeoutMs: number = 60000): Promise<{
+  async waitForUserOp(
+    userOpHash: string,
+    timeoutMs: number = 60000
+  ): Promise<{
     success: boolean;
     txHash: string;
     gasCost: bigint;
   }> {
     return this.bundlerClient.waitForUserOperation(userOpHash, timeoutMs);
   }
-  
+
   /**
    * Execute a full USDT deposit flow
    * 1. Create UserOp
@@ -531,13 +537,13 @@ export class AAClient {
     sharesReceived?: number;
   }> {
     const { smartAccountAddress, communityPoolAddress, amountUSDT, signUserOp } = params;
-    
+
     logger.info('[AAClient] Starting USDT deposit flow', {
       smartAccount: smartAccountAddress,
       pool: communityPoolAddress,
       amount: amountUSDT,
     });
-    
+
     try {
       // 1. Create UserOp
       const amountWei = parseUSDT(amountUSDT);
@@ -546,7 +552,7 @@ export class AAClient {
         communityPoolAddress,
         amountUSDT: amountWei,
       });
-      
+
       logger.info('[AAClient] UserOp created', {
         estimatedGas: {
           preVerification: estimatedGas.preVerificationGas.toString(),
@@ -555,48 +561,43 @@ export class AAClient {
         },
         paymaster: paymasterQuote.paymaster,
       });
-      
+
       // 2. Calculate UserOp hash for signing
-      const entryPoint = new ethers.Contract(
-        ENTRY_POINT_V07,
-        ENTRY_POINT_ABI,
-        this.provider
-      );
-      
+      const entryPoint = new ethers.Contract(ENTRY_POINT_V07, ENTRY_POINT_ABI, this.provider);
+
       // Pack the UserOp for hashing
       const packedUserOp = this.packUserOp(userOp as UserOperation);
       const userOpHash = await entryPoint.getUserOpHash(packedUserOp);
-      
+
       // 3. Get signature from user
       const signature = await signUserOp(userOpHash);
       userOp.signature = signature;
-      
+
       // 4. Submit to bundler
       const submittedHash = await this.submitUserOp(userOp as UserOperation);
       logger.info('[AAClient] UserOp submitted', { userOpHash: submittedHash });
-      
+
       // 5. Wait for on-chain confirmation
       const result = await this.waitForUserOp(submittedHash);
-      
+
       logger.info('[AAClient] UserOp completed', {
         success: result.success,
         txHash: result.txHash,
         gasCost: formatUSDT(result.gasCost),
       });
-      
+
       return {
         success: result.success,
         txHash: result.txHash,
         userOpHash: submittedHash,
         gasCostUSDT: formatUSDT(result.gasCost),
       };
-      
     } catch (error) {
       logger.error('[AAClient] Deposit failed', { error });
       throw error;
     }
   }
-  
+
   /**
    * Pack UserOperation for EntryPoint
    */
@@ -616,18 +617,18 @@ export class AAClient {
       ethers.zeroPadValue(ethers.toBeHex(userOp.callGasLimit), 16),
       ethers.zeroPadValue(ethers.toBeHex(userOp.verificationGasLimit), 16),
     ]);
-    
+
     // Pack gas fees: maxFeePerGas (16 bytes) | maxPriorityFeePerGas (16 bytes)
     const gasFees = ethers.concat([
       ethers.zeroPadValue(ethers.toBeHex(userOp.maxFeePerGas), 16),
       ethers.zeroPadValue(ethers.toBeHex(userOp.maxPriorityFeePerGas), 16),
     ]);
-    
+
     // Pack init code
-    const initCode = userOp.factory 
+    const initCode = userOp.factory
       ? ethers.concat([userOp.factory, userOp.factoryData || '0x'])
       : '0x';
-    
+
     // Pack paymaster data
     let paymasterAndData = '0x';
     if (userOp.paymaster) {
@@ -641,7 +642,7 @@ export class AAClient {
         userOp.paymasterData || '0x',
       ]);
     }
-    
+
     return {
       sender: userOp.sender,
       nonce: userOp.nonce,
@@ -654,7 +655,7 @@ export class AAClient {
       signature: userOp.signature,
     };
   }
-  
+
   /**
    * Get configuration
    */
@@ -670,10 +671,7 @@ export class AAClient {
 /**
  * Check if an address is a smart account (has code)
  */
-export async function isSmartAccount(
-  provider: ethers.Provider,
-  address: string
-): Promise<boolean> {
+export async function isSmartAccount(provider: ethers.Provider, address: string): Promise<boolean> {
   const code = await provider.getCode(address);
   return code !== '0x';
 }
@@ -693,16 +691,16 @@ export async function estimateDepositCost(
   if (!client) {
     throw new Error(`Chain ${chainId} not supported for AA`);
   }
-  
+
   // Gas fee estimate (rough)
   const gasPrices = await client.getGasPrices();
   const estimatedGasUnits = 200000n; // Typical deposit gas
   const gasCostWei = estimatedGasUnits * gasPrices.maxFeePerGas;
-  
+
   // Convert to USDT (rough estimate)
   // In reality, paymaster provides exact quote
-  const gasCostUSDT = Number(gasCostWei) / 1e18 * 2000; // Assuming ETH ~ $2000
-  
+  const gasCostUSDT = (Number(gasCostWei) / 1e18) * 2000; // Assuming ETH ~ $2000
+
   return {
     depositAmount: amountUSDT.toFixed(6),
     estimatedGasFee: gasCostUSDT.toFixed(6),

@@ -4,7 +4,6 @@ import React, { memo, useState } from 'react';
 import { Award, Shield, Wallet, ExternalLink, CheckCircle2, Database } from 'lucide-react';
 import type { LeaderboardEntry } from './types';
 import { formatPercent } from './utils';
-
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
   /** Total member count (may exceed `entries.length` if the leaderboard is
@@ -17,7 +16,10 @@ interface LeaderboardProps {
   chainConfig?: {
     chainType?: string;
     name?: string;
-    contracts?: { testnet?: { communityPool?: string; usdt?: string }; mainnet?: { communityPool?: string; usdt?: string } };
+    contracts?: {
+      testnet?: { communityPool?: string; usdt?: string };
+      mainnet?: { communityPool?: string; usdt?: string };
+    };
     blockExplorer?: { testnet?: string; mainnet?: string };
     assets?: string[];
   };
@@ -56,11 +58,19 @@ async function deriveTreasuryProxyClient(): Promise<string> {
   const data = encoder.encode(derivationPath);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   return '0x' + hashHex.slice(-40);
 }
 
-export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, proxyWallet, poolTVL, chainId = 11155111, selectedChain, chainConfig }: LeaderboardProps) {
+export const Leaderboard = memo(function Leaderboard({
+  entries,
+  totalMembers,
+  proxyWallet,
+  poolTVL,
+  chainId = 11155111,
+  selectedChain,
+  chainConfig,
+}: LeaderboardProps) {
   // Effective total — prop wins, but fall back to entries.length so the
   // "top N of M" chip is always sane even if the caller didn't wire it.
   const memberTotal = Math.max(totalMembers ?? 0, entries.length);
@@ -69,7 +79,7 @@ export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, pr
   const [showProof, setShowProof] = useState(false);
   const [treasuryProxy, setTreasuryProxy] = useState<string>('');
   const isSui = selectedChain === 'sui' || chainConfig?.chainType === 'sui';
-  
+
   // Derive treasury proxy address (EVM chains only)
   React.useEffect(() => {
     if (!isSui) {
@@ -80,20 +90,26 @@ export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, pr
   // Get explorer URL based on chain
   const suiNetwork = (process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet') as 'mainnet' | 'testnet';
   const explorerUrl = isSui
-    ? (chainConfig?.blockExplorer?.[suiNetwork] || `https://suiscan.xyz/${suiNetwork}`)
-    : (EXPLORER_URLS[chainId] || EXPLORER_URLS[11155111]);
+    ? chainConfig?.blockExplorer?.[suiNetwork] || `https://suiscan.xyz/${suiNetwork}`
+    : EXPLORER_URLS[chainId] || EXPLORER_URLS[11155111];
 
   // Treasury info varies by chain
-  const treasury = isSui ? {
-    address: chainConfig?.contracts?.[suiNetwork]?.communityPool || '',
-    name: 'Pool Contract (USDC)',
-  } : treasuryProxy ? {
-    address: treasuryProxy,
-    name: POOL_PROXY_WALLETS[selectedChain || 'sepolia']?.name || 'Pool Treasury',
-  } : proxyWallet ? {
-    address: proxyWallet,
-    name: 'Pool Treasury',
-  } : POOL_PROXY_WALLETS[selectedChain || 'sepolia'] || POOL_PROXY_WALLETS.sepolia;
+  const treasury = isSui
+    ? {
+        address: chainConfig?.contracts?.[suiNetwork]?.communityPool || '',
+        name: 'Pool Contract (USDC)',
+      }
+    : treasuryProxy
+      ? {
+          address: treasuryProxy,
+          name: POOL_PROXY_WALLETS[selectedChain || 'sepolia']?.name || 'Pool Treasury',
+        }
+      : proxyWallet
+        ? {
+            address: proxyWallet,
+            name: 'Pool Treasury',
+          }
+        : POOL_PROXY_WALLETS[selectedChain || 'sepolia'] || POOL_PROXY_WALLETS.sepolia;
 
   // Build explorer link based on chain type
   const contractUrl = isSui
@@ -105,14 +121,20 @@ export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, pr
       {/* Pool Contract Info */}
       <div className="mb-4 p-3 sm:p-4 rounded-lg bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
         <div className="flex items-center gap-2 mb-2">
-          {isSui ? <Database className="w-4 h-4 text-blue-500 flex-shrink-0" /> : <Shield className="w-4 h-4 text-purple-500 flex-shrink-0" />}
+          {isSui ? (
+            <Database className="w-4 h-4 text-blue-500 flex-shrink-0" />
+          ) : (
+            <Shield className="w-4 h-4 text-purple-500 flex-shrink-0" />
+          )}
           <span className="font-semibold text-xs sm:text-sm text-purple-600 dark:text-purple-400 truncate">
             {treasury.name}
           </span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 font-mono truncate min-w-0">
-            {treasury.address ? `${treasury.address.slice(0, 8)}...${treasury.address.slice(-6)}` : 'N/A'}
+            {treasury.address
+              ? `${treasury.address.slice(0, 8)}...${treasury.address.slice(-6)}`
+              : 'N/A'}
           </span>
           {poolTVL !== undefined && (
             <span className="text-xs sm:text-sm font-bold text-purple-600 dark:text-purple-400 tabular-nums flex-shrink-0">
@@ -167,8 +189,8 @@ export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, pr
             </span>
           </div>
           <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-            Deposits are recorded in the pool database. AI manages a 3-asset allocation
-            across {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI'}. Share price starts at $1 at
+            Deposits are recorded in the pool database. AI manages a 3-asset allocation across{' '}
+            {chainConfig?.assets?.join(', ') || 'BTC, ETH, SUI'}. Share price starts at $1 at
             inception and tracks the pool&apos;s on-chain NAV oracle as the AI grows capital.
           </p>
         </div>
@@ -187,7 +209,8 @@ export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, pr
             )}
           </h3>
           <p className="pool-inner-subheading text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">
-            All deposits are routed through the single treasury proxy. Real addresses are never disclosed.
+            All deposits are routed through the single treasury proxy. Real addresses are never
+            disclosed.
           </p>
           <div className="space-y-2">
             {entries
@@ -201,7 +224,8 @@ export const Leaderboard = memo(function Leaderboard({ entries, totalMembers, pr
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                       <span
                         className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
-                          RANK_STYLES[index] || 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                          RANK_STYLES[index] ||
+                          'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
                         }`}
                       >
                         {index + 1}

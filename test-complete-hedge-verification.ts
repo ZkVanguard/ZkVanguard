@@ -7,7 +7,6 @@ import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { BluefinService } from './lib/services/sui/BluefinService';
 import { Polymarket5MinService } from './lib/services/market-data/Polymarket5MinService';
 import { SuiPoolAgent } from './agents/specialized/SuiPoolAgent';
-
 const POOL_STATE = '0xe814e0948e29d9c10b73a0e6fb23c9997ccc373bed223657ab65ff544742fb3a';
 const PERP_SPECS = {
   BTC: { minQty: 0.001, stepSize: 0.001 },
@@ -15,11 +14,24 @@ const PERP_SPECS = {
   SUI: { minQty: 1, stepSize: 1 },
 } as const;
 
-interface Check { name: string; ok: boolean; detail: string }
+interface Check {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
 const checks: Check[] = [];
-const ok = (name: string, detail: string) => { checks.push({ name, ok: true, detail }); console.log(`✅ ${name}\n   ${detail}`); };
-const warn = (name: string, detail: string) => { checks.push({ name, ok: false, detail }); console.log(`⚠ ${name}\n   ${detail}`); };
-const bad = (name: string, detail: string) => { checks.push({ name, ok: false, detail }); console.log(`❌ ${name}\n   ${detail}`); };
+const ok = (name: string, detail: string) => {
+  checks.push({ name, ok: true, detail });
+  console.log(`✅ ${name}\n   ${detail}`);
+};
+const warn = (name: string, detail: string) => {
+  checks.push({ name, ok: false, detail });
+  console.log(`⚠ ${name}\n   ${detail}`);
+};
+const bad = (name: string, detail: string) => {
+  checks.push({ name, ok: false, detail });
+  console.log(`❌ ${name}\n   ${detail}`);
+};
 
 async function main() {
   console.log('\n╔══════════════════════════════════════════════════════════════╗');
@@ -35,23 +47,33 @@ async function main() {
   const totalHedged = Number(c.hedge_state?.fields?.total_hedged_value || 0) / 1e6;
   const dailyTotal = Number(c.hedge_state?.fields?.daily_hedge_total || 0) / 1e6;
   const navUsd = poolBalance + totalHedged;
-  ok('Pool readable', `NAV=$${navUsd.toFixed(2)} balance=$${poolBalance.toFixed(2)} hedged=$${totalHedged.toFixed(2)} dailyTotal=$${dailyTotal.toFixed(2)}`);
+  ok(
+    'Pool readable',
+    `NAV=$${navUsd.toFixed(2)} balance=$${poolBalance.toFixed(2)} hedged=$${totalHedged.toFixed(2)} dailyTotal=$${dailyTotal.toFixed(2)}`
+  );
 
   // ── 2. NAV gate (new $20 floor) ─────────────────────────────
   const MIN_NAV = Number(process.env.HEDGE_MIN_NAV_USD) || 20;
   if (navUsd >= MIN_NAV) ok('NAV gate (new $20 floor)', `$${navUsd.toFixed(2)} ≥ $${MIN_NAV}`);
-  else { bad('NAV gate', `$${navUsd.toFixed(2)} < $${MIN_NAV}`); return done(); }
+  else {
+    bad('NAV gate', `$${navUsd.toFixed(2)} < $${MIN_NAV}`);
+    return done();
+  }
 
   // ── 3. AI signal pipeline ──────────────────────────────────
   console.log('\n── 2. AI SIGNAL PIPELINE ──');
   const sig = await Polymarket5MinService.getLatest5MinSignal();
-  if (sig) ok('Polymarket 5-min', `${sig.direction} prob=${sig.probability}% conf=${sig.confidence}%`);
+  if (sig)
+    ok('Polymarket 5-min', `${sig.direction} prob=${sig.probability}% conf=${sig.confidence}%`);
   else bad('Polymarket 5-min', 'no signal');
 
   const agent = new SuiPoolAgent('mainnet');
   await agent.initialize();
   const ctx = await agent.getEnhancedAllocationContext();
-  ok('AI allocation', `sentiment=${ctx.marketSentiment} urgency=${ctx.urgency} BTC=${ctx.allocations.BTC}%/ETH=${ctx.allocations.ETH}%/SUI=${ctx.allocations.SUI}% signals=${ctx.predictionSignals?.length || 0}`);
+  ok(
+    'AI allocation',
+    `sentiment=${ctx.marketSentiment} urgency=${ctx.urgency} BTC=${ctx.allocations.BTC}%/ETH=${ctx.allocations.ETH}%/SUI=${ctx.allocations.SUI}% signals=${ctx.predictionSignals?.length || 0}`
+  );
 
   const sentiment = (ctx.marketSentiment || 'NEUTRAL').toUpperCase();
   const side: 'LONG' | 'SHORT' = sentiment === 'BULLISH' ? 'LONG' : 'SHORT';
@@ -79,7 +101,10 @@ async function main() {
     if (allocation >= 5 && snapped >= spec.minQty) {
       totalMarginNeeded += hedgeUSD;
       planned.push({ asset, size: snapped, margin: hedgeUSD });
-      ok(`${asset}-PERP`, `size=${snapped} ($${effective.toFixed(2)} eff @ ${leverage}x) margin=$${hedgeUSD.toFixed(2)}`);
+      ok(
+        `${asset}-PERP`,
+        `size=${snapped} ($${effective.toFixed(2)} eff @ ${leverage}x) margin=$${hedgeUSD.toFixed(2)}`
+      );
     } else {
       warn(`${asset}-PERP`, `alloc=${allocation}% snapped=${snapped} minQty=${spec.minQty} → SKIP`);
     }
@@ -88,7 +113,10 @@ async function main() {
   // ── 5. BlueFin account state ────────────────────────────
   console.log('\n── 4. BLUEFIN MARGIN ACCOUNT ──');
   const key = (process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-  if (!key) { bad('BlueFin key', 'BLUEFIN_PRIVATE_KEY missing'); return done(); }
+  if (!key) {
+    bad('BlueFin key', 'BLUEFIN_PRIVATE_KEY missing');
+    return done();
+  }
 
   const bf = BluefinService.getInstance();
   if (!bf.isInitialized()) await bf.initialize(key, 'mainnet');
@@ -96,15 +124,21 @@ async function main() {
   ok('BlueFin auth', `wallet=${bf.getAddress()?.slice(0, 12)}… positions=${positions.length}`);
 
   const acct: any = await (bf as any).apiRequest(
-    'GET', `/api/v1/account?accountAddress=${bf.getAddress()}`, undefined, 'exchange'
+    'GET',
+    `/api/v1/account?accountAddress=${bf.getAddress()}`,
+    undefined,
+    'exchange'
   );
   const freeCollat = Number(acct?.freeCollateral || 0);
-  const dedup = new Set(positions.map(p => `${p.symbol}|${p.side}`));
+  const dedup = new Set(positions.map((p) => `${p.symbol}|${p.side}`));
 
   if (freeCollat >= totalMarginNeeded) {
     ok('Free collateral', `$${freeCollat.toFixed(2)} ≥ $${totalMarginNeeded.toFixed(2)} needed`);
   } else {
-    bad('Free collateral', `$${freeCollat.toFixed(2)} < $${totalMarginNeeded.toFixed(2)} needed → hedges will fail with insufficient-margin`);
+    bad(
+      'Free collateral',
+      `$${freeCollat.toFixed(2)} < $${totalMarginNeeded.toFixed(2)} needed → hedges will fail with insufficient-margin`
+    );
   }
 
   console.log('\n── 5. DEDUP GATE PREVIEW ──');
@@ -139,7 +173,9 @@ async function main() {
         ok('Last cron run', `${ageMin.toFixed(1)}m ago, action=${r.rows[0].action}`);
         if (newCode) ok('My fixes are LIVE', 'new daily-cap error message detected in latest run');
       }
-    } finally { await pg.end(); }
+    } finally {
+      await pg.end();
+    }
   }
 
   done();
@@ -149,10 +185,10 @@ function done() {
   console.log('\n╔══════════════════════════════════════════════════════════════╗');
   console.log('║  SUMMARY                                                     ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
-  const passed = checks.filter(c => c.ok).length;
+  const passed = checks.filter((c) => c.ok).length;
   const total = checks.length;
   console.log(`Passed ${passed}/${total}`);
-  const failed = checks.filter(c => !c.ok);
+  const failed = checks.filter((c) => !c.ok);
   if (failed.length > 0) {
     console.log('\nBlockers:');
     for (const f of failed) console.log(`  ❌ ${f.name}: ${f.detail}`);
@@ -160,4 +196,7 @@ function done() {
   process.exit(failed.length === 0 ? 0 : 1);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

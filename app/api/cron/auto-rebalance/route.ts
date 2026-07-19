@@ -1,12 +1,12 @@
 /**
  * Cron Job: Auto-Rebalance & Loss Protection
- * 
+ *
  * This endpoint is invoked by Upstash QStash (or master cron) to:
  * 1. Check and rebalance portfolios based on allocation drift
  * 2. Monitor P&L and trigger protective hedges on significant losses
- * 
+ *
  * Schedule: Every 15 minutes via QStash
- * 
+ *
  * Security: Verified by QStash signature or CRON_SECRET
  */
 
@@ -14,7 +14,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
-import { getAutoRebalanceConfigs, saveLastRebalance, getLastRebalance } from '@/lib/storage/auto-rebalance-storage';
+import {
+  getAutoRebalanceConfigs,
+  saveLastRebalance,
+  getLastRebalance,
+} from '@/lib/storage/auto-rebalance-storage';
 import type { AutoRebalanceConfig } from '@/lib/storage/auto-rebalance-storage';
 import { assessPortfolio, executeRebalance } from '@/lib/services/rebalance-executor';
 import type { RebalanceAssessment } from '@/lib/services/rebalance-executor';
@@ -30,8 +34,8 @@ const COOLDOWN_PERIOD_MS = 24 * 60 * 60 * 1000; // 24 hours
 const _LOSS_PROTECTION_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours default
 
 // In-memory caches — loaded from DB on cold start, saved on change
-let lastHedgeTimeCache = new Map<number, number>();
-let peakPortfolioValuesCache = new Map<number, number>();
+const lastHedgeTimeCache = new Map<number, number>();
+const peakPortfolioValuesCache = new Map<number, number>();
 let dbStateLoaded = false;
 
 /**
@@ -49,17 +53,21 @@ async function loadStateFromDb(portfolioIds: number[]): Promise<void> {
       const peakVal = await getNumber(CronKeys.rebalancePeakValue(id));
       if (peakVal > 0) peakPortfolioValuesCache.set(id, peakVal);
     }
-    logger.info(`[AutoRebalance] Loaded loss-protection state from DB for ${portfolioIds.length} portfolios`);
+    logger.info(
+      `[AutoRebalance] Loaded loss-protection state from DB for ${portfolioIds.length} portfolios`
+    );
   } catch (error: unknown) {
-    logger.warn('[AutoRebalance] Failed to load state from DB — using defaults', { error: errMsg(error) });
+    logger.warn('[AutoRebalance] Failed to load state from DB — using defaults', {
+      error: errMsg(error),
+    });
   }
 }
 
 interface LossProtectionConfig {
   enabled: boolean;
-  lossThresholdPercent: number;  // Threshold for loss from entry
-  drawdownThresholdPercent?: number;  // Threshold for loss from peak (drawdown)
-  mode?: 'entry' | 'drawdown' | 'both';  // Which mode to use (default: 'entry')
+  lossThresholdPercent: number; // Threshold for loss from entry
+  drawdownThresholdPercent?: number; // Threshold for loss from peak (drawdown)
+  mode?: 'entry' | 'drawdown' | 'both'; // Which mode to use (default: 'entry')
   action: 'hedge' | 'sell_to_stable';
   hedgeRatio: number;
   maxHedgeLeverage: number;
@@ -82,24 +90,21 @@ interface ProcessingResult {
  */
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
-  
+
   // Security: Verify QStash signature or CRON_SECRET
   const authResult = await verifyCronRequest(request, 'AutoRebalance Cron');
   if (authResult !== true) {
     logger.warn('[AutoRebalance Cron] Unauthorized request');
-    return NextResponse.json(
-      { success: false, error: 'Unauthorized' },
-      { status: 401 }
-    );
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
-  
+
   logger.info('[AutoRebalance Cron] Starting scheduled portfolio check');
-  
+
   try {
     // Load enabled portfolios from persistent storage
     const configs = await getAutoRebalanceConfigs();
-    const enabledConfigs = configs.filter(c => c.enabled);
-    
+    const enabledConfigs = configs.filter((c) => c.enabled);
+
     if (enabledConfigs.length === 0) {
       logger.info('[AutoRebalance Cron] No enabled portfolios, skipping');
       return NextResponse.json({
@@ -109,21 +114,24 @@ export async function GET(request: NextRequest) {
         duration: Date.now() - startTime,
       });
     }
-    
+
     logger.info(`[AutoRebalance Cron] Processing ${enabledConfigs.length} portfolios`);
 
     // Load DB-backed state for all enabled portfolios (cold-start resilience)
-    await loadStateFromDb(enabledConfigs.map(c => c.portfolioId));
-    
+    await loadStateFromDb(enabledConfigs.map((c) => c.portfolioId));
+
     // Process each portfolio
     const results: ProcessingResult[] = [];
-    
+
     for (const config of enabledConfigs) {
       try {
         const result = await processPortfolio(config);
         results.push(result);
       } catch (error: unknown) {
-        logger.error(`[AutoRebalance Cron] Error processing portfolio ${config.portfolioId}:`, error);
+        logger.error(
+          `[AutoRebalance Cron] Error processing portfolio ${config.portfolioId}:`,
+          error
+        );
         results.push({
           portfolioId: config.portfolioId,
           status: 'error',
@@ -131,18 +139,18 @@ export async function GET(request: NextRequest) {
         });
       }
     }
-    
+
     // Summary
     const summary = {
       total: results.length,
-      rebalanced: results.filter(r => r.status === 'rebalanced').length,
-      checked: results.filter(r => r.status === 'checked').length,
-      skipped: results.filter(r => r.status === 'skipped').length,
-      errors: results.filter(r => r.status === 'error').length,
+      rebalanced: results.filter((r) => r.status === 'rebalanced').length,
+      checked: results.filter((r) => r.status === 'checked').length,
+      skipped: results.filter((r) => r.status === 'skipped').length,
+      errors: results.filter((r) => r.status === 'error').length,
     };
-    
+
     logger.info('[AutoRebalance Cron] Completed', summary);
-    
+
     return NextResponse.json({
       success: true,
       summary,
@@ -150,7 +158,6 @@ export async function GET(request: NextRequest) {
       duration: Date.now() - startTime,
       timestamp: new Date().toISOString(),
     });
-    
   } catch (error: unknown) {
     logger.error('[AutoRebalance Cron] Fatal error:', error);
     return safeErrorResponse(error, 'Auto-rebalance cron');
@@ -161,13 +168,19 @@ export async function GET(request: NextRequest) {
  * Process a single portfolio - handles both rebalancing AND loss protection
  */
 async function processPortfolio(config: AutoRebalanceConfig): Promise<ProcessingResult> {
-  const { portfolioId, threshold = DRIFT_THRESHOLD_DEFAULT, autoApprovalEnabled, autoApprovalThreshold, lossProtection } = config;
+  const {
+    portfolioId,
+    threshold = DRIFT_THRESHOLD_DEFAULT,
+    autoApprovalEnabled,
+    autoApprovalThreshold,
+    lossProtection,
+  } = config;
   const now = Date.now();
-  
+
   // Assess portfolio
   logger.info(`[AutoRebalance Cron] Assessing portfolio ${portfolioId}`);
   const assessment = await assessPortfolio(portfolioId, config.walletAddress);
-  
+
   if (!assessment) {
     logger.warn(`[AutoRebalance Cron] Unable to fetch portfolio data for portfolio ${portfolioId}`);
     return {
@@ -186,7 +199,7 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
     const cooldownMs = (lossConfig.cooldownHours || 4) * 60 * 60 * 1000;
     const lastHedge = lastHedgeTimeCache.get(portfolioId) || 0;
     const mode = lossConfig.mode || 'entry';
-    
+
     // Track peak value for drawdown calculation — DB-backed
     const currentValue = assessment.totalValue;
     const previousPeak = peakPortfolioValuesCache.get(portfolioId) || currentValue;
@@ -195,15 +208,15 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
       peakPortfolioValuesCache.set(portfolioId, newPeak);
       await setNumber(CronKeys.rebalancePeakValue(portfolioId), newPeak);
     }
-    
+
     // Calculate drawdown from peak
     const drawdownPercent = newPeak > 0 ? ((newPeak - currentValue) / newPeak) * 100 : 0;
     const drawdownThreshold = lossConfig.drawdownThresholdPercent || 4; // Default 4% drawdown
-    
+
     // Determine if protection should trigger
     let shouldTrigger = false;
     let triggerReason = '';
-    
+
     // Entry-based loss check
     if ((mode === 'entry' || mode === 'both') && assessment.pnlPercent !== undefined) {
       if (assessment.pnlPercent < -lossConfig.lossThresholdPercent) {
@@ -211,16 +224,16 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
         triggerReason = `P&L ${assessment.pnlPercent.toFixed(2)}% breached -${lossConfig.lossThresholdPercent}% threshold`;
       }
     }
-    
+
     // Drawdown-based check
     if ((mode === 'drawdown' || mode === 'both') && drawdownPercent > drawdownThreshold) {
       shouldTrigger = true;
-      triggerReason = `Drawdown ${drawdownPercent.toFixed(2)}% from peak ($${(newPeak/1e6).toFixed(1)}M → $${(currentValue/1e6).toFixed(1)}M) breached ${drawdownThreshold}% threshold`;
+      triggerReason = `Drawdown ${drawdownPercent.toFixed(2)}% from peak ($${(newPeak / 1e6).toFixed(1)}M → $${(currentValue / 1e6).toFixed(1)}M) breached ${drawdownThreshold}% threshold`;
     }
-    
+
     if (shouldTrigger) {
       logger.warn(`[LossProtection] Portfolio ${portfolioId}: ${triggerReason}`);
-      
+
       // Check hedge cooldown
       if (now - lastHedge < cooldownMs) {
         const hoursRemaining = ((cooldownMs - (now - lastHedge)) / (1000 * 60 * 60)).toFixed(1);
@@ -228,7 +241,7 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
       } else {
         // Execute protective hedge
         logger.info(`[LossProtection] Executing protective hedge for portfolio ${portfolioId}`);
-        
+
         try {
           const hedgeResult = await executeProtectiveHedge(
             portfolioId,
@@ -236,10 +249,10 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
             assessment,
             lossConfig
           );
-          
+
           lastHedgeTimeCache.set(portfolioId, now);
           await setTimestamp(CronKeys.rebalanceLastHedge(portfolioId), now);
-          
+
           return {
             portfolioId,
             status: 'hedged',
@@ -248,7 +261,10 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
             reason: `Loss protection triggered at ${assessment.pnlPercent.toFixed(2)}% → hedged ${(lossConfig.hedgeRatio * 100).toFixed(0)}% of portfolio`,
           };
         } catch (error: unknown) {
-          logger.error(`[LossProtection] Failed to execute hedge for portfolio ${portfolioId}:`, error);
+          logger.error(
+            `[LossProtection] Failed to execute hedge for portfolio ${portfolioId}:`,
+            error
+          );
           return {
             portfolioId,
             status: 'error',
@@ -263,25 +279,32 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
   // ════════════════════════════════════════════════════════════════════════
   // REBALANCING CHECK (allocation drift)
   // ════════════════════════════════════════════════════════════════════════
-  
+
   // Check cooldown period
   const lastRebalance = await getLastRebalance(portfolioId);
-  
-  if (lastRebalance && (now - lastRebalance) < COOLDOWN_PERIOD_MS) {
-    const hoursRemaining = ((COOLDOWN_PERIOD_MS - (now - lastRebalance)) / (1000 * 60 * 60)).toFixed(1);
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} in cooldown (${hoursRemaining}h remaining)`);
+
+  if (lastRebalance && now - lastRebalance < COOLDOWN_PERIOD_MS) {
+    const hoursRemaining = (
+      (COOLDOWN_PERIOD_MS - (now - lastRebalance)) /
+      (1000 * 60 * 60)
+    ).toFixed(1);
+    logger.info(
+      `[AutoRebalance Cron] Portfolio ${portfolioId} in cooldown (${hoursRemaining}h remaining)`
+    );
     return {
       portfolioId,
       status: 'skipped',
       reason: `Cooldown active (${hoursRemaining}h remaining)`,
     };
   }
-  
+
   // Check if rebalancing needed - use absolute drift % (e.g., 35% → 37% = 2% drift)
-  const maxAbsoluteDrift = Math.max(...assessment.drifts.map(d => Math.abs(d.drift)));
-  
+  const maxAbsoluteDrift = Math.max(...assessment.drifts.map((d) => Math.abs(d.drift)));
+
   if (maxAbsoluteDrift < threshold) {
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} within threshold (max drift: ${maxAbsoluteDrift.toFixed(2)}% < threshold ${threshold}%)`);
+    logger.info(
+      `[AutoRebalance Cron] Portfolio ${portfolioId} within threshold (max drift: ${maxAbsoluteDrift.toFixed(2)}% < threshold ${threshold}%)`
+    );
     return {
       portfolioId,
       status: 'checked',
@@ -290,18 +313,20 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
       reason: `Max drift ${maxAbsoluteDrift.toFixed(2)}% < threshold ${threshold}%`,
     };
   }
-  
+
   // Drift detected
-  logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} requires rebalancing (max drift: ${maxAbsoluteDrift.toFixed(2)}% > threshold ${threshold}%)`);
+  logger.info(
+    `[AutoRebalance Cron] Portfolio ${portfolioId} requires rebalancing (max drift: ${maxAbsoluteDrift.toFixed(2)}% > threshold ${threshold}%)`
+  );
   logger.info(`[AutoRebalance Cron] Drift details:`, {
-    drifts: assessment.drifts.map(d => ({
+    drifts: assessment.drifts.map((d) => ({
       asset: d.asset,
       target: `${d.target}%`,
       current: `${d.current.toFixed(1)}%`,
       drift: `${d.drift > 0 ? '+' : ''}${d.drift.toFixed(1)}%`,
     })),
   });
-  
+
   // Check auto-approval
   if (!autoApprovalEnabled) {
     logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} requires manual approval`);
@@ -312,9 +337,11 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
       reason: 'Manual approval required',
     };
   }
-  
+
   if (autoApprovalThreshold && assessment.totalValue > autoApprovalThreshold) {
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} exceeds auto-approval threshold ($${assessment.totalValue.toLocaleString()} > $${autoApprovalThreshold.toLocaleString()})`);
+    logger.info(
+      `[AutoRebalance Cron] Portfolio ${portfolioId} exceeds auto-approval threshold ($${assessment.totalValue.toLocaleString()} > $${autoApprovalThreshold.toLocaleString()})`
+    );
     return {
       portfolioId,
       status: 'skipped',
@@ -322,18 +349,24 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
       reason: `Value $${assessment.totalValue.toLocaleString()} > threshold $${autoApprovalThreshold.toLocaleString()}`,
     };
   }
-  
+
   // Execute rebalancing
   logger.info(`[AutoRebalance Cron] Executing rebalance for portfolio ${portfolioId}`);
-  
+
   try {
-    const result = await executeRebalance(portfolioId, config.walletAddress, assessment.proposedActions);
-    
+    const result = await executeRebalance(
+      portfolioId,
+      config.walletAddress,
+      assessment.proposedActions
+    );
+
     // Save last rebalance timestamp
     await saveLastRebalance(portfolioId, now);
-    
-    logger.info(`[AutoRebalance Cron] Portfolio ${portfolioId} rebalanced successfully: ${result.txHash}`);
-    
+
+    logger.info(
+      `[AutoRebalance Cron] Portfolio ${portfolioId} rebalanced successfully: ${result.txHash}`
+    );
+
     return {
       portfolioId,
       status: 'rebalanced',
@@ -341,7 +374,6 @@ async function processPortfolio(config: AutoRebalanceConfig): Promise<Processing
       txHash: result.txHash,
       reason: `Rebalanced (max drift: ${maxAbsoluteDrift.toFixed(2)}%)`,
     };
-    
   } catch (error: unknown) {
     logger.error(`[Auto Rebalance Cron] Failed to rebalance portfolio ${portfolioId}:`, error);
     return {
@@ -363,26 +395,24 @@ async function executeProtectiveHedge(
   lossConfig: LossProtectionConfig
 ): Promise<{ txHash: string }> {
   // Find the most underallocated assets to hedge (negative drift = underperforming target)
-  const losers = assessment.drifts
-    .filter((d) => d.drift < 0)
-    .sort((a, b) => a.drift - b.drift);
-  
+  const losers = assessment.drifts.filter((d) => d.drift < 0).sort((a, b) => a.drift - b.drift);
+
   const assetToHedge = losers[0]?.asset || 'BTC';
   const hedgeSize = assessment.totalValue * lossConfig.hedgeRatio;
   const leverage = Math.min(lossConfig.maxHedgeLeverage, 5);
-  
+
   logger.info(`[LossProtection] Creating SHORT ${assetToHedge} hedge`, {
     portfolioId,
     hedgeSize: `$${hedgeSize.toLocaleString()}`,
     leverage: `${leverage}x`,
     portfolioLoss: `${assessment.pnlPercent.toFixed(2)}%`,
   });
-  
+
   const hedgeApiUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL;
   if (!hedgeApiUrl) {
     throw new Error('Neither NEXTAUTH_URL nor NEXT_PUBLIC_URL set, cannot execute hedge');
   }
-  
+
   // Call the hedge execution API
   const response = await fetch(`${hedgeApiUrl}/api/agents/hedging/execute`, {
     method: 'POST',
@@ -399,26 +429,26 @@ async function executeProtectiveHedge(
     }),
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
+      Authorization: `Bearer ${process.env.INTERNAL_API_SECRET || process.env.CRON_SECRET}`,
     },
   });
-  
+
   if (!response.ok) {
     const error = await response.text();
     throw new Error(`Hedge API failed: ${error}`);
   }
-  
+
   const result = await response.json();
-  
+
   if (!result.success) {
     throw new Error(result.error || 'Hedge execution failed');
   }
-  
+
   logger.info(`[LossProtection] Hedge executed successfully`, {
     txHash: result.txHash,
     hedgeId: result.hedgeId,
   });
-  
+
   return { txHash: result.txHash || result.hedgeId };
 }
 

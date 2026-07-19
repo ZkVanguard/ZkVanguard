@@ -1,6 +1,6 @@
 /**
  * Community Pool Storage Layer
- * 
+ *
  * Provides persistent storage for community pool data using Neon PostgreSQL
  * - Pool state (total assets, share price, allocations)
  * - User shares (deposits, withdrawals, ownership)
@@ -22,11 +22,7 @@ import {
   txHashExists,
   getUserTransactionCounts,
   DbPoolState,
-  DbUserShares,
-  DbPoolTransaction,
-} from '../db/community-pool';
-
-// Re-export txHashExists for idempotency checks
+} from '../db/community-pool'; // Re-export txHashExists for idempotency checks
 export { txHashExists, getUserTransactionCounts };
 
 // Initialize tables on first import
@@ -46,19 +42,22 @@ async function ensureTablesInitialized() {
 
 // Supported assets
 export const SUPPORTED_ASSETS = ['BTC', 'ETH', 'SUI', 'CRO'] as const;
-export type SupportedAsset = typeof SUPPORTED_ASSETS[number];
+export type SupportedAsset = (typeof SUPPORTED_ASSETS)[number];
 
 // Types
 export interface PoolState {
   totalValueUSD: number;
   totalShares: number;
   sharePrice: number; // USD per share
-  allocations: Record<SupportedAsset, {
-    percentage: number;
-    valueUSD: number;
-    amount: number;
-    price: number;
-  }>;
+  allocations: Record<
+    SupportedAsset,
+    {
+      percentage: number;
+      valueUSD: number;
+      amount: number;
+      price: number;
+    }
+  >;
   lastRebalance: number;
   lastAIDecision: {
     timestamp: number;
@@ -147,7 +146,7 @@ function dbToPoolState(db: DbPoolState): PoolState {
  */
 export async function getPoolState(chain?: string): Promise<PoolState> {
   await ensureTablesInitialized();
-  
+
   try {
     const dbState = await getPoolStateFromDb(chain || 'cronos');
     if (dbState) {
@@ -166,7 +165,7 @@ export async function getPoolState(chain?: string): Promise<PoolState> {
 export async function savePoolState(state: PoolState, chain?: string): Promise<void> {
   await ensureTablesInitialized();
   state.updatedAt = Date.now();
-  
+
   try {
     await savePoolStateToDb({
       totalValueUSD: state.totalValueUSD,
@@ -188,12 +187,12 @@ export async function savePoolState(state: PoolState, chain?: string): Promise<v
  */
 export async function getAllUserShares(chain?: string): Promise<UserShares[]> {
   await ensureTablesInitialized();
-  
+
   try {
     const dbShares = await getAllUserSharesFromDb();
     const poolState = await getPoolState(chain);
-    
-    return dbShares.map(db => ({
+
+    return dbShares.map((db) => ({
       walletAddress: db.wallet_address,
       shares: Number(db.shares),
       valueUSD: Number(db.shares) * poolState.sharePrice,
@@ -212,19 +211,23 @@ export async function getAllUserShares(chain?: string): Promise<UserShares[]> {
 /**
  * Get user shares by wallet address
  */
-export async function getUserShares(walletAddress: string, chain?: string): Promise<UserShares | null> {
+export async function getUserShares(
+  walletAddress: string,
+  chain?: string
+): Promise<UserShares | null> {
   await ensureTablesInitialized();
-  
+
   try {
     const dbShares = await getUserSharesFromDb(walletAddress);
     if (!dbShares) return null;
-    
+
     const poolState = await getPoolState(chain);
     return {
       walletAddress: dbShares.wallet_address,
       shares: Number(dbShares.shares),
       valueUSD: Number(dbShares.shares) * poolState.sharePrice,
-      percentage: poolState.totalShares > 0 ? (Number(dbShares.shares) / poolState.totalShares) * 100 : 0,
+      percentage:
+        poolState.totalShares > 0 ? (Number(dbShares.shares) / poolState.totalShares) * 100 : 0,
       deposits: [],
       withdrawals: [],
       joinedAt: new Date(dbShares.joined_at).getTime(),
@@ -241,12 +244,13 @@ export async function getUserShares(walletAddress: string, chain?: string): Prom
  */
 export async function saveUserShares(userShares: UserShares): Promise<void> {
   await ensureTablesInitialized();
-  
+
   try {
     // Calculate cost basis from deposits
-    const costBasis = userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0) -
-                      userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0);
-    
+    const costBasis =
+      userShares.deposits.reduce((sum, d) => sum + d.amountUSD, 0) -
+      userShares.withdrawals.reduce((sum, w) => sum + w.amountUSD, 0);
+
     if (userShares.shares <= 0) {
       // Delete user if no shares remaining
       await deleteUserSharesFromDb(userShares.walletAddress);
@@ -266,12 +270,15 @@ export async function saveUserShares(userShares: UserShares): Promise<void> {
 /**
  * Get pool transaction history from Neon PostgreSQL
  */
-export async function getPoolHistory(limit: number = 50, chain?: string): Promise<PoolTransaction[]> {
+export async function getPoolHistory(
+  limit: number = 50,
+  chain?: string
+): Promise<PoolTransaction[]> {
   await ensureTablesInitialized();
-  
+
   try {
     const dbHistory = await getPoolHistoryFromDb(limit, chain);
-    return dbHistory.map(db => ({
+    return dbHistory.map((db) => ({
       id: db.transaction_id,
       type: db.type,
       walletAddress: db.wallet_address || undefined,
@@ -291,9 +298,12 @@ export async function getPoolHistory(limit: number = 50, chain?: string): Promis
 /**
  * Add transaction to pool history in Neon PostgreSQL
  */
-export async function addPoolTransaction(tx: Omit<PoolTransaction, 'id'>, chain?: string): Promise<PoolTransaction> {
+export async function addPoolTransaction(
+  tx: Omit<PoolTransaction, 'id'>,
+  chain?: string
+): Promise<PoolTransaction> {
   await ensureTablesInitialized();
-  
+
   const transaction: PoolTransaction = {
     ...tx,
     id: `pool-tx-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`,
@@ -329,15 +339,18 @@ export function calculateOwnership(userShares: number, totalShares: number): num
 /**
  * Get top shareholders
  */
-export async function getTopShareholders(limit: number = 10, chain?: string): Promise<{ walletAddress: string; shares: number; percentage: number }[]> {
+export async function getTopShareholders(
+  limit: number = 10,
+  chain?: string
+): Promise<{ walletAddress: string; shares: number; percentage: number }[]> {
   const allShares = await getAllUserShares(chain);
   const poolState = await getPoolState(chain);
-  
+
   return allShares
-    .filter(u => u.shares > 0)
+    .filter((u) => u.shares > 0)
     .sort((a, b) => b.shares - a.shares)
     .slice(0, limit)
-    .map(u => ({
+    .map((u) => ({
       walletAddress: u.walletAddress,
       shares: u.shares,
       percentage: calculateOwnership(u.shares, poolState.totalShares),

@@ -1,6 +1,6 @@
 /**
  * Multi-Chain Community Pool Configuration
- * 
+ *
  * Manages CommunityPool contract addresses and configurations across:
  * - Ethereum Mainnet - Production with USDT (via Tether WDK)
  * - Sepolia Testnet - WDK USDT integration testing
@@ -10,9 +10,7 @@
  */
 
 import { ChainType, NetworkType } from './addresses';
-import { getRpcUrl } from '../rpc-urls';
-
-// ============================================
+import { getRpcUrl } from '../rpc-urls'; // ============================================
 // TYPES
 // ============================================
 
@@ -140,7 +138,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     assets: ['BTC', 'ETH', 'SUI', 'CRO'],
     status: 'deprecated',
   },
-  
+
   hedera: {
     chainId: 296,
     chainType: 'evm',
@@ -177,7 +175,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     assets: ['BTC', 'ETH', 'USDT'],
     status: 'testing',
   },
-  
+
   // ============================================
   // SEPOLIA - PRIMARY CHAIN FOR TETHER WDK HACKATHON
   // Has OFFICIAL WDK USDT token
@@ -222,7 +220,7 @@ export const POOL_CHAIN_CONFIGS: Record<string, PoolChainConfig> = {
     assets: ['BTC', 'ETH', 'SUI', 'CRO'],
     status: 'live',
   },
-  
+
   sui: {
     chainId: 'sui:mainnet',
     chainType: 'sui',
@@ -291,16 +289,14 @@ export function getCommunityPoolAddress(
   if (!config) {
     return '0x0000000000000000000000000000000000000000';
   }
-  return config.contracts[network === 'mainnet' ? 'mainnet' : 'testnet'].communityPool as `0x${string}`;
+  return config.contracts[network === 'mainnet' ? 'mainnet' : 'testnet']
+    .communityPool as `0x${string}`;
 }
 
 /**
  * Get USDT token address for a specific chain and network
  */
-export function getUsdtAddress(
-  chainKey: string,
-  network: NetworkType = 'testnet'
-): `0x${string}` {
+export function getUsdtAddress(chainKey: string, network: NetworkType = 'testnet'): `0x${string}` {
   const config = POOL_CHAIN_CONFIGS[chainKey];
   if (!config) {
     return '0x0000000000000000000000000000000000000000';
@@ -313,10 +309,7 @@ export function getUsdtAddress(
  * - EVM chains: USDT (via Tether WDK)
  * - SUI: USDC
  */
-export function getDepositTokenSymbol(
-  chainKey: string,
-  network: NetworkType = 'testnet'
-): string {
+export function getDepositTokenSymbol(chainKey: string, network: NetworkType = 'testnet'): string {
   // SUI uses USDC across all networks
   if (chainKey === 'sui') return 'USDC';
   // EVM chains: USDT on both mainnet and testnet (WDK integration)
@@ -340,7 +333,7 @@ export function getDepositTokenInfo(
       logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg',
     };
   }
-  
+
   // EVM chains use USDT via Tether WDK (both mainnet and testnet)
   return {
     symbol: 'USDT',
@@ -355,7 +348,7 @@ export function getDepositTokenInfo(
  */
 export function getActiveChains(): PoolChainConfig[] {
   return Object.values(POOL_CHAIN_CONFIGS).filter(
-    c => c.status === 'live' || c.status === 'testing'
+    (c) => c.status === 'live' || c.status === 'testing'
   );
 }
 
@@ -363,7 +356,7 @@ export function getActiveChains(): PoolChainConfig[] {
  * Get chain config by chainId (supports both number and string)
  */
 export function getPoolChainByChainId(chainId: number | string): PoolChainConfig | undefined {
-  return Object.values(POOL_CHAIN_CONFIGS).find(c => c.chainId === chainId);
+  return Object.values(POOL_CHAIN_CONFIGS).find((c) => c.chainId === chainId);
 }
 
 /**
@@ -377,7 +370,7 @@ export function getPoolExplorerUrl(
 ): string {
   const config = POOL_CHAIN_CONFIGS[chainKey];
   if (!config) return '';
-  
+
   const baseUrl = config.blockExplorer[network === 'mainnet' ? 'mainnet' : 'testnet'];
   return `${baseUrl}/${type}/${value}`;
 }
@@ -385,10 +378,7 @@ export function getPoolExplorerUrl(
 /**
  * Check if a chain's pool is deployed (address != zero)
  */
-export function isPoolDeployed(
-  chainKey: string,
-  network: NetworkType = 'testnet'
-): boolean {
+export function isPoolDeployed(chainKey: string, network: NetworkType = 'testnet'): boolean {
   const address = getCommunityPoolAddress(chainKey, network);
   return address !== '0x0000000000000000000000000000000000000000';
 }
@@ -397,7 +387,7 @@ export function isPoolDeployed(
  * Get all deployed pools
  */
 export function getDeployedPools(network: NetworkType = 'testnet'): string[] {
-  return Object.keys(POOL_CHAIN_CONFIGS).filter(key => isPoolDeployed(key, network));
+  return Object.keys(POOL_CHAIN_CONFIGS).filter((key) => isPoolDeployed(key, network));
 }
 
 // ============================================

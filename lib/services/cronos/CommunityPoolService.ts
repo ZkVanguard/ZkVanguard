@@ -1,24 +1,24 @@
 /**
  * Community Pool Service (Business Logic + DB Tracking)
- * 
+ *
  * ARCHITECTURE:
  * - READS: Delegates to CommunityPoolStatsService.ts (single source of truth)
  * - WRITES: Records deposits/withdrawals to Neon PostgreSQL for tracking
  * - On-chain contract (CommunityPool.sol) is authoritative for NAV/shares
- * 
+ *
  * This service provides:
  * - Share-based ownership tracking (deposit → shares, withdraw → burn shares)
  * - ERC-4626 style virtual shares for inflation attack protection
  * - Fair proportional withdrawals with slippage protection
  * - AI-driven asset allocation decisions
  * - Transaction logging for analytics
- * 
+ *
  * FAIRNESS MECHANISMS (matching on-chain contract):
  * - Virtual shares offset to prevent first depositor attacks
  * - mulDiv-style calculations to prevent rounding manipulation
  * - Minimum first deposit to prevent inflation attacks
  * - Slippage protection on withdrawals
- * 
+ *
  * MAINNET SAFETY:
  * - All stats from on-chain via CommunityPoolStatsService
  * - DB is for logging only - never used as source of truth for NAV
@@ -27,10 +27,12 @@
 
 import { logger } from '../../utils/logger';
 import { isMainnet } from '../../utils/network';
-import { getMarketDataService, type ExtendedMarketData } from '../market-data/RealMarketDataService';
+import {
+  getMarketDataService,
+  type ExtendedMarketData,
+} from '../market-data/RealMarketDataService';
 import {
   getPoolStats as getOnChainPoolStats,
-  clearCaches as clearStatsCaches,
   type ChainStatsConfig,
 } from '../CommunityPoolStatsService';
 import {
@@ -44,11 +46,8 @@ import {
   txHashExists,
   SUPPORTED_ASSETS,
   type PoolState,
-  type UserShares,
   type SupportedAsset,
-} from '../../storage/community-pool-storage';
-
-// ═══════════════════════════════════════════════════════════════
+} from '../../storage/community-pool-storage'; // ═══════════════════════════════════════════════════════════════
 // NETWORK CONFIGURATION (Mainnet-Safe)
 // ═══════════════════════════════════════════════════════════════
 
@@ -72,14 +71,14 @@ const POOL_CONFIG = {
 function _getPoolConfig() {
   const mainnetMode = isMainnet();
   const config = mainnetMode ? POOL_CONFIG.mainnet : POOL_CONFIG.testnet;
-  
+
   if (!config.poolAddress) {
-    logger.error('[CommunityPool] Pool not deployed on network', { 
+    logger.error('[CommunityPool] Pool not deployed on network', {
       network: mainnetMode ? 'mainnet' : 'testnet',
-      alert: 'POOL_NOT_DEPLOYED'
+      alert: 'POOL_NOT_DEPLOYED',
     });
   }
-  
+
   return config;
 }
 
@@ -88,20 +87,20 @@ function _getPoolConfig() {
 // ═══════════════════════════════════════════════════════════════
 
 // Minimum deposits to prevent dust/inflation attacks
-const MIN_DEPOSIT_USD = 10;           // $10 minimum subsequent deposits
-const MIN_FIRST_DEPOSIT_USD = 10;     // $10 minimum FIRST deposit (virtual shares provide inflation attack protection)
+const MIN_DEPOSIT_USD = 10; // $10 minimum subsequent deposits
+const MIN_FIRST_DEPOSIT_USD = 10; // $10 minimum FIRST deposit (virtual shares provide inflation attack protection)
 const MIN_WITHDRAWAL_SHARES = 0.01;
 
 // Virtual shares/assets offset (ERC-4626 inflation attack protection)
 // MUST MATCH ON-CHAIN CONTRACT VALUES (in human-readable format):
 // Contract: VIRTUAL_SHARES = 1e18 (1 share), VIRTUAL_ASSETS = 1e6 ($1 USDC)
 // Off-chain (human-readable): 1 share, $1
-const VIRTUAL_SHARES = 1;             // 1 virtual share
-const VIRTUAL_ASSETS_USD = 1;         // $1 virtual assets
+const VIRTUAL_SHARES = 1; // 1 virtual share
+const VIRTUAL_ASSETS_USD = 1; // $1 virtual assets
 
 // Slippage protection
-const _DEFAULT_SLIPPAGE_BPS = 100;     // 1% default slippage tolerance
-const _MAX_SLIPPAGE_BPS = 500;         // 5% max slippage
+const _DEFAULT_SLIPPAGE_BPS = 100; // 1% default slippage tolerance
+const _MAX_SLIPPAGE_BPS = 500; // 5% max slippage
 
 // Extended market data cache - minimal TTL, relies on RealMarketDataService caching
 let extendedDataCache: Map<string, ExtendedMarketData> | null = null;
@@ -110,14 +109,14 @@ const DATA_CACHE_TTL = 5000; // 5 seconds - very fresh prices for fund operation
 
 /**
  * Fetch live prices using central RealMarketDataService
- * 
+ *
  * ⚠️ SECURITY: For billion-dollar fund, NEVER use hardcoded fallback prices.
  * Uses the unified price service with proper caching and deduplication.
  * Always returns fresh prices (<10s old via stale-while-revalidate).
  */
 export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>> {
   const now = Date.now();
-  
+
   // Return cached prices if fresh
   if (extendedDataCache && now - dataCacheTime < DATA_CACHE_TTL) {
     const prices: Partial<Record<SupportedAsset, number>> = {};
@@ -129,15 +128,15 @@ export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>>
       return prices as Record<SupportedAsset, number>;
     }
   }
-  
+
   // Use central RealMarketDataService
   const marketService = getMarketDataService();
   const extendedData = await marketService.getExtendedPrices([...SUPPORTED_ASSETS]);
-  
+
   // Validate we got all required prices
   const prices: Partial<Record<SupportedAsset, number>> = {};
   const missingAssets: string[] = [];
-  
+
   for (const asset of SUPPORTED_ASSETS) {
     const data = extendedData.get(asset);
     if (data && data.price > 0) {
@@ -146,16 +145,20 @@ export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>>
       missingAssets.push(asset);
     }
   }
-  
+
   if (missingAssets.length > 0) {
-    throw new Error(`Missing prices for: ${missingAssets.join(', ')}. Operations halted for fund security.`);
+    throw new Error(
+      `Missing prices for: ${missingAssets.join(', ')}. Operations halted for fund security.`
+    );
   }
-  
+
   // Update cache
   extendedDataCache = extendedData;
   dataCacheTime = now;
-  
-  logger.info(`[CommunityPool] Prices via RealMarketDataService: BTC=$${prices.BTC}, ETH=$${prices.ETH}`);
+
+  logger.info(
+    `[CommunityPool] Prices via RealMarketDataService: BTC=$${prices.BTC}, ETH=$${prices.ETH}`
+  );
   return prices as Record<SupportedAsset, number>;
 }
 
@@ -165,31 +168,34 @@ export async function fetchLivePrices(): Promise<Record<SupportedAsset, number>>
  */
 export async function fetchExtendedMarketData(): Promise<Map<string, ExtendedMarketData>> {
   const now = Date.now();
-  
+
   // Return cached if fresh
   if (extendedDataCache && now - dataCacheTime < DATA_CACHE_TTL) {
     return extendedDataCache;
   }
-  
+
   const marketService = getMarketDataService();
   const extendedData = await marketService.getExtendedPrices([...SUPPORTED_ASSETS]);
-  
+
   extendedDataCache = extendedData;
   dataCacheTime = now;
-  
+
   return extendedData;
 }
 
 /**
  * Calculate current NAV (Net Asset Value) of the pool
- * 
+ *
  * SINGLE SOURCE OF TRUTH: Delegates to CommunityPoolStatsService
  * which ALWAYS reads from on-chain contract.
- * 
+ *
  * Returns allocations in legacy format for backward compatibility
  * with existing code that expects PoolState['allocations'].
  */
-export async function calculatePoolNAV(chain?: string, chainStatsConfig?: ChainStatsConfig): Promise<{
+export async function calculatePoolNAV(
+  chain?: string,
+  chainStatsConfig?: ChainStatsConfig
+): Promise<{
   totalValueUSD: number;
   sharePrice: number;
   allocations: PoolState['allocations'];
@@ -198,7 +204,7 @@ export async function calculatePoolNAV(chain?: string, chainStatsConfig?: ChainS
     // Get authoritative on-chain stats
     const stats = await getOnChainPoolStats(chainStatsConfig);
     const prices = await fetchLivePrices();
-    
+
     // Build allocations in legacy format
     const allocations: PoolState['allocations'] = {
       BTC: {
@@ -226,13 +232,13 @@ export async function calculatePoolNAV(chain?: string, chainStatsConfig?: ChainS
         price: prices.CRO,
       },
     };
-    
+
     logger.info('[CommunityPool] NAV from on-chain via unified service', {
       totalValueUSD: stats.totalNAV,
       sharePrice: stats.sharePrice,
       source: 'on-chain',
     });
-    
+
     return {
       totalValueUSD: stats.totalNAV,
       sharePrice: stats.sharePrice,
@@ -243,11 +249,11 @@ export async function calculatePoolNAV(chain?: string, chainStatsConfig?: ChainS
     logger.warn('[CommunityPool] On-chain stats failed, falling back to DB', {
       err: err instanceof Error ? err.message : String(err),
     });
-    
+
     const poolState = await getPoolState(chain);
     const prices = await fetchLivePrices();
     const allocations = { ...poolState.allocations };
-    
+
     let cachedTVL = 0;
     for (const asset of SUPPORTED_ASSETS) {
       const amount = allocations[asset].amount || 0;
@@ -257,10 +263,10 @@ export async function calculatePoolNAV(chain?: string, chainStatsConfig?: ChainS
       allocations[asset].valueUSD = valueUSD;
       cachedTVL += valueUSD;
     }
-    
+
     const totalShares = poolState.totalShares || 1;
     const sharePrice = totalShares > 0 ? cachedTVL / totalShares : 1.0;
-    
+
     return { totalValueUSD: cachedTVL, sharePrice, allocations };
   }
 }
@@ -268,7 +274,7 @@ export async function calculatePoolNAV(chain?: string, chainStatsConfig?: ChainS
 /**
  * Deposit USDC into the community pool
  * Uses ERC-4626 virtual shares mechanism for fair share calculation
- * 
+ *
  * FAIRNESS: Virtual shares prevent first depositor inflation attacks
  * shares = (amount * (totalShares + VIRTUAL_SHARES)) / (totalAssets + VIRTUAL_ASSETS)
  */
@@ -286,7 +292,7 @@ export async function deposit(
   error?: string;
 }> {
   // IDEMPOTENCY: If txHash provided, check if already recorded
-  if (txHash && await txHashExists(txHash)) {
+  if (txHash && (await txHashExists(txHash))) {
     logger.info(`[CommunityPool] Duplicate deposit txHash ignored: ${txHash}`);
     return {
       success: true, // Already recorded, return success
@@ -302,7 +308,7 @@ export async function deposit(
   const poolState = await getPoolState(chain);
   const isFirstDeposit = poolState.totalShares === 0;
   const minRequired = isFirstDeposit ? MIN_FIRST_DEPOSIT_USD : MIN_DEPOSIT_USD;
-  
+
   if (amountUSD < minRequired) {
     return {
       success: false,
@@ -310,48 +316,52 @@ export async function deposit(
       sharePrice: 0,
       newTotalShares: 0,
       ownershipPercentage: 0,
-      error: isFirstDeposit 
+      error: isFirstDeposit
         ? `First deposit must be at least $${MIN_FIRST_DEPOSIT_USD} to prevent manipulation`
         : `Minimum deposit is $${MIN_DEPOSIT_USD}`,
     };
   }
-  
+
   try {
     const { totalValueUSD, allocations } = await calculatePoolNAV(chain);
-    
+
     // FAIRNESS: ERC-4626 virtual shares mechanism
     // Add virtual offset to prevent first depositor attacks
     const totalAssetsWithOffset = totalValueUSD + VIRTUAL_ASSETS_USD;
     const totalSharesWithOffset = poolState.totalShares + VIRTUAL_SHARES;
-    
+
     // Guard: totalSharesWithOffset should never be zero (VIRTUAL_SHARES >= 1)
     // but protect against misconfiguration
     if (totalAssetsWithOffset <= 0 || totalSharesWithOffset <= 0) {
       throw new Error('Pool state corrupt: virtual offset resulted in zero denominator');
     }
-    
+
     // shares = (amount * totalSharesWithOffset) / totalAssetsWithOffset
     // Using floor division to favor the pool (same as mulDiv.Floor in Solidity)
     const sharesReceived = Math.floor((amountUSD * totalSharesWithOffset) / totalAssetsWithOffset);
-    
+
     // Calculate actual share price for user reference
     const sharePrice = totalAssetsWithOffset / totalSharesWithOffset;
-    
+
     // Validate shares received is reasonable
     if (sharesReceived <= 0) {
       throw new Error('Share calculation failed: would receive 0 shares');
     }
-    
+
     // Update pool state
     poolState.totalValueUSD = totalValueUSD + amountUSD;
     poolState.totalShares += sharesReceived;
-    poolState.sharePrice = (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
-    
+    poolState.sharePrice =
+      (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
+
     // Allocate deposited funds according to target allocation
     const targetAllocations = poolState.lastAIDecision?.allocations || {
-      BTC: 35, ETH: 30, SUI: 20, CRO: 15,
+      BTC: 35,
+      ETH: 30,
+      SUI: 20,
+      CRO: 15,
     };
-    
+
     const prices = await fetchLivePrices();
     for (const asset of SUPPORTED_ASSETS) {
       const targetPct = targetAllocations[asset] / 100;
@@ -361,9 +371,9 @@ export async function deposit(
       poolState.allocations[asset].valueUSD += depositForAsset;
       poolState.allocations[asset].price = prices[asset];
     }
-    
+
     await savePoolState(poolState, chain);
-    
+
     // Update user shares
     let userShares = await getUserShares(walletAddress, chain);
     if (!userShares) {
@@ -378,7 +388,7 @@ export async function deposit(
         updatedAt: Date.now(),
       };
     }
-    
+
     userShares.shares += sharesReceived;
     userShares.valueUSD = userShares.shares * poolState.sharePrice;
     userShares.percentage = calculateOwnership(userShares.shares, poolState.totalShares);
@@ -389,22 +399,27 @@ export async function deposit(
       sharePrice,
       txHash,
     });
-    
+
     await saveUserShares(userShares);
-    
+
     // Record transaction
-    await addPoolTransaction({
-      type: 'DEPOSIT',
-      walletAddress,
-      amountUSD,
-      shares: sharesReceived,
-      sharePrice,
-      timestamp: Date.now(),
-      txHash,
-    }, chain);
-    
-    logger.info(`[CommunityPool] Deposit: ${walletAddress} deposited $${amountUSD}, received ${sharesReceived.toFixed(4)} shares`);
-    
+    await addPoolTransaction(
+      {
+        type: 'DEPOSIT',
+        walletAddress,
+        amountUSD,
+        shares: sharesReceived,
+        sharePrice,
+        timestamp: Date.now(),
+        txHash,
+      },
+      chain
+    );
+
+    logger.info(
+      `[CommunityPool] Deposit: ${walletAddress} deposited $${amountUSD}, received ${sharesReceived.toFixed(4)} shares`
+    );
+
     return {
       success: true,
       sharesReceived,
@@ -412,7 +427,6 @@ export async function deposit(
       newTotalShares: poolState.totalShares,
       ownershipPercentage: userShares.percentage,
     };
-    
   } catch (error: any) {
     logger.error('[CommunityPool] Deposit failed:', error);
     return {
@@ -429,10 +443,10 @@ export async function deposit(
 /**
  * Withdraw from the community pool by burning shares
  * Uses ERC-4626 virtual shares mechanism for fair withdrawal calculation
- * 
+ *
  * FAIRNESS: Virtual shares ensure symmetric deposit/withdrawal calculations
  * amountUSD = (sharesToBurn * (totalAssets + VIRTUAL_ASSETS)) / (totalShares + VIRTUAL_SHARES)
- * 
+ *
  * @param minAmountOut Optional slippage protection - reverts if output is less
  */
 export async function withdraw(
@@ -451,7 +465,7 @@ export async function withdraw(
 }> {
   try {
     // IDEMPOTENCY: If txHash provided, check if already recorded
-    if (txHash && await txHashExists(txHash)) {
+    if (txHash && (await txHashExists(txHash))) {
       logger.info(`[CommunityPool] Duplicate withdrawal txHash ignored: ${txHash}`);
       return {
         success: true, // Already recorded, return success
@@ -464,11 +478,11 @@ export async function withdraw(
     }
 
     let userShares = await getUserShares(walletAddress, chain);
-    
+
     // If txHash is provided, the on-chain tx already succeeded
     // The smart contract verified ownership - just record the withdrawal
     const onChainVerified = !!txHash;
-    
+
     // If no local record but on-chain succeeded, create a record to track
     if (!userShares && onChainVerified) {
       userShares = {
@@ -482,7 +496,7 @@ export async function withdraw(
         withdrawals: [],
       };
     }
-    
+
     // Only validate shares if NOT on-chain verified (pre-flight check)
     if (!onChainVerified && (!userShares || userShares.shares < sharesToBurn)) {
       return {
@@ -494,7 +508,7 @@ export async function withdraw(
         error: `Insufficient shares. You have ${userShares?.shares.toFixed(4) || 0} shares`,
       };
     }
-    
+
     if (!userShares) {
       return {
         success: false,
@@ -505,7 +519,7 @@ export async function withdraw(
         error: 'No user shares found',
       };
     }
-    
+
     if (sharesToBurn < MIN_WITHDRAWAL_SHARES) {
       return {
         success: false,
@@ -516,24 +530,24 @@ export async function withdraw(
         error: `Minimum withdrawal is ${MIN_WITHDRAWAL_SHARES} shares`,
       };
     }
-    
+
     const poolState = await getPoolState();
     const { totalValueUSD } = await calculatePoolNAV();
-    
+
     // FAIRNESS: ERC-4626 virtual shares mechanism (symmetric with deposit)
     const totalAssetsWithOffset = totalValueUSD + VIRTUAL_ASSETS_USD;
     const totalSharesWithOffset = poolState.totalShares + VIRTUAL_SHARES;
-    
+
     // Guard: totalSharesWithOffset should never be zero (VIRTUAL_SHARES >= 1)
     if (totalAssetsWithOffset <= 0 || totalSharesWithOffset <= 0) {
       throw new Error('Pool state corrupt: virtual offset resulted in zero denominator');
     }
-    
+
     // amountUSD = sharesToBurn * totalAssetsWithOffset / totalSharesWithOffset
     // Using floor division to favor the pool (same as mulDiv.Floor in Solidity)
     const amountUSD = Math.floor((sharesToBurn * totalAssetsWithOffset) / totalSharesWithOffset);
     const sharePrice = totalAssetsWithOffset / totalSharesWithOffset;
-    
+
     // FAIRNESS: Slippage protection - user specifies minimum acceptable output
     if (minAmountOut !== undefined && amountUSD < minAmountOut) {
       return {
@@ -545,22 +559,24 @@ export async function withdraw(
         error: `Slippage exceeded: would receive $${amountUSD.toFixed(2)} but minimum is $${minAmountOut.toFixed(2)}`,
       };
     }
-    
+
     // Update pool state (ensure non-negative in case local storage was out of sync)
     poolState.totalShares = Math.max(0, poolState.totalShares - sharesToBurn);
     poolState.totalValueUSD = Math.max(0, totalValueUSD - amountUSD);
-    poolState.sharePrice = (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
-    
+    poolState.sharePrice =
+      (poolState.totalValueUSD + VIRTUAL_ASSETS_USD) / (poolState.totalShares + VIRTUAL_SHARES);
+
     // Reduce asset amounts proportionally
     const withdrawalPct = sharesToBurn / (poolState.totalShares + sharesToBurn);
     for (const asset of SUPPORTED_ASSETS) {
       const amountToReduce = poolState.allocations[asset].amount * withdrawalPct;
       poolState.allocations[asset].amount -= amountToReduce;
-      poolState.allocations[asset].valueUSD = poolState.allocations[asset].amount * poolState.allocations[asset].price;
+      poolState.allocations[asset].valueUSD =
+        poolState.allocations[asset].amount * poolState.allocations[asset].price;
     }
-    
+
     await savePoolState(poolState, chain);
-    
+
     // Update user shares (ensure non-negative in case local storage was out of sync)
     userShares.shares = Math.max(0, userShares.shares - sharesToBurn);
     userShares.valueUSD = userShares.shares * poolState.sharePrice;
@@ -572,22 +588,27 @@ export async function withdraw(
       sharePrice,
       txHash,
     });
-    
+
     await saveUserShares(userShares);
-    
+
     // Record transaction
-    await addPoolTransaction({
-      type: 'WITHDRAWAL',
-      walletAddress,
-      amountUSD,
-      shares: sharesToBurn,
-      sharePrice,
-      timestamp: Date.now(),
-      txHash,
-    }, chain);
-    
-    logger.info(`[CommunityPool] Withdrawal: ${walletAddress} burned ${sharesToBurn.toFixed(4)} shares, received $${amountUSD.toFixed(2)}`);
-    
+    await addPoolTransaction(
+      {
+        type: 'WITHDRAWAL',
+        walletAddress,
+        amountUSD,
+        shares: sharesToBurn,
+        sharePrice,
+        timestamp: Date.now(),
+        txHash,
+      },
+      chain
+    );
+
+    logger.info(
+      `[CommunityPool] Withdrawal: ${walletAddress} burned ${sharesToBurn.toFixed(4)} shares, received $${amountUSD.toFixed(2)}`
+    );
+
     return {
       success: true,
       amountUSD,
@@ -595,7 +616,6 @@ export async function withdraw(
       sharePrice,
       remainingShares: userShares.shares,
     };
-    
   } catch (error: any) {
     logger.error('[CommunityPool] Withdrawal failed:', error);
     return {
@@ -627,7 +647,10 @@ export async function applyAIDecision(
     // Validate individual allocations are within valid range
     for (const [asset, pct] of Object.entries(newAllocations)) {
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
-        const emptyAlloc = Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>;
+        const emptyAlloc = Object.fromEntries(SUPPORTED_ASSETS.map((a) => [a, 0])) as Record<
+          SupportedAsset,
+          number
+        >;
         return {
           success: false,
           previousAllocations: emptyAlloc,
@@ -637,11 +660,14 @@ export async function applyAIDecision(
         };
       }
     }
-    
+
     // Validate allocations sum to 100%
     const totalPct = Object.values(newAllocations).reduce((sum, pct) => sum + pct, 0);
     if (Math.abs(totalPct - 100) > 0.1) {
-      const emptyAlloc = Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>;
+      const emptyAlloc = Object.fromEntries(SUPPORTED_ASSETS.map((a) => [a, 0])) as Record<
+        SupportedAsset,
+        number
+      >;
       return {
         success: false,
         previousAllocations: emptyAlloc,
@@ -650,28 +676,32 @@ export async function applyAIDecision(
         error: `Allocations must sum to 100%, got ${totalPct}%`,
       };
     }
-    
+
     const poolState = await getPoolState(chain);
     const { totalValueUSD } = await calculatePoolNAV(chain);
     const prices = await fetchLivePrices();
-    
-    const previousAllocations = Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>;
+
+    const previousAllocations = Object.fromEntries(SUPPORTED_ASSETS.map((a) => [a, 0])) as Record<
+      SupportedAsset,
+      number
+    >;
     const trades: { asset: SupportedAsset; action: 'BUY' | 'SELL'; amountUSD: number }[] = [];
-    
+
     for (const asset of SUPPORTED_ASSETS) {
       previousAllocations[asset] = poolState.allocations[asset].percentage;
-      
+
       const currentValueUSD = poolState.allocations[asset].valueUSD;
       const targetValueUSD = (newAllocations[asset] / 100) * totalValueUSD;
       const diffUSD = targetValueUSD - currentValueUSD;
-      
-      if (Math.abs(diffUSD) > 10) { // Ignore tiny differences
+
+      if (Math.abs(diffUSD) > 10) {
+        // Ignore tiny differences
         trades.push({
           asset,
           action: diffUSD > 0 ? 'BUY' : 'SELL',
           amountUSD: Math.abs(diffUSD),
         });
-        
+
         // Update allocation
         poolState.allocations[asset].amount = targetValueUSD / prices[asset];
         poolState.allocations[asset].valueUSD = targetValueUSD;
@@ -679,7 +709,7 @@ export async function applyAIDecision(
         poolState.allocations[asset].price = prices[asset];
       }
     }
-    
+
     // Save AI decision
     poolState.lastAIDecision = {
       timestamp: Date.now(),
@@ -687,35 +717,40 @@ export async function applyAIDecision(
       allocations: newAllocations,
     };
     poolState.lastRebalance = Date.now();
-    
+
     await savePoolState(poolState, chain);
-    
+
     // Record transaction
-    await addPoolTransaction({
-      type: 'AI_DECISION',
-      timestamp: Date.now(),
-      details: {
-        previousAllocations,
-        newAllocations,
-        reasoning,
-        trades,
+    await addPoolTransaction(
+      {
+        type: 'AI_DECISION',
+        timestamp: Date.now(),
+        details: {
+          previousAllocations,
+          newAllocations,
+          reasoning,
+          trades,
+        },
       },
-    }, chain);
-    
+      chain
+    );
+
     logger.info(`[CommunityPool] AI decision applied: ${JSON.stringify(newAllocations)}`);
-    
+
     return {
       success: true,
       previousAllocations,
       newAllocations,
       trades,
     };
-    
   } catch (error: any) {
     logger.error('[CommunityPool] AI decision failed:', error);
     return {
       success: false,
-      previousAllocations: Object.fromEntries(SUPPORTED_ASSETS.map(a => [a, 0])) as Record<SupportedAsset, number>,
+      previousAllocations: Object.fromEntries(SUPPORTED_ASSETS.map((a) => [a, 0])) as Record<
+        SupportedAsset,
+        number
+      >,
       newAllocations,
       trades: [],
       error: error.message,
@@ -725,10 +760,13 @@ export async function applyAIDecision(
 
 /**
  * Get pool summary for display
- * 
+ *
  * SINGLE SOURCE OF TRUTH: Uses on-chain data via CommunityPoolStatsService
  */
-export async function getPoolSummary(chain?: string, chainStatsConfig?: ChainStatsConfig): Promise<{
+export async function getPoolSummary(
+  chain?: string,
+  chainStatsConfig?: ChainStatsConfig
+): Promise<{
   totalValueUSD: number;
   totalShares: number;
   sharePrice: number;
@@ -749,33 +787,36 @@ export async function getPoolSummary(chain?: string, chainStatsConfig?: ChainSta
     logger.warn('[CommunityPool] On-chain stats failed, falling back to DB', { err });
     onChainStats = null;
   }
-  
+
   // Fallback to DB state if needed
   const poolState = await getPoolState(chain);
-  const { totalValueUSD, sharePrice, allocations } = await calculatePoolNAV(chain, chainStatsConfig);
-  
+  const { totalValueUSD, sharePrice, allocations } = await calculatePoolNAV(
+    chain,
+    chainStatsConfig
+  );
+
   // Use on-chain member count if available, otherwise count from DB
   let totalMembers: number;
   let totalShares: number;
-  
+
   if (onChainStats) {
     totalMembers = onChainStats.memberCount;
     totalShares = onChainStats.totalShares;
   } else {
     const allUsers = await getAllUserShares(chain);
-    totalMembers = allUsers.filter(u => u.shares > 0).length;
+    totalMembers = allUsers.filter((u) => u.shares > 0).length;
     totalShares = poolState.totalShares;
   }
-  
+
   // Performance is calculated from real NAV history via RiskMetricsService
   // We return null here to indicate "use RiskMetrics API for real performance data"
   // ⚠️ NEVER use hardcoded placeholder performance for billion-dollar fund
   const performance = {
-    day: null as number | null,     // Use /api/community-pool/risk-metrics for real data
+    day: null as number | null, // Use /api/community-pool/risk-metrics for real data
     week: null as number | null,
     month: null as number | null,
   };
-  
+
   return {
     totalValueUSD,
     totalShares,

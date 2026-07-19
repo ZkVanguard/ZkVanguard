@@ -1,31 +1,31 @@
 /**
  * BlueFin Pro Perpetual DEX Integration for SUI
- * 
+ *
  * BlueFin is the leading orderbook-based perpetual exchange on SUI Network.
  * This service provides hedge execution via BlueFin Pro REST API.
- * 
+ *
  * AUTHENTICATION (No API Keys - Wallet Signature Only):
  * - POST /auth/v2/token with BCS-encoded payload signature
  * - Body: { accountAddress, signedAtMillis, audience }
  * - Header: payloadSignature (BCS signature with intent bytes)
  * - Returns JWT tokens for authenticated requests
- * 
+ *
  * RATE LIMITS:
  * - auth.api: 30 RPM (token requests)
  * - api: 300 RPM (pro services except trading)
  * - stream.api: 50 RPM (websocket)
  * - trade.api: 500 RPM (trading gateway)
- * 
+ *
  * ENDPOINTS:
  * - Auth API: https://auth.api.{env}.bluefin.io/auth/v2/token
  * - Trade API: https://trade.api.{env}.bluefin.io/api/v1/ (orders, account)
  * - Exchange API: https://api.{env}.bluefin.io/v1/exchange/ (market data, orderbook)
- * 
+ *
  * Order Fields (e9 scaling - 1e9 = 1.0):
  * - price_e9: Price in e9 format
  * - quantity_e9: Size in e9 format
  * - leverage_e9: Leverage in e9 format (2x = 2000000000)
- * 
+ *
  * @see https://bluefin-exchange.readme.io/reference/post_auth-v2-token
  * @see https://bluefin-exchange.readme.io/reference/postcreateorder
  */
@@ -74,14 +74,70 @@ export const BLUEFIN_NETWORKS = {
 
 // Supported trading pairs on BlueFin
 export const BLUEFIN_PAIRS = {
-  'BTC-PERP':  { index: 0, symbol: 'BTC-PERP',  baseAsset: 'BTC',  maxLeverage: 10, minQuantity: 0.001,  stepSize: 0.001 },
-  'ETH-PERP':  { index: 1, symbol: 'ETH-PERP',  baseAsset: 'ETH',  maxLeverage: 10, minQuantity: 0.01,   stepSize: 0.01  },
-  'SUI-PERP':  { index: 2, symbol: 'SUI-PERP',  baseAsset: 'SUI',  maxLeverage: 20, minQuantity: 1,      stepSize: 1     },
-  'SOL-PERP':  { index: 3, symbol: 'SOL-PERP',  baseAsset: 'SOL',  maxLeverage: 20, minQuantity: 0.1,    stepSize: 0.1   },
-  'GOLD-PERP': { index: 4, symbol: 'GOLD-PERP', baseAsset: 'GOLD', maxLeverage: 2,  minQuantity: 0.01,   stepSize: 0.01  },
-  'HYPE-PERP': { index: 5, symbol: 'HYPE-PERP', baseAsset: 'HYPE', maxLeverage: 10, minQuantity: 0.1,    stepSize: 0.1   },
-  'DEEP-PERP': { index: 6, symbol: 'DEEP-PERP', baseAsset: 'DEEP', maxLeverage: 10, minQuantity: 1,      stepSize: 1     },
-  'WAL-PERP':  { index: 7, symbol: 'WAL-PERP',  baseAsset: 'WAL',  maxLeverage: 10, minQuantity: 1,      stepSize: 1     },
+  'BTC-PERP': {
+    index: 0,
+    symbol: 'BTC-PERP',
+    baseAsset: 'BTC',
+    maxLeverage: 10,
+    minQuantity: 0.001,
+    stepSize: 0.001,
+  },
+  'ETH-PERP': {
+    index: 1,
+    symbol: 'ETH-PERP',
+    baseAsset: 'ETH',
+    maxLeverage: 10,
+    minQuantity: 0.01,
+    stepSize: 0.01,
+  },
+  'SUI-PERP': {
+    index: 2,
+    symbol: 'SUI-PERP',
+    baseAsset: 'SUI',
+    maxLeverage: 20,
+    minQuantity: 1,
+    stepSize: 1,
+  },
+  'SOL-PERP': {
+    index: 3,
+    symbol: 'SOL-PERP',
+    baseAsset: 'SOL',
+    maxLeverage: 20,
+    minQuantity: 0.1,
+    stepSize: 0.1,
+  },
+  'GOLD-PERP': {
+    index: 4,
+    symbol: 'GOLD-PERP',
+    baseAsset: 'GOLD',
+    maxLeverage: 2,
+    minQuantity: 0.01,
+    stepSize: 0.01,
+  },
+  'HYPE-PERP': {
+    index: 5,
+    symbol: 'HYPE-PERP',
+    baseAsset: 'HYPE',
+    maxLeverage: 10,
+    minQuantity: 0.1,
+    stepSize: 0.1,
+  },
+  'DEEP-PERP': {
+    index: 6,
+    symbol: 'DEEP-PERP',
+    baseAsset: 'DEEP',
+    maxLeverage: 10,
+    minQuantity: 1,
+    stepSize: 1,
+  },
+  'WAL-PERP': {
+    index: 7,
+    symbol: 'WAL-PERP',
+    baseAsset: 'WAL',
+    maxLeverage: 10,
+    minQuantity: 1,
+    stepSize: 1,
+  },
 } as const;
 
 // Order types
@@ -145,8 +201,15 @@ export interface BluefinHedgeResult {
    *   - 'NO_POSITION'         — close called with nothing on venue
    *   - 'VENUE_ERROR'         — non-classified BlueFin API failure
    */
-  code?: 'DUST_LOCKED' | 'DUST_RISK' | 'BELOW_MIN_QTY' | 'BELOW_MIN_QTY_SNAPPED'
-       | 'LEVERAGE_EXCEEDED' | 'NO_MARKET_PRICE' | 'NO_POSITION' | 'VENUE_ERROR';
+  code?:
+    | 'DUST_LOCKED'
+    | 'DUST_RISK'
+    | 'BELOW_MIN_QTY'
+    | 'BELOW_MIN_QTY_SNAPPED'
+    | 'LEVERAGE_EXCEEDED'
+    | 'NO_MARKET_PRICE'
+    | 'NO_POSITION'
+    | 'VENUE_ERROR';
   /** Structured dust classification — populated when code is DUST_LOCKED / DUST_RISK. */
   dust?: {
     positionSize: number;
@@ -164,7 +227,7 @@ export interface BluefinHedgeResult {
 
 /**
  * BlueFin Service - Handles all interactions with BlueFin DEX
- * 
+ *
  * Authentication: Wallet signature to get JWT token (no API keys)
  * Rate limiting: Built-in with exponential backoff on 429, respects Retry-After header
  */
@@ -177,7 +240,7 @@ export class BluefinService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private tokenExpiresAt: number = 0;
-  
+
   // Rate limiting state — per-endpoint to prevent one 429 from blocking all requests
   private lastRequestTime: Map<string, number> = new Map();
   private rateLimitRetryAfter: Map<string, number> = new Map();
@@ -248,13 +311,15 @@ export class BluefinService {
     try {
       const networkConfig = BLUEFIN_NETWORKS[cleanNetwork];
       if (!networkConfig) {
-        throw new Error(`Unknown BlueFin network: '${cleanNetwork}'. Must be 'mainnet' or 'testnet'.`);
+        throw new Error(
+          `Unknown BlueFin network: '${cleanNetwork}'. Must be 'mainnet' or 'testnet'.`
+        );
       }
 
-      logger.info('🌊 Initializing BlueFin Pro client', { 
-        network: cleanNetwork, 
+      logger.info('🌊 Initializing BlueFin Pro client', {
+        network: cleanNetwork,
         authApi: networkConfig.authApiUrl,
-        tradeApi: networkConfig.tradeApiUrl 
+        tradeApi: networkConfig.tradeApiUrl,
       });
 
       // Parse private key - supports bech32 (suiprivkey...) or hex formats
@@ -270,7 +335,7 @@ export class BluefinService {
 
       this.walletAddress = this.keypair.toSuiAddress();
       this.network = cleanNetwork;
-      
+
       // Try to authenticate with BlueFin API
       const authSuccess = await this.authenticate();
 
@@ -289,37 +354,52 @@ export class BluefinService {
       if (authSuccess) {
         try {
           const acctResp = await this.apiRequest<Record<string, unknown> | null>(
-            'GET', `/api/v1/account?accountAddress=${this.walletAddress}`, undefined, 'exchange'
+            'GET',
+            `/api/v1/account?accountAddress=${this.walletAddress}`,
+            undefined,
+            'exchange'
           );
           if (!acctResp) {
-            logger.warn(`⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${cleanNetwork}`);
+            logger.warn(
+              `⚠️ BlueFin account ${this.walletAddress} may not be onboarded on ${cleanNetwork}`
+            );
           } else {
             const e9 = acctResp.marginAvailableE9;
-            const free = e9 !== undefined && e9 !== null
-              ? (parseFloat(String(e9)) / 1e9).toFixed(6)
-              : String(acctResp.freeCollateral ?? '0');
-            logger.info('✅ BlueFin account verified', { canTrade: acctResp.canTrade, freeCollateral: free });
+            const free =
+              e9 !== undefined && e9 !== null
+                ? (parseFloat(String(e9)) / 1e9).toFixed(6)
+                : String(acctResp.freeCollateral ?? '0');
+            logger.info('✅ BlueFin account verified', {
+              canTrade: acctResp.canTrade,
+              freeCollateral: free,
+            });
           }
         } catch (acctErr) {
           const msg = acctErr instanceof Error ? acctErr.message : String(acctErr);
           if (msg.includes('404') || msg.includes('not found')) {
-            logger.error(`❌ BlueFin account ${this.walletAddress} NOT onboarded on ${cleanNetwork}. Visit https://trade.bluefin.io to register.`);
+            logger.error(
+              `❌ BlueFin account ${this.walletAddress} NOT onboarded on ${cleanNetwork}. Visit https://trade.bluefin.io to register.`
+            );
           } else {
             logger.warn('⚠️ Could not verify BlueFin account onboarding', { error: msg });
           }
         }
       }
-      
+
       this.initialized = true;
-      logger.info('✅ BlueFin client initialized', { 
-        network: cleanNetwork, 
+      logger.info('✅ BlueFin client initialized', {
+        network: cleanNetwork,
         address: this.walletAddress,
         authenticated: authSuccess,
       });
-
     } catch (error) {
-      logger.error('❌ Failed to initialize BlueFin client', error instanceof Error ? error : undefined);
-      throw new Error(`BlueFin initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(
+        '❌ Failed to initialize BlueFin client',
+        error instanceof Error ? error : undefined
+      );
+      throw new Error(
+        `BlueFin initialization failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -327,40 +407,40 @@ export class BluefinService {
    * Authenticate with BlueFin Pro /auth/v2/token endpoint
    * Uses SUI signPersonalMessage for wallet signature authentication
    * Returns true if authentication succeeded
-   * 
+   *
    * Rate limit: 30 RPM on auth.api
    */
   private async authenticate(): Promise<boolean> {
     if (!this.keypair) return false;
 
     const networkConfig = BLUEFIN_NETWORKS[this.network];
-    
+
     try {
       const signedAtMillis = Date.now();
       const audience = networkConfig.audience;
-      
+
       // Create the auth payload per SDK format
       const authPayload = {
         accountAddress: this.walletAddress,
         signedAtMillis,
         audience,
       };
-      
+
       // Serialize payload for signing
       const payloadString = JSON.stringify(authPayload);
       const messageBytes = new TextEncoder().encode(payloadString);
-      
+
       // Sign using SUI's signPersonalMessage which handles:
       // - BCS encoding message as vector<u8>
       // - Adding PersonalMessage intent prefix
       // - Blake2b hashing
       // - Creating serialized signature (flag + signature + pubkey in base64)
       const { signature: payloadSignature } = await this.keypair.signPersonalMessage(messageBytes);
-      
-      logger.debug('BlueFin Pro auth attempt', { 
-        address: this.walletAddress, 
+
+      logger.debug('BlueFin Pro auth attempt', {
+        address: this.walletAddress,
         network: this.network,
-        authUrl: `${networkConfig.authApiUrl}/auth/v2/token`
+        authUrl: `${networkConfig.authApiUrl}/auth/v2/token`,
       });
 
       const controller = new AbortController();
@@ -370,10 +450,10 @@ export class BluefinService {
       try {
         response = await fetch(`${networkConfig.authApiUrl}/auth/v2/token`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'payloadSignature': payloadSignature,
+            Accept: 'application/json',
+            payloadSignature: payloadSignature,
           },
           body: payloadString,
           signal: controller.signal,
@@ -385,17 +465,17 @@ export class BluefinService {
       // Handle rate limiting
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-        this.rateLimitRetryAfter.set('auth', Date.now() + (Math.min(retryAfter, 60) * 1000));
+        this.rateLimitRetryAfter.set('auth', Date.now() + Math.min(retryAfter, 60) * 1000);
         logger.warn('BlueFin auth rate limited', { retryAfter });
         return false;
       }
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.warn('BlueFin Pro auth failed', { 
-          status: response.status, 
+        logger.warn('BlueFin Pro auth failed', {
+          status: response.status,
           error: errorText.slice(0, 200),
-          network: this.network
+          network: this.network,
         });
         return false;
       }
@@ -403,29 +483,28 @@ export class BluefinService {
       const data = await response.json();
       this.accessToken = data.accessToken || data.token;
       this.refreshToken = data.refreshToken;
-      
+
       // Token typically valid for 30 days, but refresh before expiry
       if (data.expiresIn) {
-        this.tokenExpiresAt = Date.now() + (data.expiresIn * 1000) - 60000; // Refresh 1 min early
+        this.tokenExpiresAt = Date.now() + data.expiresIn * 1000 - 60000; // Refresh 1 min early
       } else {
-        this.tokenExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // Default 24 hours
+        this.tokenExpiresAt = Date.now() + 24 * 60 * 60 * 1000; // Default 24 hours
       }
-      
+
       if (this.accessToken) {
         logger.info('✅ BlueFin Pro authentication successful');
         return true;
       }
-      
+
       logger.warn('BlueFin Pro: No token in response');
       return false;
-      
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       logger.debug('BlueFin Pro auth error', { error: errMsg });
       return false;
     }
   }
-  
+
   /**
    * Ensure we have a valid access token, refreshing if needed
    */
@@ -439,7 +518,7 @@ export class BluefinService {
   /**
    * Sign order fields with SUI wallet using signPersonalMessage
    * Transforms fields to BlueFin Pro UI format and signs
-   * 
+   *
    * Per SDK: fields are transformed to UI format, pretty-printed JSON,
    * then signed with signPersonalMessage
    */
@@ -457,7 +536,7 @@ export class BluefinService {
     signedAtMillis: number;
   }): Promise<string> {
     if (!this.keypair) throw new Error('Keypair not initialized');
-    
+
     // Transform to UI format per SDK's toUICreateOrderRequest
     const uiOrderRequest = {
       type: 'Bluefin Pro Order',
@@ -473,14 +552,14 @@ export class BluefinService {
       salt: signedFields.salt,
       signedAt: signedFields.signedAtMillis.toString(),
     };
-    
+
     // SDK uses pretty-printed JSON with 2-space indent
     const orderJson = JSON.stringify(uiOrderRequest, null, 2);
     const messageBytes = new TextEncoder().encode(orderJson);
-    
+
     // Sign using signPersonalMessage
     const { signature } = await this.keypair.signPersonalMessage(messageBytes);
-    
+
     // Return the base64 serialized signature
     return signature;
   }
@@ -496,7 +575,7 @@ export class BluefinService {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     body?: Record<string, unknown>,
-    apiType: 'trade' | 'exchange' = 'trade',
+    apiType: 'trade' | 'exchange' = 'trade'
   ): Promise<T> {
     await this.ensureInitializedAsync();
     return this.apiRequest<T>(method, path, body, apiType);
@@ -524,22 +603,25 @@ export class BluefinService {
       if (Date.now() < retryAfterTs) {
         const waitMs = Math.min(retryAfterTs - Date.now(), 60000);
         if (attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, waitMs + Math.random() * 1000));
+          await new Promise((r) => setTimeout(r, waitMs + Math.random() * 1000));
         } else {
-          throw new Error(`Rate limited on ${rateLimitKey}. Retry after ${Math.ceil(waitMs / 1000)} seconds`);
+          throw new Error(
+            `Rate limited on ${rateLimitKey}. Retry after ${Math.ceil(waitMs / 1000)} seconds`
+          );
         }
       }
-    
+
       // Ensure we have a valid token
       await this.ensureValidToken();
-    
+
       const networkConfig = BLUEFIN_NETWORKS[this.network];
-      const baseUrl = apiType === 'exchange' ? networkConfig.exchangeApiUrl : networkConfig.tradeApiUrl;
+      const baseUrl =
+        apiType === 'exchange' ? networkConfig.exchangeApiUrl : networkConfig.tradeApiUrl;
       const url = `${baseUrl}${path}`;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
       };
 
       // Add auth token if available
@@ -561,11 +643,14 @@ export class BluefinService {
 
         // Handle rate limiting (429) — auto-retry with Retry-After
         if (response.status === 429) {
-          const retryAfter = Math.min(parseInt(response.headers.get('Retry-After') || '60', 10), 60);
-          this.rateLimitRetryAfter.set(rateLimitKey, Date.now() + (retryAfter * 1000));
+          const retryAfter = Math.min(
+            parseInt(response.headers.get('Retry-After') || '60', 10),
+            60
+          );
+          this.rateLimitRetryAfter.set(rateLimitKey, Date.now() + retryAfter * 1000);
           if (attempt < MAX_RETRIES) {
             logger.debug('BlueFin API rate limited, retrying...', { attempt, retryAfter, path });
-            await new Promise(r => setTimeout(r, retryAfter * 1000 + Math.random() * 1000));
+            await new Promise((r) => setTimeout(r, retryAfter * 1000 + Math.random() * 1000));
             continue;
           }
           logger.warn('BlueFin API rate limited after max retries', { retryAfter, path });
@@ -575,8 +660,12 @@ export class BluefinService {
         // Server errors (5xx) — auto-retry with exponential backoff
         if (response.status >= 500 && attempt < MAX_RETRIES) {
           const backoff = Math.pow(2, attempt - 1) * 1000;
-          logger.debug('BlueFin API server error, retrying...', { attempt, status: response.status, path });
-          await new Promise(r => setTimeout(r, backoff + Math.random() * 1000));
+          logger.debug('BlueFin API server error, retrying...', {
+            attempt,
+            status: response.status,
+            path,
+          });
+          await new Promise((r) => setTimeout(r, backoff + Math.random() * 1000));
           continue;
         }
 
@@ -604,14 +693,19 @@ export class BluefinService {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         // Retry on network/timeout errors
-        const isRetryable = lastError.message.includes('aborted') || 
-                           lastError.message.includes('network') ||
-                           lastError.message.includes('ECONNRESET') ||
-                           lastError.message.includes('fetch failed');
+        const isRetryable =
+          lastError.message.includes('aborted') ||
+          lastError.message.includes('network') ||
+          lastError.message.includes('ECONNRESET') ||
+          lastError.message.includes('fetch failed');
         if (isRetryable && attempt < MAX_RETRIES) {
           const backoff = Math.pow(2, attempt - 1) * 1000;
-          logger.debug('BlueFin API transient error, retrying...', { attempt, error: lastError.message, path });
-          await new Promise(r => setTimeout(r, backoff + Math.random() * 1000));
+          logger.debug('BlueFin API transient error, retrying...', {
+            attempt,
+            error: lastError.message,
+            path,
+          });
+          await new Promise((r) => setTimeout(r, backoff + Math.random() * 1000));
           continue;
         }
         throw lastError;
@@ -649,7 +743,7 @@ export class BluefinService {
         'GET',
         `/api/v1/account?accountAddress=${this.walletAddress}`,
         undefined,
-        'exchange',
+        'exchange'
       );
       const e9 = data?.marginAvailableE9;
       if (e9 !== undefined && e9 !== null) {
@@ -689,7 +783,9 @@ export class BluefinService {
 
       return positions.map((p: Record<string, unknown>) => {
         const symbol = String(p.symbol ?? '');
-        const side = (String(p.side ?? '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as 'LONG' | 'SHORT';
+        const side = (String(p.side ?? '').toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG') as
+          | 'LONG'
+          | 'SHORT';
         const entryPrice = e9(p.avgEntryPriceE9);
         const markPrice = e9(p.markPriceE9);
         const leverage = e9(p.leverageE9) || 1;
@@ -727,14 +823,16 @@ export class BluefinService {
    * Get open orders from Trade API
    * Uses Trade API: /api/v1/trade/openOrders
    */
-  async getOpenOrders(): Promise<Array<{
-    orderId: string;
-    symbol: string;
-    side: string;
-    price: number;
-    quantity: number;
-    status: string;
-  }>> {
+  async getOpenOrders(): Promise<
+    Array<{
+      orderId: string;
+      symbol: string;
+      side: string;
+      price: number;
+      quantity: number;
+      status: string;
+    }>
+  > {
     await this.ensureInitializedAsync();
 
     try {
@@ -744,17 +842,17 @@ export class BluefinService {
         undefined,
         'trade'
       );
-      return (orders || []).map(o => ({
-        orderId: o.orderId as string || o.orderHash as string,
+      return (orders || []).map((o) => ({
+        orderId: (o.orderId as string) || (o.orderHash as string),
         symbol: o.symbol as string,
         side: o.side as string,
-        price: parseFloat(o.price as string || '0'),
-        quantity: parseFloat(o.quantity as string || '0'),
-        status: o.status as string || 'OPEN',
+        price: parseFloat((o.price as string) || '0'),
+        quantity: parseFloat((o.quantity as string) || '0'),
+        status: (o.status as string) || 'OPEN',
       }));
     } catch (error) {
-      logger.debug('Failed to get BlueFin open orders', { 
-        error: error instanceof Error ? error.message : String(error) 
+      logger.debug('Failed to get BlueFin open orders', {
+        error: error instanceof Error ? error.message : String(error),
       });
       return [];
     }
@@ -766,14 +864,21 @@ export class BluefinService {
    * Note: Prices are in E9 format (multiply by 1e-9 to get decimal)
    * Falls back to null if exchange API is unavailable
    */
-  async getMarketData(symbol: string): Promise<{ price: number; fundingRate: number; change24h?: number; openInterestUsd?: number } | null> {
+  async getMarketData(
+    symbol: string
+  ): Promise<{
+    price: number;
+    fundingRate: number;
+    change24h?: number;
+    openInterestUsd?: number;
+  } | null> {
     await this.ensureInitializedAsync();
 
     try {
       // Response uses E9 format: lastPriceE9, fundingRateE9, etc.
       const marketData = await this.apiRequest<{
         lastPriceE9?: string;
-        lastPrice?: string;  // Some responses may use non-E9 format
+        lastPrice?: string; // Some responses may use non-E9 format
         lastFundingRateE9?: string;
         fundingRate?: string;
         priceChangePercent24hrE9?: string;
@@ -785,13 +890,8 @@ export class BluefinService {
         // values in the past (BTC OI reported $117B on 2026-06-01 prior
         // to the parsing fix).
         quoteVolume24hrE9?: string;
-      }>(
-        'GET',
-        `/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`,
-        undefined,
-        'exchange'
-      );
-      
+      }>('GET', `/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`, undefined, 'exchange');
+
       // Parse E9 format prices (divide by 1e9)
       let price = 0;
       if (marketData?.lastPriceE9) {
@@ -803,7 +903,7 @@ export class BluefinService {
         logger.warn('[BlueFin] NaN price detected', { symbol, raw: marketData });
         return null;
       }
-      
+
       let fundingRate = 0;
       if (marketData?.lastFundingRateE9) {
         fundingRate = parseFloat(marketData.lastFundingRateE9) / 1e9;
@@ -811,10 +911,10 @@ export class BluefinService {
         fundingRate = parseFloat(marketData.fundingRate);
       }
       if (isNaN(fundingRate)) fundingRate = 0;
-      
+
       let change24h: number | undefined;
       if (marketData?.priceChangePercent24hrE9) {
-        change24h = parseFloat(marketData.priceChangePercent24hrE9) / 1e9 * 100;
+        change24h = (parseFloat(marketData.priceChangePercent24hrE9) / 1e9) * 100;
       } else if (marketData?.priceChange24h) {
         change24h = parseFloat(marketData.priceChange24h);
       }
@@ -824,22 +924,28 @@ export class BluefinService {
       // See lib/services/sui/bluefin-ticker-parsers.ts for the encoding
       // story (openInterestE9 is USD × 1e9, NOT base × 1e9 — earlier code
       // was inflating BTC OI ~71,000×).
-      const oiSnap = parseTickerOpenInterest({
-        openInterestE9: marketData?.openInterestE9,
-        openInterest: marketData?.openInterest,
-        quoteVolume24hrE9: marketData?.quoteVolume24hrE9,
-      }, price);
+      const oiSnap = parseTickerOpenInterest(
+        {
+          openInterestE9: marketData?.openInterestE9,
+          openInterest: marketData?.openInterest,
+          quoteVolume24hrE9: marketData?.quoteVolume24hrE9,
+        },
+        price
+      );
       const openInterestUsd = oiSnap.openInterestUsd;
       if (oiSnap.rejectedReason) {
-        logger.warn('[BlueFin] OI snapshot rejected by sanity check', { symbol, reason: oiSnap.rejectedReason });
+        logger.warn('[BlueFin] OI snapshot rejected by sanity check', {
+          symbol,
+          reason: oiSnap.rejectedReason,
+        });
       }
 
       return { price, fundingRate, change24h, openInterestUsd };
     } catch (error) {
       // Log at debug level - exchange API may be temporarily unavailable on testnet
-      logger.debug('Failed to get market data', { 
-        symbol, 
-        error: error instanceof Error ? error.message : String(error)
+      logger.debug('Failed to get market data', {
+        symbol,
+        error: error instanceof Error ? error.message : String(error),
       });
       return null;
     }
@@ -875,7 +981,10 @@ export class BluefinService {
     const rawHedgeId = params.clientOrderId
       ? params.clientOrderId.replace(/[^A-Za-z0-9_\-:]/g, '_').slice(0, 64)
       : `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const hedgeId = rawHedgeId.length > 0 ? rawHedgeId : `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const hedgeId =
+      rawHedgeId.length > 0
+        ? rawHedgeId
+        : `BF_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const startTime = Date.now();
 
     try {
@@ -888,16 +997,26 @@ export class BluefinService {
 
       // Check if account is onboarded on BlueFin (use exchange API, not trade API)
       try {
-        const acctResp = await this.apiRequest<{ canTrade?: boolean; freeCollateral?: string } | null>(
-          'GET', `/api/v1/account?accountAddress=${this.walletAddress}`, undefined, 'exchange'
+        const acctResp = await this.apiRequest<{
+          canTrade?: boolean;
+          freeCollateral?: string;
+        } | null>(
+          'GET',
+          `/api/v1/account?accountAddress=${this.walletAddress}`,
+          undefined,
+          'exchange'
         );
         if (!acctResp || !acctResp.canTrade) {
-          throw new Error(`BlueFin account ${this.walletAddress} not found. Please onboard at https://trade.bluefin.io first.`);
+          throw new Error(
+            `BlueFin account ${this.walletAddress} not found. Please onboard at https://trade.bluefin.io first.`
+          );
         }
       } catch (acctError) {
         const msg = acctError instanceof Error ? acctError.message : String(acctError);
         if (msg.includes('404') || msg.includes('not found') || msg.includes('not onboarded')) {
-          throw new Error(`BlueFin account ${this.walletAddress} not onboarded. Visit https://trade.bluefin.io to register.`);
+          throw new Error(
+            `BlueFin account ${this.walletAddress} not onboarded. Visit https://trade.bluefin.io to register.`
+          );
         }
         // Re-throw other errors
         throw acctError;
@@ -929,17 +1048,20 @@ export class BluefinService {
             'GET',
             `/api/v1/trade/orders?clientOrderId=${encodeURIComponent(hedgeId)}`,
             undefined,
-            'trade',
+            'trade'
           );
           const match = Array.isArray(existing)
-            ? existing.find(o => o?.clientOrderId === hedgeId)
+            ? existing.find((o) => o?.clientOrderId === hedgeId)
             : null;
           if (match) {
-            logger.warn('🛡️  BlueFin idempotency hit — returning existing order instead of resubmitting', {
-              hedgeId,
-              orderHash: match.orderHash,
-              status: match.status,
-            });
+            logger.warn(
+              '🛡️  BlueFin idempotency hit — returning existing order instead of resubmitting',
+              {
+                hedgeId,
+                orderHash: match.orderHash,
+                status: match.status,
+              }
+            );
             return {
               success: true,
               hedgeId,
@@ -962,14 +1084,18 @@ export class BluefinService {
       }
 
       // Validate pair
-      const pair = Object.values(BLUEFIN_PAIRS).find(p => p.symbol === params.symbol);
+      const pair = Object.values(BLUEFIN_PAIRS).find((p) => p.symbol === params.symbol);
       if (!pair) {
-        throw new Error(`Invalid pair: ${params.symbol}. Available: ${Object.keys(BLUEFIN_PAIRS).join(', ')}`);
+        throw new Error(
+          `Invalid pair: ${params.symbol}. Available: ${Object.keys(BLUEFIN_PAIRS).join(', ')}`
+        );
       }
 
       // Check leverage limits
       if (params.leverage > pair.maxLeverage) {
-        throw new Error(`Leverage ${params.leverage}x exceeds max ${pair.maxLeverage}x for ${params.symbol}`);
+        throw new Error(
+          `Leverage ${params.leverage}x exceeds max ${pair.maxLeverage}x for ${params.symbol}`
+        );
       }
 
       // DUST3: prevent creating positions that will immediately become dust.
@@ -984,8 +1110,10 @@ export class BluefinService {
       const bypass = (process.env.BLUEFIN_ALLOW_DUST_RISK_OPEN ?? '') === '1';
       if (!bypass && params.size < pair.minQuantity * OPEN_MIN_QTY_BUFFER) {
         logger.warn('[BlueFin] openHedge: DUST_RISK — size below 1.5x minQty buffer', {
-          symbol: params.symbol, size: params.size,
-          minQty: pair.minQuantity, threshold: pair.minQuantity * OPEN_MIN_QTY_BUFFER,
+          symbol: params.symbol,
+          size: params.size,
+          minQty: pair.minQuantity,
+          threshold: pair.minQuantity * OPEN_MIN_QTY_BUFFER,
         });
         return {
           success: false,
@@ -1024,7 +1152,9 @@ export class BluefinService {
         };
       }
       if (steppedSize !== params.size) {
-        logger.info(`[BlueFin] Snapped order size ${params.size} → ${steppedSize} (step=${pair.stepSize}) for ${params.symbol}`);
+        logger.info(
+          `[BlueFin] Snapped order size ${params.size} → ${steppedSize} (step=${pair.stepSize}) for ${params.symbol}`
+        );
         params.size = steppedSize;
       }
 
@@ -1052,13 +1182,15 @@ export class BluefinService {
       //   BLUEFIN_MAX_FUNDING_RATE=0.0002    → adjust threshold (decimal per 8h)
       //   params.bypassFundingGuard=true     → per-call bypass for proven edge
       // ═══════════════════════════════════════════════════════════════════
-      const fundingGuardEnabled = (process.env.BLUEFIN_FUNDING_RATE_GUARD || 'true').toLowerCase() !== 'false';
+      const fundingGuardEnabled =
+        (process.env.BLUEFIN_FUNDING_RATE_GUARD || 'true').toLowerCase() !== 'false';
       if (fundingGuardEnabled && !params.bypassFundingGuard) {
         const fundingRate = marketData?.fundingRate ?? 0;
         const maxFunding = Math.abs(Number(process.env.BLUEFIN_MAX_FUNDING_RATE) || 0.0001);
         // SHORT pays when funding > 0; LONG pays when funding < 0.
-        const wouldPay = (params.side === 'SHORT' && fundingRate > maxFunding)
-                     || (params.side === 'LONG'  && fundingRate < -maxFunding);
+        const wouldPay =
+          (params.side === 'SHORT' && fundingRate > maxFunding) ||
+          (params.side === 'LONG' && fundingRate < -maxFunding);
         if (wouldPay) {
           logger.warn('[BlueFin] Funding-rate guard rejected hedge — would pay too much funding', {
             symbol: params.symbol,
@@ -1162,7 +1294,7 @@ export class BluefinService {
       // drops the order — we have to verify by observing the position
       // appear / grow.
       const preOpenPositions = await this.getPositions();
-      const prePos = preOpenPositions.find(p => p.symbol === params.symbol);
+      const prePos = preOpenPositions.find((p) => p.symbol === params.symbol);
       const preOpenSize = prePos?.size ?? 0;
       // If we already hold the same-side position, "opened" means size grew.
       // If we hold the opposite side, the new order may net-close it before
@@ -1204,9 +1336,9 @@ export class BluefinService {
         const POLL_MS = 500;
         const POLL_ATTEMPTS = 10;
         for (let i = 0; i < POLL_ATTEMPTS; i++) {
-          await new Promise(r => setTimeout(r, POLL_MS));
+          await new Promise((r) => setTimeout(r, POLL_MS));
           const fresh = await this.getPositions();
-          const stillThere = fresh.find(p => p.symbol === params.symbol);
+          const stillThere = fresh.find((p) => p.symbol === params.symbol);
           if (stillThere) {
             postOpenSize = stillThere.size;
             const sameSideSize = stillThere.side === params.side ? stillThere.size : 0;
@@ -1218,9 +1350,10 @@ export class BluefinService {
             }
             // Opposite-side reduction also counts as a fill (the order
             // netted against an existing position).
-            const oppositeReduction = (prePos?.side && prePos.side !== params.side)
-              ? Math.max(0, preOpenSize - stillThere.size)
-              : 0;
+            const oppositeReduction =
+              prePos?.side && prePos.side !== params.side
+                ? Math.max(0, preOpenSize - stillThere.size)
+                : 0;
             if (oppositeReduction >= params.size * 0.99) {
               positionGrew = true;
               filledSize = oppositeReduction;
@@ -1280,7 +1413,6 @@ export class BluefinService {
         fees: parseFloat(orderResponse?.fee || '0'),
         timestamp: Date.now(),
       };
-
     } catch (error) {
       logger.error('❌ Failed to open BlueFin hedge', error instanceof Error ? error : undefined);
       return {
@@ -1314,7 +1446,13 @@ export class BluefinService {
     try {
       // Step 1: Authentication
       const hasToken = !!this.accessToken;
-      steps.push({ step: 'auth', passed: hasToken, detail: hasToken ? `JWT token acquired for ${this.walletAddress}` : 'No token — auth failed' });
+      steps.push({
+        step: 'auth',
+        passed: hasToken,
+        detail: hasToken
+          ? `JWT token acquired for ${this.walletAddress}`
+          : 'No token — auth failed',
+      });
       if (!hasToken) return { success: false, steps, error: 'Authentication failed' };
 
       // Step 2: Account onboarding check
@@ -1325,7 +1463,7 @@ export class BluefinService {
           'GET',
           `/api/v1/account?accountAddress=${this.walletAddress}`,
           undefined,
-          'exchange',
+          'exchange'
         );
         accountOnboarded = !!acctResp;
         const e9 = acctResp?.marginAvailableE9;
@@ -1335,22 +1473,38 @@ export class BluefinService {
         } else {
           freeCollateral = String(acctResp?.freeCollateral ?? '0');
         }
-        steps.push({ step: 'account', passed: true, detail: `Onboarded, freeCollateral=${freeCollateral}` });
+        steps.push({
+          step: 'account',
+          passed: true,
+          detail: `Onboarded, freeCollateral=${freeCollateral}`,
+        });
       } catch {
-        steps.push({ step: 'account', passed: false, detail: `Account ${this.walletAddress} NOT onboarded — register at https://trade.bluefin.io` });
+        steps.push({
+          step: 'account',
+          passed: false,
+          detail: `Account ${this.walletAddress} NOT onboarded — register at https://trade.bluefin.io`,
+        });
       }
 
       // Step 3: Validate pair
-      const pair = Object.values(BLUEFIN_PAIRS).find(p => p.symbol === params.symbol);
+      const pair = Object.values(BLUEFIN_PAIRS).find((p) => p.symbol === params.symbol);
       if (!pair) {
         steps.push({ step: 'pair', passed: false, detail: `Invalid pair: ${params.symbol}` });
         return { success: false, steps, error: `Invalid pair: ${params.symbol}` };
       }
-      steps.push({ step: 'pair', passed: true, detail: `${pair.symbol} — maxLeverage=${pair.maxLeverage}x, minQty=${pair.minQuantity}, step=${pair.stepSize}` });
+      steps.push({
+        step: 'pair',
+        passed: true,
+        detail: `${pair.symbol} — maxLeverage=${pair.maxLeverage}x, minQty=${pair.minQuantity}, step=${pair.stepSize}`,
+      });
 
       // Step 4: Leverage
       const leverageOk = params.leverage <= pair.maxLeverage;
-      steps.push({ step: 'leverage', passed: leverageOk, detail: `${params.leverage}x (max ${pair.maxLeverage}x)` });
+      steps.push({
+        step: 'leverage',
+        passed: leverageOk,
+        detail: `${params.leverage}x (max ${pair.maxLeverage}x)`,
+      });
 
       // Step 4b: Minimum order size + step validation
       const sizeOk = params.size >= pair.minQuantity;
@@ -1367,7 +1521,10 @@ export class BluefinService {
       steps.push({
         step: 'market-data',
         passed: price > 0,
-        detail: price > 0 ? `${params.symbol} price=$${price.toFixed(2)}, funding=${marketData?.fundingRate?.toFixed(6) || 'n/a'}` : 'No price data',
+        detail:
+          price > 0
+            ? `${params.symbol} price=$${price.toFixed(2)}, funding=${marketData?.fundingRate?.toFixed(6) || 'n/a'}`
+            : 'No price data',
       });
 
       // Step 6: Order construction
@@ -1403,10 +1560,14 @@ export class BluefinService {
       // Step 7: Signature
       try {
         const signature = await this.signOrderFields(signedFields);
-        steps.push({ step: 'signature', passed: !!signature, detail: `Signed (${signature.slice(0, 20)}...)` });
+        steps.push({
+          step: 'signature',
+          passed: !!signature,
+          detail: `Signed (${signature.slice(0, 20)}...)`,
+        });
 
         // Return the constructed order for inspection
-        const allPassed = steps.every(s => s.passed);
+        const allPassed = steps.every((s) => s.passed);
         return {
           success: allPassed,
           steps,
@@ -1419,11 +1580,19 @@ export class BluefinService {
           },
         };
       } catch (sigErr) {
-        steps.push({ step: 'signature', passed: false, detail: `Signing failed: ${sigErr instanceof Error ? sigErr.message : String(sigErr)}` });
+        steps.push({
+          step: 'signature',
+          passed: false,
+          detail: `Signing failed: ${sigErr instanceof Error ? sigErr.message : String(sigErr)}`,
+        });
         return { success: false, steps, error: 'Signature failed' };
       }
     } catch (error) {
-      return { success: false, steps, error: error instanceof Error ? error.message : String(error) };
+      return {
+        success: false,
+        steps,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
@@ -1445,7 +1614,7 @@ export class BluefinService {
 
       // Get current position to determine close side and size
       const positions = await this.getPositions();
-      const position = positions.find(p => p.symbol === params.symbol);
+      const position = positions.find((p) => p.symbol === params.symbol);
 
       if (!position) {
         throw new Error(`No open position found for ${params.symbol}`);
@@ -1472,7 +1641,9 @@ export class BluefinService {
           stepMultiples: pair?.stepSize ? rawCloseSize / pair.stepSize : 0,
         };
         logger.warn('[BlueFin] closeHedge: DUST_LOCKED — position below minQty', {
-          symbol: params.symbol, ...dustInfo, snappedTo: closeSize,
+          symbol: params.symbol,
+          ...dustInfo,
+          snappedTo: closeSize,
         });
         return {
           success: false,
@@ -1591,9 +1762,9 @@ export class BluefinService {
         const POLL_MS = 500;
         const POLL_ATTEMPTS = 10;
         for (let i = 0; i < POLL_ATTEMPTS; i++) {
-          await new Promise(r => setTimeout(r, POLL_MS));
+          await new Promise((r) => setTimeout(r, POLL_MS));
           const fresh = await this.getPositions();
-          const stillThere = fresh.find(p => p.symbol === params.symbol);
+          const stillThere = fresh.find((p) => p.symbol === params.symbol);
           postCloseSize = stillThere?.size ?? 0;
           const shrinkage = preCloseSize - postCloseSize;
           if (shrinkage >= closeSize * 0.99) {
@@ -1674,11 +1845,14 @@ export class BluefinService {
           closeTxDigest: orderResponse?.txDigest,
         });
         if (updateResult.updated === 0) {
-          logger.warn('[BlueFin] Close persisted to exchange but no DB row matched (possible orphan)', {
-            symbol: params.symbol,
-            originalSide,
-            realizedPnl,
-          });
+          logger.warn(
+            '[BlueFin] Close persisted to exchange but no DB row matched (possible orphan)',
+            {
+              symbol: params.symbol,
+              originalSide,
+              realizedPnl,
+            }
+          );
         }
       } catch (dbErr) {
         logger.warn('[BlueFin] Failed to persist close PnL to DB (non-fatal)', {
@@ -1696,9 +1870,11 @@ export class BluefinService {
         fees: parseFloat(orderResponse?.fee || '0'),
         timestamp: Date.now(),
       };
-
     } catch (error) {
-      logger.error('❌ Failed to close BlueFin position', error instanceof Error ? error : undefined);
+      logger.error(
+        '❌ Failed to close BlueFin position',
+        error instanceof Error ? error : undefined
+      );
       return {
         success: false,
         hedgeId,
@@ -1711,7 +1887,10 @@ export class BluefinService {
   /**
    * Get order book for a symbol
    */
-  async getOrderBook(symbol: string, depth: number = 10): Promise<{
+  async getOrderBook(
+    symbol: string,
+    depth: number = 10
+  ): Promise<{
     bids: Array<{ price: number; size: number }>;
     asks: Array<{ price: number; size: number }>;
   }> {
@@ -1719,7 +1898,12 @@ export class BluefinService {
 
     try {
       // BlueFin Pro uses /v1/exchange/depth with E9-format prices
-      const orderbook = await this.apiRequest<{ bidsE9?: [string, string][]; asksE9?: [string, string][]; bids?: [string, string][]; asks?: [string, string][] }>(
+      const orderbook = await this.apiRequest<{
+        bidsE9?: [string, string][];
+        asksE9?: [string, string][];
+        bids?: [string, string][];
+        asks?: [string, string][];
+      }>(
         'GET',
         `/v1/exchange/depth?symbol=${encodeURIComponent(symbol)}&limit=${depth}`,
         undefined,
@@ -1752,7 +1936,14 @@ export class BluefinService {
 
     try {
       // BlueFin Pro uses /v1/exchange/fundingRateHistory with E9 format
-      const fundingHistory = await this.apiRequest<Array<{ fundingTimeAtMillis?: number; time?: number; fundingRateE9?: string; fundingRate?: string }>>(
+      const fundingHistory = await this.apiRequest<
+        Array<{
+          fundingTimeAtMillis?: number;
+          time?: number;
+          fundingRateE9?: string;
+          fundingRate?: string;
+        }>
+      >(
         'GET',
         `/v1/exchange/fundingRateHistory?symbol=${encodeURIComponent(symbol)}`,
         undefined,
@@ -1760,7 +1951,9 @@ export class BluefinService {
       );
       return (fundingHistory || []).map((f) => ({
         time: f.fundingTimeAtMillis || f.time || 0,
-        rate: f.fundingRateE9 ? parseFloat(f.fundingRateE9) / 1e9 : parseFloat(f.fundingRate || '0'),
+        rate: f.fundingRateE9
+          ? parseFloat(f.fundingRateE9) / 1e9
+          : parseFloat(f.fundingRate || '0'),
       }));
     } catch (error) {
       logger.error('Failed to get funding rates', error instanceof Error ? error : undefined);
@@ -1773,14 +1966,14 @@ export class BluefinService {
    */
   static assetToPair(asset: string): string | null {
     const mapping: Record<string, string> = {
-      'BTC': 'BTC-PERP',
-      'ETH': 'ETH-PERP',
-      'SUI': 'SUI-PERP',
-      'SOL': 'SOL-PERP',
-      'GOLD': 'GOLD-PERP',
-      'HYPE': 'HYPE-PERP',
-      'DEEP': 'DEEP-PERP',
-      'WAL': 'WAL-PERP',
+      BTC: 'BTC-PERP',
+      ETH: 'ETH-PERP',
+      SUI: 'SUI-PERP',
+      SOL: 'SOL-PERP',
+      GOLD: 'GOLD-PERP',
+      HYPE: 'HYPE-PERP',
+      DEEP: 'DEEP-PERP',
+      WAL: 'WAL-PERP',
     };
     return mapping[asset.toUpperCase()] || null;
   }
@@ -1791,12 +1984,18 @@ export class BluefinService {
   private async ensureInitializedAsync(): Promise<void> {
     if (!this.initialized) {
       const privateKey = (process.env.BLUEFIN_PRIVATE_KEY || '').trim();
-      const network = (process.env.BLUEFIN_NETWORK || process.env.SUI_NETWORK || 'mainnet').trim() as 'mainnet' | 'testnet';
-      
+      const network = (
+        process.env.BLUEFIN_NETWORK ||
+        process.env.SUI_NETWORK ||
+        'mainnet'
+      ).trim() as 'mainnet' | 'testnet';
+
       if (!privateKey) {
-        throw new Error('BlueFin client not initialized. Set BLUEFIN_PRIVATE_KEY or call initialize() first.');
+        throw new Error(
+          'BlueFin client not initialized. Set BLUEFIN_PRIVATE_KEY or call initialize() first.'
+        );
       }
-      
+
       await this.initialize(privateKey, network);
     }
   }

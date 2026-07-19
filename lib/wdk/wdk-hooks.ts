@@ -1,6 +1,6 @@
 /**
  * WDK Hooks
- * 
+ *
  * React hooks for Tether WDK wallet operations.
  * Provides useAccount, useChainId, useWriteContract,
  * useWaitForTransactionReceipt, useSignMessage, useSwitchChain, etc.
@@ -12,18 +12,16 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useWdk } from './wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
 import { ethers } from 'ethers';
-import { getCachedProvider } from './provider-cache';
-
-// ============================================
+import { getCachedProvider } from './provider-cache'; // ============================================
 // CHAIN MAPPING (derived from WDK_CHAINS config)
 // ============================================
 
 const CHAIN_ID_TO_KEY: Record<number, string> = Object.fromEntries(
-  Object.entries(WDK_CHAINS).map(([key, cfg]) => [cfg.chainId, key]),
+  Object.entries(WDK_CHAINS).map(([key, cfg]) => [cfg.chainId, key])
 );
 
 const _CHAIN_KEY_TO_ID: Record<string, number> = Object.fromEntries(
-  Object.entries(WDK_CHAINS).map(([key, cfg]) => [key, cfg.chainId]),
+  Object.entries(WDK_CHAINS).map(([key, cfg]) => [key, cfg.chainId])
 );
 
 // ============================================
@@ -44,24 +42,20 @@ export interface UseAccountReturn {
 
 export function useAccount(): UseAccountReturn {
   const { state } = useWdk();
-  
+
   const chain = useMemo(() => {
     if (!state.chainKey) return undefined;
     const config = WDK_CHAINS[state.chainKey];
     return config ? { id: config.chainId, name: config.name } : undefined;
   }, [state.chainKey]);
-  
+
   return {
     address: state.address as `0x${string}` | undefined,
     isConnected: state.isConnected,
     isConnecting: state.isLoading,
     isDisconnected: !state.isConnected && !state.isLoading,
     chain,
-    status: state.isLoading 
-      ? 'connecting' 
-      : state.isConnected 
-        ? 'connected' 
-        : 'disconnected',
+    status: state.isLoading ? 'connecting' : state.isConnected ? 'connected' : 'disconnected',
   };
 }
 
@@ -89,35 +83,41 @@ export function useSwitchChain(): UseSwitchChainReturn {
   const { switchChain: wdkSwitchChain } = useWdk();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
-  const switchChainAsync = useCallback(async ({ chainId }: { chainId: number }) => {
-    const chainKey = CHAIN_ID_TO_KEY[chainId];
-    if (!chainKey) {
-      setError(new Error(`Unsupported chain: ${chainId}`));
-      return false;
-    }
-    
-    setIsPending(true);
-    setError(null);
-    
-    try {
-      const success = await wdkSwitchChain(chainKey);
-      if (!success) {
-        setError(new Error('Failed to switch chain'));
+
+  const switchChainAsync = useCallback(
+    async ({ chainId }: { chainId: number }) => {
+      const chainKey = CHAIN_ID_TO_KEY[chainId];
+      if (!chainKey) {
+        setError(new Error(`Unsupported chain: ${chainId}`));
+        return false;
       }
-      return success;
-    } catch (err) {
-      setError(err as Error);
-      return false;
-    } finally {
-      setIsPending(false);
-    }
-  }, [wdkSwitchChain]);
-  
-  const switchChain = useCallback(async ({ chainId }: { chainId: number }) => {
-    await switchChainAsync({ chainId });
-  }, [switchChainAsync]);
-  
+
+      setIsPending(true);
+      setError(null);
+
+      try {
+        const success = await wdkSwitchChain(chainKey);
+        if (!success) {
+          setError(new Error('Failed to switch chain'));
+        }
+        return success;
+      } catch (err) {
+        setError(err as Error);
+        return false;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [wdkSwitchChain]
+  );
+
+  const switchChain = useCallback(
+    async ({ chainId }: { chainId: number }) => {
+      await switchChainAsync({ chainId });
+    },
+    [switchChainAsync]
+  );
+
   return { switchChain, switchChainAsync, isPending, error };
 }
 
@@ -141,39 +141,45 @@ export function useSignMessage(): UseSignMessageReturn {
   const [isPending, setIsPending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
-  const signMessageAsync = useCallback(async ({ message }: { message: string | Uint8Array }) => {
-    setIsPending(true);
-    setError(null);
-    setIsSuccess(false);
-    
-    try {
-      const signature = await wdkSignMessage(message);
-      if (!signature) {
-        throw new Error('Failed to sign message');
+
+  const signMessageAsync = useCallback(
+    async ({ message }: { message: string | Uint8Array }) => {
+      setIsPending(true);
+      setError(null);
+      setIsSuccess(false);
+
+      try {
+        const signature = await wdkSignMessage(message);
+        if (!signature) {
+          throw new Error('Failed to sign message');
+        }
+        setData(signature);
+        setIsSuccess(true);
+        return signature;
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setIsPending(false);
       }
-      setData(signature);
-      setIsSuccess(true);
-      return signature;
-    } catch (err) {
-      setError(err as Error);
-      throw err;
-    } finally {
-      setIsPending(false);
-    }
-  }, [wdkSignMessage]);
-  
-  const signMessage = useCallback(({ message }: { message: string | Uint8Array }) => {
-    signMessageAsync({ message }).catch(() => {});
-  }, [signMessageAsync]);
-  
+    },
+    [wdkSignMessage]
+  );
+
+  const signMessage = useCallback(
+    ({ message }: { message: string | Uint8Array }) => {
+      signMessageAsync({ message }).catch(() => {});
+    },
+    [signMessageAsync]
+  );
+
   const reset = useCallback(() => {
     setData(undefined);
     setIsPending(false);
     setIsSuccess(false);
     setError(null);
   }, []);
-  
+
   return { signMessage, signMessageAsync, data, isPending, isSuccess, error, reset };
 }
 
@@ -207,55 +213,61 @@ export function useWriteContract(): UseWriteContractReturn {
   const [isPending, setIsPending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
-  const writeContractAsync = useCallback(async (args: WriteContractArgs): Promise<`0x${string}`> => {
-    if (!state.chainKey) {
-      throw new Error('Wallet not connected');
-    }
-    
-    setIsPending(true);
-    setError(null);
-    setIsSuccess(false);
-    
-    try {
-      // Encode the function call
-      const { ethers } = await import('ethers');
-      const iface = new ethers.Interface(args.abi);
-      const callData = iface.encodeFunctionData(args.functionName, args.args ?? []);
-      
-      // Send transaction via WDK (throws on failure with real error)
-      const hash = await sendTransaction({
-        to: args.address,
-        data: callData,
-        value: args.value,
-      });
-      
-      if (!hash) {
-        throw new Error('Wallet not connected or transaction cancelled');
+
+  const writeContractAsync = useCallback(
+    async (args: WriteContractArgs): Promise<`0x${string}`> => {
+      if (!state.chainKey) {
+        throw new Error('Wallet not connected');
       }
-      
-      setData(hash as `0x${string}`);
-      setIsSuccess(true);
-      return hash as `0x${string}`;
-    } catch (err) {
-      setError(err as Error);
-      throw err;
-    } finally {
-      setIsPending(false);
-    }
-  }, [state.chainKey, sendTransaction]);
-  
-  const writeContract = useCallback((args: WriteContractArgs) => {
-    writeContractAsync(args).catch(() => {});
-  }, [writeContractAsync]);
-  
+
+      setIsPending(true);
+      setError(null);
+      setIsSuccess(false);
+
+      try {
+        // Encode the function call
+        const { ethers } = await import('ethers');
+        const iface = new ethers.Interface(args.abi);
+        const callData = iface.encodeFunctionData(args.functionName, args.args ?? []);
+
+        // Send transaction via WDK (throws on failure with real error)
+        const hash = await sendTransaction({
+          to: args.address,
+          data: callData,
+          value: args.value,
+        });
+
+        if (!hash) {
+          throw new Error('Wallet not connected or transaction cancelled');
+        }
+
+        setData(hash as `0x${string}`);
+        setIsSuccess(true);
+        return hash as `0x${string}`;
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [state.chainKey, sendTransaction]
+  );
+
+  const writeContract = useCallback(
+    (args: WriteContractArgs) => {
+      writeContractAsync(args).catch(() => {});
+    },
+    [writeContractAsync]
+  );
+
   const reset = useCallback(() => {
     setData(undefined);
     setIsPending(false);
     setIsSuccess(false);
     setError(null);
   }, []);
-  
+
   return { writeContract, writeContractAsync, data, isPending, isSuccess, error, reset };
 }
 
@@ -270,25 +282,27 @@ export interface UseWaitForTransactionReceiptReturn {
   error: Error | null;
 }
 
-export function useWaitForTransactionReceipt(args?: { hash?: `0x${string}` }): UseWaitForTransactionReceiptReturn {
+export function useWaitForTransactionReceipt(args?: {
+  hash?: `0x${string}`;
+}): UseWaitForTransactionReceiptReturn {
   const { state } = useWdk();
   const [data, setData] = useState<any>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
+
   // Watch for transaction confirmation
   useEffect(() => {
     if (!args?.hash || !state.chainKey) return;
-    
+
     const checkReceipt = async () => {
       setIsLoading(true);
-      
+
       try {
         const provider = getCachedProvider(state.chainKey!);
         if (!provider) throw new Error(`No provider for chain ${state.chainKey}`);
         const receipt = await provider.waitForTransaction(args.hash!, 1, 60000);
-        
+
         if (receipt) {
           setData(receipt);
           setIsSuccess(receipt.status === 1);
@@ -299,10 +313,10 @@ export function useWaitForTransactionReceipt(args?: { hash?: `0x${string}` }): U
         setIsLoading(false);
       }
     };
-    
+
     checkReceipt();
   }, [args?.hash, state.chainKey]);
-  
+
   return { data, isLoading, isSuccess, error };
 }
 
@@ -320,7 +334,9 @@ export interface ReadContractArgs {
   query?: { enabled?: boolean; refetchInterval?: number };
 }
 
-export function useReadContract<T = any>(args: ReadContractArgs): {
+export function useReadContract<T = any>(
+  args: ReadContractArgs
+): {
   data: T | undefined;
   isLoading: boolean;
   isError: boolean;
@@ -332,21 +348,19 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
   const [data, setData] = useState<T | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
-  const chainKey = args.chainId 
-    ? CHAIN_ID_TO_KEY[args.chainId] 
-    : state.chainKey;
+
+  const chainKey = args.chainId ? CHAIN_ID_TO_KEY[args.chainId] : state.chainKey;
 
   // Accept `query` options inside args for backwards compatibility
   const legacyQuery = (args as any).query ?? {};
   const enabledFlag = args.enabled ?? legacyQuery.enabled ?? true;
   const refetchInterval = (args as any).refetchInterval ?? legacyQuery.refetchInterval;
-  
+
   // Stabilize args.args AND args.abi to prevent infinite re-render loops
   // (inline arrays/objects have new identity each render)
   const argsKey = JSON.stringify(args.args ?? []);
   const abiKey = JSON.stringify(args.abi);
-  
+
   const refetch = useCallback(async () => {
     if (!chainKey) {
       setIsLoading(false);
@@ -357,17 +371,17 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
       setIsLoading(false);
       return;
     }
-    
+
     const chainConfig = WDK_CHAINS[chainKey];
     if (!chainConfig) {
       setError(new Error(`Unknown chain: ${chainKey}`));
       setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const parsedArgs = JSON.parse(argsKey);
       const parsedAbi = JSON.parse(abiKey);
@@ -382,7 +396,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
       setIsLoading(false);
     }
   }, [chainKey, args.address, abiKey, args.functionName, argsKey, enabledFlag]);
-  
+
   // Initial fetch — useEffect to avoid setState during render (hydration #301)
   useEffect(() => {
     refetch();
@@ -396,7 +410,7 @@ export function useReadContract<T = any>(args: ReadContractArgs): {
     }, refetchInterval);
     return () => clearInterval(id);
   }, [refetchInterval, enabledFlag, refetch]);
-  
+
   const isError = error !== null;
   const isSuccess = data !== undefined && !isError;
 
@@ -411,27 +425,30 @@ export function useSignTypedData() {
   const { signTypedData } = useWdk();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
-  const signTypedDataAsync = useCallback(async (data: any) => {
-    setIsPending(true);
-    setError(null);
-    
-    try {
-      // Use proper EIP-712 signing via ethers.js HDNodeWallet.signTypedData
-      const { domain, types, message } = data;
-      // ethers.js signTypedData does NOT want the EIP712Domain type in the types object
-      const { EIP712Domain, ...signingTypes } = types;
-      const signature = await signTypedData(domain, signingTypes, message);
-      if (!signature) throw new Error('Failed to sign typed data');
-      return signature;
-    } catch (err) {
-      setError(err as Error);
-      throw err;
-    } finally {
-      setIsPending(false);
-    }
-  }, [signTypedData]);
-  
+
+  const signTypedDataAsync = useCallback(
+    async (data: any) => {
+      setIsPending(true);
+      setError(null);
+
+      try {
+        // Use proper EIP-712 signing via ethers.js HDNodeWallet.signTypedData
+        const { domain, types, message } = data;
+        // ethers.js signTypedData does NOT want the EIP712Domain type in the types object
+        const { EIP712Domain, ...signingTypes } = types;
+        const signature = await signTypedData(domain, signingTypes, message);
+        if (!signature) throw new Error('Failed to sign typed data');
+        return signature;
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [signTypedData]
+  );
+
   return { signTypedDataAsync, isPending, error };
 }
 
@@ -441,24 +458,24 @@ export function useSignTypedData() {
 
 export function usePublicClient(): any {
   const { state } = useWdk();
-  
+
   return useMemo(() => {
     if (!state.chainKey) return null;
     const chainConfig = WDK_CHAINS[state.chainKey];
     if (!chainConfig) return null;
-    
+
     const provider = getCachedProvider(state.chainKey!);
     if (!provider) return null;
-    
+
     // Wrap ethers provider with viem-compatible method signatures
     return {
       _provider: provider,
-      
+
       async getChainId(): Promise<number> {
         const network = await provider.getNetwork();
         return Number(network.chainId);
       },
-      
+
       async getTransaction({ hash }: { hash: string }) {
         const tx = await provider.getTransaction(hash);
         if (!tx) return null;
@@ -471,7 +488,7 @@ export function usePublicClient(): any {
           blockNumber: tx.blockNumber ? BigInt(tx.blockNumber) : null,
         };
       },
-      
+
       async getTransactionReceipt({ hash }: { hash: string }) {
         const receipt = await provider.getTransactionReceipt(hash);
         if (!receipt) return null;
@@ -480,16 +497,24 @@ export function usePublicClient(): any {
           to: receipt.to,
           from: receipt.from,
           blockNumber: BigInt(receipt.blockNumber),
-          logs: receipt.logs.map(log => ({
+          logs: receipt.logs.map((log) => ({
             address: log.address,
             topics: log.topics as string[],
             data: log.data,
           })),
         };
       },
-      
-      async readContract({ address, abi, functionName, args }: {
-        address: string; abi: any[]; functionName: string; args?: any[];
+
+      async readContract({
+        address,
+        abi,
+        functionName,
+        args,
+      }: {
+        address: string;
+        abi: any[];
+        functionName: string;
+        args?: any[];
       }) {
         const contract = new ethers.Contract(address, abi, provider);
         return await contract[functionName](...(args || []));
@@ -504,7 +529,7 @@ export function usePublicClient(): any {
 
 export function useWalletClient(): { data: any | null } {
   const { state, signMessage, sendTransaction } = useWdk();
-  
+
   const data = useMemo(() => {
     if (!state.isConnected || !state.chainKey) return null;
     // Return a proxy object with signing capabilities
@@ -514,7 +539,7 @@ export function useWalletClient(): { data: any | null } {
       account: { address: state.address },
     };
   }, [state.isConnected, state.chainKey, state.address, signMessage, sendTransaction]);
-  
+
   return { data };
 }
 
@@ -529,30 +554,30 @@ export function useBalance(args?: { address?: `0x${string}`; chainId?: number })
   refetch: () => Promise<void>;
 } {
   const { state } = useWdk();
-  const [data, setData] = useState<{ value: bigint; formatted: string; symbol: string } | undefined>();
+  const [data, setData] = useState<
+    { value: bigint; formatted: string; symbol: string } | undefined
+  >();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
-  const address = args?.address ?? state.address as `0x${string}`;
-  const chainKey = args?.chainId 
-    ? CHAIN_ID_TO_KEY[args.chainId] 
-    : state.chainKey;
-  
+
+  const address = args?.address ?? (state.address as `0x${string}`);
+  const chainKey = args?.chainId ? CHAIN_ID_TO_KEY[args.chainId] : state.chainKey;
+
   const refetch = useCallback(async () => {
     if (!address || !chainKey) {
       setIsLoading(false);
       return;
     }
-    
+
     const chainConfig = WDK_CHAINS[chainKey];
     if (!chainConfig) {
       setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const provider = getCachedProvider(chainKey);
       if (!provider) throw new Error(`No provider for chain: ${chainKey}`);
@@ -568,12 +593,12 @@ export function useBalance(args?: { address?: `0x${string}`; chainId?: number })
       setIsLoading(false);
     }
   }, [address, chainKey]);
-  
+
   // Initial fetch — useEffect to avoid setState during render (hydration #301)
   useEffect(() => {
     refetch();
   }, [refetch]);
-  
+
   return { data, isLoading, error, refetch };
 }
 
@@ -588,7 +613,7 @@ export function useDisconnect(): {
 } {
   const { lockWallet } = useWdk();
   const [isPending, setIsPending] = useState(false);
-  
+
   const disconnectAsync = useCallback(async () => {
     setIsPending(true);
     try {
@@ -597,11 +622,11 @@ export function useDisconnect(): {
       setIsPending(false);
     }
   }, [lockWallet]);
-  
+
   const disconnect = useCallback(() => {
     disconnectAsync().catch(() => {});
   }, [disconnectAsync]);
-  
+
   return { disconnect, disconnectAsync, isPending };
 }
 

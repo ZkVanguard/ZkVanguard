@@ -1,7 +1,7 @@
 /**
  * Execute Hedge Position on Moonlander
  * API endpoint for opening SHORT positions on Moonlander perpetuals
- * 
+ *
  * Supports:
  * - Real on-chain execution via MoonlanderOnChainClient
  * - Privacy-preserving mode with ZK commitments
@@ -24,11 +24,17 @@ import { privateHedgeService } from '@/lib/services/cronos/PrivateHedgeService';
 import { MoonlanderOnChainClient } from '@/integrations/moonlander/MoonlanderOnChainClient';
 import { MOONLANDER_CONTRACTS } from '@/integrations/moonlander/contracts';
 import type { NetworkType } from '@/integrations/moonlander/contracts';
-import { HedgeExecutorClient, type OnChainHedgeResult } from '@/integrations/hedge-executor/HedgeExecutorClient';
+import {
+  HedgeExecutorClient,
+  type OnChainHedgeResult,
+} from '@/integrations/hedge-executor/HedgeExecutorClient';
 import { generateRebalanceProof, generateWalletOwnershipProof } from '@/lib/api/zk';
 import { deriveProxyPDA, type ProxyPDA } from '@/lib/crypto/ProxyPDA';
 import { getOnChainHedgeService } from '@/lib/services/cronos/OnChainHedgeService';
-import { getHedgeExecutionPrice, type HedgePriceContext } from '@/lib/services/market-data/unified-price-provider';
+import {
+  getHedgeExecutionPrice,
+  type HedgePriceContext,
+} from '@/lib/services/market-data/unified-price-provider';
 import * as crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -129,13 +135,25 @@ export async function POST(request: NextRequest) {
     const authResult = await requireAuth(request, body as unknown as Record<string, unknown>);
     if (authResult instanceof NextResponse) return authResult;
 
-    const { 
-      asset, side, notionalValue, leverage = 5, stopLoss, takeProfit, reason, 
-      privateMode = false, privacyLevel = 'standard',
-      autoApprovalEnabled = false, autoApprovalThreshold = 10000, signature,
-      walletAddress, useProxyWallet = false,
-      useOnChainVault = false, ownerSecret, depositAmount,
-      systemSecret
+    const {
+      asset,
+      side,
+      notionalValue,
+      leverage = 5,
+      stopLoss,
+      takeProfit,
+      reason,
+      privateMode = false,
+      privacyLevel = 'standard',
+      autoApprovalEnabled = false,
+      autoApprovalThreshold = 10000,
+      signature,
+      walletAddress,
+      useProxyWallet = false,
+      useOnChainVault = false,
+      ownerSecret,
+      depositAmount,
+      systemSecret,
     } = body;
 
     // Check for system/internal authentication (cron jobs, liquidation guard, etc.)
@@ -149,14 +167,14 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     if (!side || !['LONG', 'SHORT', 'BUY', 'SELL'].includes(side.toUpperCase())) {
       return NextResponse.json(
         { success: false, error: 'Missing or invalid side parameter (LONG/SHORT)' },
         { status: 400 }
       );
     }
-    
+
     if (notionalValue === undefined || notionalValue === null || isNaN(Number(notionalValue))) {
       return NextResponse.json(
         { success: false, error: 'Missing or invalid notionalValue parameter' },
@@ -174,7 +192,7 @@ export async function POST(request: NextRequest) {
           owner: walletAddress.slice(0, 10) + '...',
           depositAmount,
         });
-        
+
         const onChainService = getOnChainHedgeService('cronos-testnet');
         const vaultResult = await onChainService.createHedgeProxy({
           ownerAddress: walletAddress,
@@ -185,7 +203,7 @@ export async function POST(request: NextRequest) {
           side,
           leverage,
         });
-        
+
         if (vaultResult.success) {
           onChainVaultResult = {
             enabled: true,
@@ -195,7 +213,7 @@ export async function POST(request: NextRequest) {
             vaultTxHash: vaultResult.txHash,
             depositedAmount: depositAmount,
           };
-          
+
           logger.info('✅ On-chain vault proxy created', {
             proxy: vaultResult.proxyAddress?.slice(0, 10) + '...',
             txHash: vaultResult.txHash?.slice(0, 20) + '...',
@@ -226,22 +244,26 @@ export async function POST(request: NextRequest) {
     // Check if signature is required
     // System calls (cron jobs, liquidation guard) bypass normal signature requirements
     const effectiveThreshold = isSystemCall ? systemAutoApprovalThreshold : autoApprovalThreshold;
-    const requiresSignature = !isSystemCall && (!autoApprovalEnabled || notionalValue > effectiveThreshold);
-    
+    const requiresSignature =
+      !isSystemCall && (!autoApprovalEnabled || notionalValue > effectiveThreshold);
+
     if (requiresSignature && !signature) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           error: 'Signature required for hedge execution',
-          message: `Hedge value ($${notionalValue.toLocaleString()}) requires manager approval${autoApprovalEnabled ? ` (threshold: $${autoApprovalThreshold.toLocaleString()})` : ''}`
+          message: `Hedge value ($${notionalValue.toLocaleString()}) requires manager approval${autoApprovalEnabled ? ` (threshold: $${autoApprovalThreshold.toLocaleString()})` : ''}`,
         },
         { status: 403 }
       );
     }
-    
+
     if (isSystemCall) {
       logger.info('🤖 System call authenticated - auto-approving hedge', {
-        asset, side, notionalValue, source: reason?.includes('EMERGENCY') ? 'emergency' : 'automated'
+        asset,
+        side,
+        notionalValue,
+        source: reason?.includes('EMERGENCY') ? 'emergency' : 'automated',
       });
     }
 
@@ -249,16 +271,19 @@ export async function POST(request: NextRequest) {
     // SUI / BLUEFIN ROUTING (For SUI assets, route to BlueFin DEX)
     //=================================================================================
     const isSuiAsset = asset.toUpperCase() === 'SUI' || asset.toUpperCase().includes('SUI');
-    
+
     if (isSuiAsset) {
       try {
         logger.info('🌊 Routing SUI hedge to BlueFin DEX on SUI Network', {
-          asset, side, notionalValue, leverage,
+          asset,
+          side,
+          notionalValue,
+          leverage,
         });
 
         // Call BlueFin API endpoint
-        const baseUrl = process.env.VERCEL 
-          ? 'https://zkvanguard.xyz' 
+        const baseUrl = process.env.VERCEL
+          ? 'https://zkvanguard.xyz'
           : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
         const bluefinResponse = await fetch(`${baseUrl}/api/agents/hedging/bluefin`, {
           method: 'POST',
@@ -349,16 +374,24 @@ export async function POST(request: NextRequest) {
     //=================================================================================
     const hedgeExecutorAddress = process.env.HEDGE_EXECUTOR_ADDRESS;
     const collateralTokenAddress = process.env.COLLATERAL_TOKEN_ADDRESS;
-    const executorPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_WALLET_PRIVATE_KEY || process.env.MOONLANDER_PRIVATE_KEY;
+    const executorPrivateKey =
+      process.env.PRIVATE_KEY ||
+      process.env.SERVER_WALLET_PRIVATE_KEY ||
+      process.env.MOONLANDER_PRIVATE_KEY;
 
     if (!hedgeExecutorAddress || !collateralTokenAddress) {
-      logger.warn('⚠️ Missing HEDGE_EXECUTOR_ADDRESS or COLLATERAL_TOKEN_ADDRESS env vars - on-chain hedge disabled');
+      logger.warn(
+        '⚠️ Missing HEDGE_EXECUTOR_ADDRESS or COLLATERAL_TOKEN_ADDRESS env vars - on-chain hedge disabled'
+      );
     }
 
     if (executorPrivateKey && hedgeExecutorAddress && collateralTokenAddress) {
       try {
         logger.info('🔗 Executing hedge via HedgeExecutor contract on-chain', {
-          asset, side, notionalValue, leverage,
+          asset,
+          side,
+          notionalValue,
+          leverage,
           contract: hedgeExecutorAddress.slice(0, 10) + '...',
         });
 
@@ -385,7 +418,7 @@ export async function POST(request: NextRequest) {
           const zkProofResult = await generateRebalanceProof(
             {
               old_allocations: [100],
-              new_allocations: [Math.floor((1 - (notionalValue / 100000)) * 100)],
+              new_allocations: [Math.floor((1 - notionalValue / 100000) * 100)],
             },
             body.portfolioId
           );
@@ -396,7 +429,8 @@ export async function POST(request: NextRequest) {
           // Fallback ZK hash
         }
         if (!zkProofHash) {
-          zkProofHash = crypto.createHash('sha256')
+          zkProofHash = crypto
+            .createHash('sha256')
             .update(JSON.stringify({ asset, side, notionalValue, leverage, timestamp: Date.now() }))
             .digest('hex');
         }
@@ -406,7 +440,11 @@ export async function POST(request: NextRequest) {
         // Use openHedge for user-initiated calls — emits HedgeOpened event
         let result: OnChainHedgeResult;
         if (isSystemCall && walletAddress) {
-          logger.info('🤖 Auto-hedge: using agentOpenHedge()', { trader: walletAddress, market, side });
+          logger.info('🤖 Auto-hedge: using agentOpenHedge()', {
+            trader: walletAddress,
+            market,
+            side,
+          });
           result = await hedgeClient.agentOpenHedge({
             trader: walletAddress,
             market,
@@ -424,11 +462,14 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        logger.info(`✅ On-chain hedge created via HedgeExecutor (${isSystemCall ? 'agent/auto' : 'manual'})`, {
-          hedgeId: result.hedgeId.slice(0, 18) + '...',
-          txHash: result.txHash,
-          status: result.status,
-        });
+        logger.info(
+          `✅ On-chain hedge created via HedgeExecutor (${isSystemCall ? 'agent/auto' : 'manual'})`,
+          {
+            hedgeId: result.hedgeId.slice(0, 18) + '...',
+            txHash: result.txHash,
+            status: result.status,
+          }
+        );
 
         // Get current price using unified price provider (real-time, validated)
         let currentPrice = 0;
@@ -448,10 +489,19 @@ export async function POST(request: NextRequest) {
               warnings: priceContext.validation.warnings,
             });
           }
-        } catch { /* use 0 */ }
+        } catch {
+          /* use 0 */
+        }
 
         // ═══ Save to DB (DB-first cache) so the on-chain API returns it immediately ═══
-        const pairIndexMap: Record<string, number> = { BTC: 0, ETH: 1, CRO: 2, ATOM: 3, DOGE: 4, SOL: 5 };
+        const pairIndexMap: Record<string, number> = {
+          BTC: 0,
+          ETH: 1,
+          CRO: 2,
+          ATOM: 3,
+          DOGE: 4,
+          SOL: 5,
+        };
         const pairIndex = pairIndexMap[asset.toUpperCase()] ?? 0;
         const proxyWallet = proxyPDA?.proxyAddress || onChainVaultResult?.proxyAddress || undefined;
 
@@ -471,9 +521,11 @@ export async function POST(request: NextRequest) {
             commitmentHash: result.commitmentHash,
             proxyWallet,
             walletAddress: walletAddress || signer.address,
-            portfolioId: body.portfolioId,  // Preserve portfolio_id (-1 = community pool, 0+ = user)
+            portfolioId: body.portfolioId, // Preserve portfolio_id (-1 = community pool, 0+ = user)
           });
-          logger.info('💾 On-chain hedge saved to DB (DB-first cache)', { hedgeId: result.hedgeId.slice(0, 18) });
+          logger.info('💾 On-chain hedge saved to DB (DB-first cache)', {
+            hedgeId: result.hedgeId.slice(0, 18),
+          });
         } catch (dbErr) {
           logger.error('⚠️ Failed to save on-chain hedge to DB', { error: String(dbErr) });
         }
@@ -519,11 +571,17 @@ export async function POST(request: NextRequest) {
           chain: 'cronos-testnet',
           contractAddress: hedgeExecutorAddress,
           message: `✅ ON-CHAIN HEDGE: Created on HedgeExecutor contract (tx: ${result.txHash.slice(0, 10)}...)`,
-        } satisfies HedgeExecutionResponse & { onChain: boolean; chain: string; contractAddress: string });
-
+        } satisfies HedgeExecutionResponse & {
+          onChain: boolean;
+          chain: string;
+          contractAddress: string;
+        });
       } catch (hedgeExecutorError) {
         logger.error('❌ HedgeExecutor on-chain creation failed, trying Moonlander path', {
-          error: hedgeExecutorError instanceof Error ? hedgeExecutorError.message : String(hedgeExecutorError),
+          error:
+            hedgeExecutorError instanceof Error
+              ? hedgeExecutorError.message
+              : String(hedgeExecutorError),
         });
         // Fall through to Moonlander path below
       }
@@ -534,32 +592,36 @@ export async function POST(request: NextRequest) {
 
     // Use wallet for signing (in production, use secure key management)
     const privateKey = process.env.MOONLANDER_PRIVATE_KEY || process.env.PRIVATE_KEY;
-    
+
     if (!privateKey) {
-      logger.error('❌ No private key configured — cannot execute hedge. Set MOONLANDER_PRIVATE_KEY or PRIVATE_KEY.');
-      return NextResponse.json({
-        success: false,
-        error: 'No private key configured. Cannot execute hedge without MOONLANDER_PRIVATE_KEY or PRIVATE_KEY environment variable.',
-      }, { status: 503 });
+      logger.error(
+        '❌ No private key configured — cannot execute hedge. Set MOONLANDER_PRIVATE_KEY or PRIVATE_KEY.'
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'No private key configured. Cannot execute hedge without MOONLANDER_PRIVATE_KEY or PRIVATE_KEY environment variable.',
+        },
+        { status: 503 }
+      );
     }
 
     //=================================================================================
-    // REAL MOONLANDER ON-CHAIN EXECUTION PATH 
+    // REAL MOONLANDER ON-CHAIN EXECUTION PATH
     // Uses actual smart contracts on Cronos EVM
     //=================================================================================
-    
+
     logger.info('🚀 Executing REAL on-chain hedge via Moonlander contracts');
-    
+
     // Determine network (mainnet or testnet)
     const network = process.env.MOONLANDER_NETWORK === 'mainnet' ? 'CRONOS_EVM' : 'CRONOS_TESTNET';
-    const moonlanderRpcUrl = network === 'CRONOS_EVM' 
-      ? MOONLANDER_CONTRACTS.CRONOS_EVM.RPC_URL 
-      : getCronosRpcUrl();
-    
+    const moonlanderRpcUrl =
+      network === 'CRONOS_EVM' ? MOONLANDER_CONTRACTS.CRONOS_EVM.RPC_URL : getCronosRpcUrl();
+
     // Create on-chain client (pass throttled provider for testnet)
-    const moonlanderProvider = network === 'CRONOS_EVM' 
-      ? moonlanderRpcUrl 
-      : getCronosProvider(moonlanderRpcUrl).provider;
+    const moonlanderProvider =
+      network === 'CRONOS_EVM' ? moonlanderRpcUrl : getCronosProvider(moonlanderRpcUrl).provider;
     const moonlander = new MoonlanderOnChainClient(moonlanderProvider, network as NetworkType);
     await moonlander.initialize(privateKey);
 
@@ -573,12 +635,12 @@ export async function POST(request: NextRequest) {
       logger.warn(`Pair ${asset} not found, defaulting to BTC`);
       pairIndex = 0;
     }
-    
+
     // ═══ STRICT PRICE VALIDATION FOR MOONLANDER ═══
     // Get validated price from unified provider - REJECT if unavailable
     let currentPrice: number;
     let priceSource: string;
-    
+
     try {
       const priceContext = await getStrictHedgePrice(asset, side, {
         maxStalenessMs: 15000, // 15s max for executions
@@ -594,51 +656,58 @@ export async function POST(request: NextRequest) {
     } catch (priceErr) {
       // Price validation failed - DO NOT proceed with hedge
       logger.error('❌ Failed to get valid price for Moonlander hedge', { error: priceErr });
-      return NextResponse.json({
-        success: false,
-        error: `Price validation failed: ${priceErr instanceof Error ? priceErr.message : 'Unknown error'}`,
-        hint: 'Cannot create hedge without valid real-time price. Please retry in a few seconds.',
-      }, { status: 503 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Price validation failed: ${priceErr instanceof Error ? priceErr.message : 'Unknown error'}`,
+          hint: 'Cannot create hedge without valid real-time price. Please retry in a few seconds.',
+        },
+        { status: 503 }
+      );
     }
 
     // Calculate collateral needed (notionalValue / leverage)
     const collateralAmount = (notionalValue / leverage).toFixed(2);
-    
+
     // Generate ZK-STARK proof for on-chain hedge
     let commitmentHash: string | undefined;
     let stealthAddress: string | undefined;
     let zkProofGenerated = false;
     let zkProofHash: string | undefined;
-    
+
     // Always generate ZK proof for hedge verification
     try {
       logger.info('🔐 Generating ZK-STARK proof for on-chain hedge...');
       const zkProofResult = await generateRebalanceProof(
         {
           old_allocations: [100],
-          new_allocations: [Math.floor((1 - (notionalValue / 100000)) * 100)],
+          new_allocations: [Math.floor((1 - notionalValue / 100000) * 100)],
         },
         body.portfolioId
       );
-      
+
       if (zkProofResult.status === 'completed' && zkProofResult.proof) {
         zkProofHash = String(zkProofResult.proof.proof_hash || zkProofResult.proof.merkle_root);
         zkProofGenerated = true;
-        logger.info('✅ ZK-STARK proof generated for on-chain hedge', { proofHash: zkProofHash?.substring(0, 20) + '...' });
+        logger.info('✅ ZK-STARK proof generated for on-chain hedge', {
+          proofHash: zkProofHash?.substring(0, 20) + '...',
+        });
       } else {
-        zkProofHash = crypto.createHash('sha256')
+        zkProofHash = crypto
+          .createHash('sha256')
           .update(JSON.stringify({ asset, side, notionalValue, timestamp: Date.now() }))
           .digest('hex');
         zkProofGenerated = true;
       }
     } catch (zkError) {
       logger.warn('⚠️ ZK proof generation failed for on-chain hedge', { error: String(zkError) });
-      zkProofHash = crypto.createHash('sha256')
+      zkProofHash = crypto
+        .createHash('sha256')
         .update(JSON.stringify({ asset, side, notionalValue, timestamp: Date.now() }))
         .digest('hex');
       zkProofGenerated = true;
     }
-    
+
     // Generate additional privacy components if privateMode is enabled
     if (privateMode) {
       const masterPublicKey = crypto.randomBytes(33).toString('hex');
@@ -653,7 +722,7 @@ export async function POST(request: NextRequest) {
       );
       commitmentHash = privateHedge.commitmentHash;
       stealthAddress = privateHedge.stealthAddress;
-      
+
       logger.info('🔐 Full privacy layer generated for on-chain hedge', {
         commitmentHash: commitmentHash.substring(0, 16) + '...',
       });
@@ -684,9 +753,10 @@ export async function POST(request: NextRequest) {
         notionalValue,
         leverage,
         entryPrice: currentPrice,
-        liquidationPrice: side === 'SHORT' 
-          ? currentPrice * (1 + 0.8 / leverage)
-          : currentPrice * (1 - 0.8 / leverage),
+        liquidationPrice:
+          side === 'SHORT'
+            ? currentPrice * (1 + 0.8 / leverage)
+            : currentPrice * (1 - 0.8 / leverage),
         stopLoss,
         takeProfit,
         simulationMode: false,
@@ -704,7 +774,7 @@ export async function POST(request: NextRequest) {
     // Generate wallet ownership proof for on-chain hedge
     let walletOwnershipProof: string | undefined;
     let walletBinding: string | undefined;
-    
+
     if (walletAddress) {
       try {
         const ownershipResult = await generateWalletOwnershipProof(
@@ -716,17 +786,23 @@ export async function POST(request: NextRequest) {
             size: parseFloat(tradeResult.positionSizeUsd) / currentPrice,
             notionalValue,
             entryPrice: currentPrice,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           }
         );
-        
+
         if (ownershipResult.status === 'completed' && ownershipResult.proof) {
-          walletOwnershipProof = String(ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root);
-          walletBinding = (ownershipResult.proof as unknown as Record<string, unknown>).hedge_binding as string | undefined;
+          walletOwnershipProof = String(
+            ownershipResult.proof.proof_hash || ownershipResult.proof.merkle_root
+          );
+          walletBinding = (ownershipResult.proof as unknown as Record<string, unknown>)
+            .hedge_binding as string | undefined;
         }
       } catch (ownershipError) {
-        logger.warn('⚠️ Wallet ownership proof generation failed for on-chain hedge', { error: String(ownershipError) });
-        walletBinding = crypto.createHash('sha256')
+        logger.warn('⚠️ Wallet ownership proof generation failed for on-chain hedge', {
+          error: String(ownershipError),
+        });
+        walletBinding = crypto
+          .createHash('sha256')
           .update(`${walletAddress.toLowerCase()}:${tradeResult.txHash}`)
           .digest('hex');
         walletOwnershipProof = walletBinding;
@@ -764,22 +840,23 @@ export async function POST(request: NextRequest) {
       walletBinding,
       // PDA Proxy info (like Solana - no private key!) - also for on-chain hedges
       proxyWallet: proxyPDA?.proxyAddress,
-      proxyPDA: proxyPDA ? {
-        proxyAddress: proxyPDA.proxyAddress,
-        ownerAddress: proxyPDA.ownerAddress,
-        zkBinding: proxyPDA.zkBinding,
-        nonce: proxyPDA.nonce,
-        hasNoPrivateKey: true, // Key feature: no one can spend from this address directly
-      } : undefined,
+      proxyPDA: proxyPDA
+        ? {
+            proxyAddress: proxyPDA.proxyAddress,
+            ownerAddress: proxyPDA.ownerAddress,
+            zkBinding: proxyPDA.zkBinding,
+            nonce: proxyPDA.nonce,
+            hasNoPrivateKey: true, // Key feature: no one can spend from this address directly
+          }
+        : undefined,
       withdrawalDestination: walletAddress, // Always goes back to owner
       autoApproved: autoApprovalEnabled && notionalValue <= autoApprovalThreshold,
-      message: zkProofGenerated 
-        ? (privateMode 
+      message: zkProofGenerated
+        ? privateMode
           ? '✅ PRIVATE ON-CHAIN: ZK-STARK verified, trade executed with full privacy'
-          : `✅ ZK-VERIFIED ON-CHAIN: Hedge executed with proof${proxyPDA ? ' with PDA proxy (no private key)' : ''}${walletAddress ? ' - withdrawal to owner only' : ''}${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''}`)
+          : `✅ ZK-VERIFIED ON-CHAIN: Hedge executed with proof${proxyPDA ? ' with PDA proxy (no private key)' : ''}${walletAddress ? ' - withdrawal to owner only' : ''}${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''}`
         : `✅ ON-CHAIN: Hedge executed${autoApprovalEnabled && notionalValue <= autoApprovalThreshold ? ' (auto-approved)' : ''}`,
     } satisfies HedgeExecutionResponse);
-
   } catch (error) {
     logger.error('❌ Hedge execution failed', { error });
 

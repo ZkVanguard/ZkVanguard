@@ -2,12 +2,21 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
-import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut, AlertTriangle, Smartphone } from 'lucide-react';
-import { 
-  useWallets, 
-  useCurrentAccount, 
-  useConnectWallet, 
-  useDisconnectWallet, 
+import {
+  Wallet,
+  ChevronDown,
+  ExternalLink,
+  Copy,
+  Check,
+  LogOut,
+  AlertTriangle,
+  Smartphone,
+} from 'lucide-react';
+import {
+  useWallets,
+  useCurrentAccount,
+  useConnectWallet,
+  useDisconnectWallet,
   useCurrentWallet,
 } from '@mysten/dapp-kit';
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
@@ -18,7 +27,6 @@ import {
   buildMobileWalletLink,
   type MobileWalletOption,
 } from '@/lib/utils/mobile-wallet';
-
 interface SuiWalletConnectProps {
   showSelector: boolean;
   onToggleSelector: () => void;
@@ -29,10 +37,10 @@ interface SuiWalletConnectProps {
  * Sui Wallet Connection Component
  * Dynamically imported to avoid loading @mysten/dapp-kit for EVM-only users
  */
-export function SuiWalletConnect({ 
-  showSelector, 
-  onToggleSelector, 
-  onClose 
+export function SuiWalletConnect({
+  showSelector,
+  onToggleSelector,
+  onClose,
 }: SuiWalletConnectProps) {
   const [copied, setCopied] = useState(false);
   const [showNetworkHelp, setShowNetworkHelp] = useState(false);
@@ -54,28 +62,26 @@ export function SuiWalletConnect({
       setSlushDeepLink(buildMobileWalletLink(SUI_MOBILE_WALLETS[0]) || '#');
     }
   }, [isMobile, showSelector]);
-  
+
   // Sui wallet hooks
   const wallets = useWallets() || [];
   const suiAccount = useCurrentAccount();
   const { currentWallet, connectionStatus } = useCurrentWallet() || {};
   const { mutate: connectSui, isPending: isConnectingSui } = useConnectWallet();
   const { mutate: disconnectSui } = useDisconnectWallet();
-  
+
   // Get SUI network status from context
   const suiContext = useSuiSafe();
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiWalletNetwork = suiContext?.walletNetwork ?? null;
   const suiExpectedNetwork = suiContext?.network ?? 'mainnet';
-  
+
   const suiAddress = suiAccount?.address ?? null;
   const isSuiConnected = connectionStatus === 'connected' && !!suiAddress;
   const walletName = currentWallet?.name ?? 'SUI';
-  
+
   // Filter to only Sui-compatible wallets
-  const suiWallets = wallets.filter((w) => 
-    w.chains?.some?.((c: string) => c.includes('sui'))
-  );
+  const suiWallets = wallets.filter((w) => w.chains?.some?.((c: string) => c.includes('sui')));
 
   const copyAddress = (addr: string) => {
     navigator.clipboard.writeText(addr);
@@ -85,19 +91,27 @@ export function SuiWalletConnect({
 
   const truncate = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
-  const handleConnectSui = useCallback((wallet: WalletWithRequiredFeatures) => {
-    try {
-      connectSui({ wallet });
-    } catch (e) {
-      logger.error('Failed to connect Sui wallet', e instanceof Error ? e : undefined, { component: 'SuiWalletConnect' });
-    }
-  }, [connectSui]);
+  const handleConnectSui = useCallback(
+    (wallet: WalletWithRequiredFeatures) => {
+      try {
+        connectSui({ wallet });
+      } catch (e) {
+        logger.error('Failed to connect Sui wallet', e instanceof Error ? e : undefined, {
+          component: 'SuiWalletConnect',
+        });
+      }
+    },
+    [connectSui]
+  );
 
   const handleDisconnectSui = useCallback(() => {
     try {
       disconnectSui();
     } catch (e) {
-      logger.warn('Failed to disconnect Sui wallet', { component: 'SuiWalletConnect', error: String(e) });
+      logger.warn('Failed to disconnect Sui wallet', {
+        component: 'SuiWalletConnect',
+        error: String(e),
+      });
     }
     onClose();
   }, [disconnectSui, onClose]);
@@ -109,14 +123,12 @@ export function SuiWalletConnect({
           onClick={onToggleSelector}
           className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-400/30 hover:border-blue-400/50 transition-all duration-200"
         >
-          {suiIsWrongNetwork && (
-            <AlertTriangle className="w-4 h-4 text-yellow-500" />
-          )}
+          {suiIsWrongNetwork && <AlertTriangle className="w-4 h-4 text-yellow-500" />}
           <span className="text-sm font-medium text-white">{walletName}</span>
           <span className="text-xs text-blue-400 font-mono">{truncate(suiAddress!)}</span>
           <ChevronDown className="w-4 h-4 text-gray-400" />
         </button>
-        
+
         {showSelector && (
           <>
             <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -124,17 +136,23 @@ export function SuiWalletConnect({
               <div className="p-4 border-b border-gray-700/30">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-400">Connected SUI Wallet</span>
-                  <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">{walletName}</span>
+                  <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                    {walletName}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-mono text-white">{truncate(suiAddress!)}</span>
-                  <button 
+                  <button
                     onClick={() => copyAddress(suiAddress!)}
                     className="p-1 hover:bg-gray-800 rounded transition-colors"
                   >
-                    {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-gray-400" />}
+                    {copied ? (
+                      <Check className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Copy className="w-4 h-4 text-gray-400" />
+                    )}
                   </button>
-                  <a 
+                  <a
                     href={`https://suiscan.xyz/${suiExpectedNetwork}/account/${suiAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -144,7 +162,7 @@ export function SuiWalletConnect({
                   </a>
                 </div>
               </div>
-              
+
               {/* Network Warning */}
               {suiIsWrongNetwork && (
                 <div className="p-4 bg-yellow-900/20 border-b border-yellow-700/30">
@@ -153,15 +171,22 @@ export function SuiWalletConnect({
                     <div className="text-sm">
                       <p className="text-yellow-400 font-medium">⚠️ Network Mismatch</p>
                       <p className="text-gray-400 text-xs mt-1">
-                        Your wallet: <span className="text-red-400 font-medium">{suiWalletNetwork || 'unknown'}</span><br />
-                        App requires: <span className="text-green-400 font-medium">{suiExpectedNetwork}</span>
+                        Your wallet:{' '}
+                        <span className="text-red-400 font-medium">
+                          {suiWalletNetwork || 'unknown'}
+                        </span>
+                        <br />
+                        App requires:{' '}
+                        <span className="text-green-400 font-medium">{suiExpectedNetwork}</span>
                       </p>
                       <div className="mt-3 p-2 bg-gray-800/50 rounded text-xs text-gray-300">
                         <p className="font-medium text-yellow-400 mb-1">How to fix:</p>
                         <ol className="list-decimal list-inside space-y-1 text-gray-400">
                           <li>Open your SUI wallet extension</li>
                           <li>Go to Settings → Network</li>
-                          <li>Switch to <span className="text-green-400">{suiExpectedNetwork}</span></li>
+                          <li>
+                            Switch to <span className="text-green-400">{suiExpectedNetwork}</span>
+                          </li>
                           <li>Reconnect to this app</li>
                         </ol>
                       </div>
@@ -172,7 +197,7 @@ export function SuiWalletConnect({
                   </div>
                 </div>
               )}
-              
+
               <div className="p-2">
                 <button
                   onClick={handleDisconnectSui}
@@ -199,7 +224,7 @@ export function SuiWalletConnect({
         <Wallet className="w-4 h-4 text-blue-400" />
         <span className="text-sm font-medium text-blue-400">Connect SUI</span>
       </button>
-      
+
       {showSelector && (
         <>
           <div className="fixed inset-0 z-40" onClick={onClose} />
@@ -207,7 +232,7 @@ export function SuiWalletConnect({
             <div className="p-4 border-b border-gray-700/30">
               <span className="text-sm font-medium text-white">Connect SUI Wallet</span>
             </div>
-            
+
             <div className="p-2 max-h-64 overflow-y-auto">
               {suiWallets.length > 0 ? (
                 suiWallets.map((wallet) => (
@@ -250,9 +275,9 @@ export function SuiWalletConnect({
               ) : (
                 <div className="p-4 text-center text-gray-400 text-sm">
                   <p>No SUI wallets detected.</p>
-                  <a 
-                    href="https://slush.app/" 
-                    target="_blank" 
+                  <a
+                    href="https://slush.app/"
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:underline block mt-2"
                   >

@@ -48,7 +48,7 @@ const TARGET_ALLOCATION_BPS = {
 };
 
 const MIN_TRADE_USDT = 1_000_000n; // $1 minimum trade
-const MAX_SLIPPAGE_BPS = 500n;     // 5% slippage (mock DEX, generous)
+const MAX_SLIPPAGE_BPS = 500n; // 5% slippage (mock DEX, generous)
 
 // ============================================
 // ABIs
@@ -152,14 +152,14 @@ interface WdkCronResult {
 
 async function updatePythPrices(
   wallet: ethers.Wallet,
-  pythOracleAddress: string,
+  pythOracleAddress: string
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   try {
     // Fetch latest price data from Pyth Hermes API
-    const idsQuery = PYTH_PRICE_IDS.map(id => `ids[]=${id}`).join('&');
+    const idsQuery = PYTH_PRICE_IDS.map((id) => `ids[]=${id}`).join('&');
     const url = `https://hermes.pyth.network/v2/updates/price/latest?${idsQuery}`;
     const response = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(10000),
     });
 
@@ -184,7 +184,10 @@ async function updatePythPrices(
 
     const tx = await pyth.updatePriceFeeds(updateData, { value: fee });
     const receipt = await tx.wait();
-    logger.info('[WDK Cron] Pyth prices updated', { txHash: receipt.hash, fee: ethers.formatEther(fee) });
+    logger.info('[WDK Cron] Pyth prices updated', {
+      txHash: receipt.hash,
+      fee: ethers.formatEther(fee),
+    });
     return { success: true, txHash: receipt.hash };
   } catch (err) {
     return { success: false, error: errMsg(err) };
@@ -225,14 +228,24 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
   const authResult = await verifyCronRequest(request, 'WDK CommunityPool Cron');
   if (authResult !== true) {
     return NextResponse.json(
-      { success: false, chain: 'wdk' as const, error: 'Unauthorized', duration: Date.now() - startTime },
-      { status: 401 },
+      {
+        success: false,
+        chain: 'wdk' as const,
+        error: 'Unauthorized',
+        duration: Date.now() - startTime,
+      },
+      { status: 401 }
     );
   }
 
   logger.info('[WDK Cron] Starting WDK Sepolia pool management');
 
-  const privateKey = (process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY || '').trim();
+  const privateKey = (
+    process.env.TREASURY_PRIVATE_KEY ||
+    process.env.PRIVATE_KEY ||
+    process.env.HEDERA_PRIVATE_KEY ||
+    ''
+  ).trim();
   if (!privateKey) {
     return NextResponse.json({
       success: false,
@@ -262,7 +275,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
         if (pythResult.success) {
           logger.info('[WDK Cron] Pyth prices updated', { txHash: pythResult.txHash });
         } else {
-          logger.warn('[WDK Cron] Pyth update failed (will try pool read anyway)', { error: pythResult.error });
+          logger.warn('[WDK Cron] Pyth update failed (will try pool read anyway)', {
+            error: pythResult.error,
+          });
         }
       }
     } catch (pythErr) {
@@ -408,7 +423,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
 
     const aiDecision = generateAllocation();
 
-    let aiResult: WdkCronResult['aiDecision'] = {
+    const aiResult: WdkCronResult['aiDecision'] = {
       action: aiDecision.shouldRebalance ? 'REBALANCE' : 'HOLD',
       reasoning: aiDecision.reasoning,
       executed: false,
@@ -433,7 +448,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
         let reserveBps = 500n;
         try {
           reserveBps = BigInt(Number(await poolContract.MIN_RESERVE_RATIO_BPS()));
-        } catch { /* default 5% */ }
+        } catch {
+          /* default 5% */
+        }
         const reserveUsdt = (usdtBalance * reserveBps) / 10000n;
         const allocatableUsdt = usdtBalance - reserveUsdt;
 
@@ -459,13 +476,23 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
             try {
               assetAddr = await poolContract.assetTokens(i);
             } catch {
-              trades.push({ asset: assetName, amountUsdt: '0', amountReceived: '0', error: 'Cannot read asset token' });
+              trades.push({
+                asset: assetName,
+                amountUsdt: '0',
+                amountReceived: '0',
+                error: 'Cannot read asset token',
+              });
               skipped++;
               continue;
             }
 
             if (assetAddr === ethers.ZeroAddress) {
-              trades.push({ asset: assetName, amountUsdt: '0', amountReceived: '0', error: 'Asset token not configured' });
+              trades.push({
+                asset: assetName,
+                amountUsdt: '0',
+                amountReceived: '0',
+                error: 'Asset token not configured',
+              });
               skipped++;
               continue;
             }
@@ -473,7 +500,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
             // Calculate USDT allocation for this asset
             const assetUsdt = (allocatableUsdt * BigInt(targetBps[i])) / 10000n;
             if (assetUsdt < MIN_TRADE_USDT) {
-              trades.push({ asset: assetName, amountUsdt: ethers.formatUnits(assetUsdt, 6), amountReceived: '0', error: 'Below minimum trade size' });
+              trades.push({
+                asset: assetName,
+                amountUsdt: ethers.formatUnits(assetUsdt, 6),
+                amountReceived: '0',
+                error: 'Below minimum trade size',
+              });
               skipped++;
               continue;
             }
@@ -483,7 +515,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
               const dexContract = new ethers.Contract(dexRouterAddr, DEX_ABI, provider);
               let minOut = 0n;
               try {
-                const amounts: bigint[] = await dexContract.getAmountsOut(assetUsdt, [SEPOLIA_USDT_ADDRESS, assetAddr]);
+                const amounts: bigint[] = await dexContract.getAmountsOut(assetUsdt, [
+                  SEPOLIA_USDT_ADDRESS,
+                  assetAddr,
+                ]);
                 const expectedOut = amounts[amounts.length - 1];
                 minOut = (expectedOut * (10000n - MAX_SLIPPAGE_BPS)) / 10000n;
               } catch {
@@ -502,9 +537,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
                 txHash: receipt.hash,
               });
               executed++;
-              logger.info(`[WDK Cron] Trade executed: $${ethers.formatUnits(assetUsdt, 6)} USDT → ${assetName}`, {
-                txHash: receipt.hash,
-              });
+              logger.info(
+                `[WDK Cron] Trade executed: $${ethers.formatUnits(assetUsdt, 6)} USDT → ${assetName}`,
+                {
+                  txHash: receipt.hash,
+                }
+              );
             } catch (tradeErr) {
               const errStr = errMsg(tradeErr);
               trades.push({
@@ -558,7 +596,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
         const balances = await bridge.getCrossChainBalances();
         crossChainState = {
           totalUsdtAcrossChains: balances.totalUsdtAcrossChains,
-          chainBalances: balances.chainBalances.map(b => ({
+          chainBalances: balances.chainBalances.map((b) => ({
             chain: b.chain,
             usdtBalance: b.usdtBalance,
             nativeBalance: b.nativeBalance,
@@ -567,7 +605,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
         };
       }
     } catch (bridgeErr) {
-      logger.warn('[WDK Cron] Cross-chain balance check failed (non-critical)', { error: errMsg(bridgeErr) });
+      logger.warn('[WDK Cron] Cross-chain balance check failed (non-critical)', {
+        error: errMsg(bridgeErr),
+      });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -594,12 +634,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
         totalShares: Number(ethers.formatUnits(totalShares, 18)),
         sharePrice: Number(ethers.formatUnits(sharePrice, 18)),
         allocations: Object.fromEntries(
-          ASSET_NAMES.map((name, i) => [name, {
-            percentage: allocations[name],
-            valueUSD: navUsd * (allocations[name] / 100),
-            amount: parseFloat(assetBalances[name] || '0'),
-            price: 0,
-          }]),
+          ASSET_NAMES.map((name, _i) => [
+            name,
+            {
+              percentage: allocations[name],
+              valueUSD: navUsd * (allocations[name] / 100),
+              amount: parseFloat(assetBalances[name] || '0'),
+              price: 0,
+            },
+          ])
         ),
         lastRebalance: Date.now(),
         lastAIDecision: {
@@ -638,12 +681,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<WdkCronRes
     return NextResponse.json(result);
   } catch (error: unknown) {
     logger.error('[WDK Cron] Fatal error', { error: errMsg(error) });
-    return NextResponse.json({
-      success: false,
-      chain: 'wdk' as const,
-      error: errMsg(error),
-      duration: Date.now() - startTime,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        success: false,
+        chain: 'wdk' as const,
+        error: errMsg(error),
+        duration: Date.now() - startTime,
+      },
+      { status: 500 }
+    );
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * Centralized Hedge Manager
- * 
+ *
  * Optimized auto-hedging orchestrator that:
  * 1. Fetches ALL market data ONCE per cycle (single API call)
  * 2. Gathers ALL portfolio contexts in PARALLEL (on-chain + DB reads)
@@ -8,32 +8,29 @@
  * 4. Batches hedge recommendations across all portfolios
  * 5. Executes hedges with pre-validated snapshot prices
  * 6. Updates ALL hedge PnLs in a single batch
- * 
+ *
  * This replaces the per-portfolio serial fetch pattern in AutoHedgingService
  * where the same BTC/ETH/CRO/SUI prices were fetched N times per cycle.
  */
 
 import { logger } from '@/lib/utils/logger';
-import { getActiveHedges, createHedge, fixHedgeEntryPrice, type Hedge } from '@/lib/db/hedges';
+import { getActiveHedges, createHedge, fixHedgeEntryPrice } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { getAgentOrchestrator } from '../agent-orchestrator';
 import { ethers } from 'ethers';
 import { RWA_MANAGER_ABI } from '@/lib/contracts/abis';
 import { getContractAddresses } from '@/lib/contracts/addresses';
 import { getCronosRpcUrl, getCronosChainId } from '@/lib/throttled-provider';
-import { getMarketDataService, type ExtendedMarketData } from '../market-data/RealMarketDataService';
+import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { getUnifiedPriceProvider } from '../market-data/unified-price-provider';
 import { COMMUNITY_POOL_PORTFOLIO_ID, isCommunityPoolPortfolio } from '@/lib/constants';
-import { 
-  ProductionGuard, 
-  validateFinancialAmount, 
-  validatePercentage, 
-  validateLeverage,
-  auditLog 
-} from '@/lib/security/production-guard';
+import { ProductionGuard } from '@/lib/security/production-guard';
 import { getPoolStats as getUnifiedPoolStats } from '../CommunityPoolStatsService';
-import { calculateDrawdown, calculateVolatility, calculateConcentrationRisk } from './hedge-risk-math';
-// calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
+import {
+  calculateDrawdown,
+  calculateVolatility,
+  calculateConcentrationRisk,
+} from './hedge-risk-math'; // calculatePoolNAV intentionally NOT imported — using snapshot prices directly to avoid redundant fetch
 import type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 // Re-export all types and config from the dedicated types module
@@ -55,9 +52,7 @@ import {
   type Position,
   type ActiveHedge,
   type CycleResult,
-} from '@/lib/types/hedge-manager-types';
-
-// ═══════════════════════════════════════════════════════════════════════════════
+} from '@/lib/types/hedge-manager-types'; // ═══════════════════════════════════════════════════════════════════════════════
 // CENTRALIZED HEDGE MANAGER
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -85,7 +80,7 @@ export class CentralizedHedgeManager {
    * - RealMarketDataService.getTokenPrice() per asset per portfolio
    * - UnifiedPriceProvider.fetchPricesFromREST()
    * - CommunityPoolService.fetchLivePrices()
-   * 
+   *
    * Single API call → single MarketSnapshot used everywhere
    */
   async fetchMarketSnapshot(extraSymbols?: string[]): Promise<MarketSnapshot> {
@@ -145,7 +140,9 @@ export class CentralizedHedgeManager {
             low24h: 0,
             volume24h: priceData.volume24h,
           });
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
     }
 
@@ -157,7 +154,7 @@ export class CentralizedHedgeManager {
     };
 
     this.lastSnapshot = snapshot;
-    
+
     logger.info('[CentralHedge] Market snapshot fetched', {
       symbols: symbols.length,
       resolved: prices.size,
@@ -182,12 +179,11 @@ export class CentralizedHedgeManager {
   ): Promise<PortfolioContext[]> {
     const tasks = Array.from(configs.entries())
       .filter(([, config]) => config.enabled)
-      .map(([portfolioId, config]) => 
-        this.gatherPortfolioContext(portfolioId, config, snapshot)
-          .catch(error => {
-            logger.error('[CentralHedge] Failed to gather context', { portfolioId, error });
-            return null;
-          })
+      .map(([portfolioId, config]) =>
+        this.gatherPortfolioContext(portfolioId, config, snapshot).catch((error) => {
+          logger.error('[CentralHedge] Failed to gather context', { portfolioId, error });
+          return null;
+        })
       );
 
     // All portfolio data fetched in PARALLEL
@@ -195,7 +191,7 @@ export class CentralizedHedgeManager {
 
     return results
       .filter((r): r is PromiseFulfilledResult<PortfolioContext | null> => r.status === 'fulfilled')
-      .map(r => r.value)
+      .map((r) => r.value)
       .filter((ctx): ctx is PortfolioContext => ctx !== null);
   }
 
@@ -233,10 +229,22 @@ export class CentralizedHedgeManager {
 
     // Build allocations from on-chain data
     const allocationsFromChain: Record<string, { amount: number; percentage: number }> = {
-      BTC: { amount: poolStats.assetBalances.BTC, percentage: poolStats.allocations.BTC.percentage },
-      ETH: { amount: poolStats.assetBalances.ETH, percentage: poolStats.allocations.ETH.percentage },
-      SUI: { amount: poolStats.assetBalances.SUI, percentage: poolStats.allocations.SUI.percentage },
-      CRO: { amount: poolStats.assetBalances.CRO, percentage: poolStats.allocations.CRO.percentage },
+      BTC: {
+        amount: poolStats.assetBalances.BTC,
+        percentage: poolStats.allocations.BTC.percentage,
+      },
+      ETH: {
+        amount: poolStats.assetBalances.ETH,
+        percentage: poolStats.allocations.ETH.percentage,
+      },
+      SUI: {
+        amount: poolStats.assetBalances.SUI,
+        percentage: poolStats.allocations.SUI.percentage,
+      },
+      CRO: {
+        amount: poolStats.assetBalances.CRO,
+        percentage: poolStats.allocations.CRO.percentage,
+      },
     };
 
     // Build positions from on-chain amounts + SNAPSHOT prices (no redundant fetch)
@@ -291,7 +299,7 @@ export class CentralizedHedgeManager {
       const { getNavHistory } = await import('@/lib/db/community-pool');
       const navHistory = await getNavHistory(30);
       if (navHistory?.length) {
-        peakSharePrice = Math.max(1.0, ...navHistory.map(h => h.share_price || 0), sharePrice);
+        peakSharePrice = Math.max(1.0, ...navHistory.map((h) => h.share_price || 0), sharePrice);
       } else {
         peakSharePrice = Math.max(1.0, sharePrice);
       }
@@ -337,13 +345,18 @@ export class CentralizedHedgeManager {
       // On-chain portfolio data
       const portfolioData = await rwaManager.portfolios(portfolioId);
       const [, , , , , isActive] = portfolioData;
-      
+
       if (!isActive) {
         logger.warn('[CentralHedge] Portfolio inactive on-chain', { portfolioId });
         const activeHedges = await this.fetchActiveHedges(portfolioId);
         return {
-          portfolioId, walletAddress: config.walletAddress, config,
-          positions: [], activeHedges, allocations: {}, totalValue: 0,
+          portfolioId,
+          walletAddress: config.walletAddress,
+          config,
+          positions: [],
+          activeHedges,
+          allocations: {},
+          totalValue: 0,
           isCommunityPool: false,
         };
       }
@@ -361,7 +374,7 @@ export class CentralizedHedgeManager {
         // USDT = institutional portfolio with virtual allocations
         if (addr === '0x28217daddc55e3c4831b4a48a00ce04880786967') {
           const usdtValue = Number(allocation) / 1e6;
-          
+
           if (usdtValue > 1000000) {
             totalValue = usdtValue;
             const virtualAllocations = [
@@ -370,7 +383,7 @@ export class CentralizedHedgeManager {
               { symbol: 'CRO', percentage: 20 },
               { symbol: 'SUI', percentage: 15 },
             ];
-            
+
             // Use SNAPSHOT prices — zero additional API calls
             for (const alloc of virtualAllocations) {
               const snapshotPrice = snapshot.prices.get(alloc.symbol);
@@ -390,7 +403,7 @@ export class CentralizedHedgeManager {
 
       // Calculate allocations
       const allocations: Record<string, number> = {};
-      positions.forEach(p => {
+      positions.forEach((p) => {
         allocations[p.symbol] = totalValue > 0 ? (p.value / totalValue) * 100 : 0;
       });
 
@@ -407,11 +420,19 @@ export class CentralizedHedgeManager {
         isCommunityPool: false,
       };
     } catch (error) {
-      logger.error('[CentralHedge] Failed to gather user portfolio context', { portfolioId, error });
+      logger.error('[CentralHedge] Failed to gather user portfolio context', {
+        portfolioId,
+        error,
+      });
       const activeHedges = await this.fetchActiveHedges(portfolioId);
       return {
-        portfolioId, walletAddress: config.walletAddress, config,
-        positions: [], activeHedges, allocations: {}, totalValue: 0,
+        portfolioId,
+        walletAddress: config.walletAddress,
+        config,
+        positions: [],
+        activeHedges,
+        allocations: {},
+        totalValue: 0,
         isCommunityPool: false,
       };
     }
@@ -425,36 +446,36 @@ export class CentralizedHedgeManager {
          WHERE portfolio_id = $1 AND status = 'active'`,
         [portfolioId]
       );
-      
+
       // PRODUCTION SAFETY: Validate hedge data from DB
       const validHedges: ActiveHedge[] = [];
-      
+
       for (const h of result) {
         const asset = String(h.asset || '');
         const side = String(h.side || '');
-        
+
         // Parse and validate size
         const rawSize = parseFloat(String(h.size));
         if (!Number.isFinite(rawSize) || rawSize <= 0) {
-          logger.warn('[HedgeManager] Skipping hedge with invalid size', { 
-            portfolioId, 
-            asset, 
-            rawSize: h.size 
+          logger.warn('[HedgeManager] Skipping hedge with invalid size', {
+            portfolioId,
+            asset,
+            rawSize: h.size,
           });
           continue;
         }
-        
+
         // Parse and validate notional value
         const rawNotional = parseFloat(String(h.notional_value));
         if (!Number.isFinite(rawNotional) || rawNotional <= 0) {
-          logger.warn('[HedgeManager] Skipping hedge with invalid notional_value', { 
-            portfolioId, 
-            asset, 
-            rawNotional: h.notional_value 
+          logger.warn('[HedgeManager] Skipping hedge with invalid notional_value', {
+            portfolioId,
+            asset,
+            rawNotional: h.notional_value,
           });
           continue;
         }
-        
+
         validHedges.push({
           asset,
           side,
@@ -462,7 +483,7 @@ export class CentralizedHedgeManager {
           notionalValue: rawNotional,
         });
       }
-      
+
       return validHedges;
     } catch (error) {
       logger.error('[HedgeManager] Failed to fetch active hedges', { portfolioId, error });
@@ -477,7 +498,7 @@ export class CentralizedHedgeManager {
    * This is PURE COMPUTATION — no I/O, no API calls.
    * The same function works for both community pool and user portfolios.
    */
-  assessPortfolioRisk(ctx: PortfolioContext, snapshot: MarketSnapshot): RiskAssessment {
+  assessPortfolioRisk(ctx: PortfolioContext, _snapshot: MarketSnapshot): RiskAssessment {
     const { positions, totalValue, portfolioId, isCommunityPool, poolStats } = ctx;
 
     // Guard: if totalValue is zero or invalid, skip assessment
@@ -497,9 +518,10 @@ export class CentralizedHedgeManager {
     let drawdownPercent: number;
     if (isCommunityPool && poolStats) {
       // Community pool: share-price-based drawdown (more accurate)
-      drawdownPercent = poolStats.sharePrice < poolStats.peakSharePrice && poolStats.peakSharePrice > 0
-        ? ((poolStats.peakSharePrice - poolStats.sharePrice) / poolStats.peakSharePrice) * 100
-        : 0;
+      drawdownPercent =
+        poolStats.sharePrice < poolStats.peakSharePrice && poolStats.peakSharePrice > 0
+          ? ((poolStats.peakSharePrice - poolStats.sharePrice) / poolStats.peakSharePrice) * 100
+          : 0;
     } else {
       drawdownPercent = calculateDrawdown(positions, totalValue);
     }
@@ -514,16 +536,16 @@ export class CentralizedHedgeManager {
     let riskScore = 1;
     if (isCommunityPool) {
       // AGGRESSIVE: community pool is shared money — any loss triggers action
-      if (drawdownPercent > 0.5) riskScore += 1;  // Even small losses matter
-      if (drawdownPercent > 1.5) riskScore += 2;  // Moderate loss → high alert
-      if (drawdownPercent > 4) riskScore += 2;    // Significant loss → critical
-      if (drawdownPercent > 8) riskScore += 1;    // Severe loss → maximum
-      if (volatility > 1.5) riskScore += 1;       // Lower vol threshold
-      if (volatility > 3) riskScore += 1;         // High volatility
+      if (drawdownPercent > 0.5) riskScore += 1; // Even small losses matter
+      if (drawdownPercent > 1.5) riskScore += 2; // Moderate loss → high alert
+      if (drawdownPercent > 4) riskScore += 2; // Significant loss → critical
+      if (drawdownPercent > 8) riskScore += 1; // Severe loss → maximum
+      if (volatility > 1.5) riskScore += 1; // Lower vol threshold
+      if (volatility > 3) riskScore += 1; // High volatility
       if (concentrationRisk > 30) riskScore += 1; // Any concentration risk
       if (concentrationRisk > 45) riskScore += 1; // High concentration
       // Any negative 24h change across positions adds risk
-      const anyNegative = positions.some(p => p.change24h < -1);
+      const anyNegative = positions.some((p) => p.change24h < -1);
       if (anyNegative) riskScore += 1;
     } else {
       // Standard user portfolio thresholds
@@ -539,8 +561,12 @@ export class CentralizedHedgeManager {
 
     // Generate recommendations using pre-fetched data
     const recommendations = this.generateHedgeRecommendations(
-      positions, totalValue, ctx.allocations, ctx.activeHedges,
-      drawdownPercent, concentrationRisk
+      positions,
+      totalValue,
+      ctx.allocations,
+      ctx.activeHedges,
+      drawdownPercent,
+      concentrationRisk
     );
 
     return {
@@ -562,10 +588,10 @@ export class CentralizedHedgeManager {
     allocations: Record<string, number>,
     activeHedges: ActiveHedge[],
     drawdownPercent: number,
-    concentrationRisk: number
+    _concentrationRisk: number
   ): HedgeRecommendation[] {
     const recommendations: HedgeRecommendation[] = [];
-    const hedgedAssets = new Set(activeHedges.map(h => h.asset));
+    const hedgedAssets = new Set(activeHedges.map((h) => h.asset));
 
     for (const pos of positions) {
       if (hedgedAssets.has(pos.symbol)) continue;
@@ -638,7 +664,7 @@ export class CentralizedHedgeManager {
 
     for (const rec of recommendations) {
       if (rec.confidence < CENTRAL_CONFIG.MIN_CONFIDENCE_FOR_EXECUTION) continue;
-      
+
       // Validate asset is allowed
       if (ctx.config.allowedAssets.length > 0 && !ctx.config.allowedAssets.includes(rec.asset)) {
         continue;
@@ -662,8 +688,9 @@ export class CentralizedHedgeManager {
       // Validate price is recent (< 60s)
       const priceAge = Date.now() - snapshot.timestamp;
       if (priceAge > 60_000) {
-        logger.warn('[CentralHedge] Snapshot too stale for execution', { 
-          asset: rec.asset, ageMs: priceAge 
+        logger.warn('[CentralHedge] Snapshot too stale for execution', {
+          asset: rec.asset,
+          ageMs: priceAge,
         });
         executionFailed++;
         continue;
@@ -674,9 +701,16 @@ export class CentralizedHedgeManager {
       const market = `${rec.asset}-USD-PERP`;
 
       // Guard: validate computed values are sane
-      if (!isFinite(effectivePrice) || effectivePrice <= 0 || !isFinite(rec.suggestedSize) || rec.suggestedSize <= 0) {
+      if (
+        !isFinite(effectivePrice) ||
+        effectivePrice <= 0 ||
+        !isFinite(rec.suggestedSize) ||
+        rec.suggestedSize <= 0
+      ) {
         logger.warn('[CentralHedge] Invalid price or size — skipping', {
-          asset: rec.asset, effectivePrice, suggestedSize: rec.suggestedSize,
+          asset: rec.asset,
+          effectivePrice,
+          suggestedSize: rec.suggestedSize,
         });
         executionFailed++;
         continue;
@@ -731,7 +765,8 @@ export class CentralizedHedgeManager {
         } else {
           // Orchestrator failed — do NOT silently simulate
           logger.error('[CentralHedge] Orchestrator failed', {
-            asset: rec.asset, error: result.error,
+            asset: rec.asset,
+            error: result.error,
           });
           executionFailed++;
         }
@@ -764,7 +799,10 @@ export class CentralizedHedgeManager {
       const baseAsset = hedge.asset.replace('-PERP', '').replace('-USD-PERP', '');
       const snapshotPrice = snapshot.prices.get(baseAsset) || snapshot.prices.get(hedge.asset);
       if (!snapshotPrice) {
-        logger.warn('[HedgeManager] Missing price for hedge asset', { asset: hedge.asset, hedgeId: hedge.id });
+        logger.warn('[HedgeManager] Missing price for hedge asset', {
+          asset: hedge.asset,
+          hedgeId: hedge.id,
+        });
         continue;
       }
 
@@ -772,19 +810,19 @@ export class CentralizedHedgeManager {
       const rawEntryPrice = Number(hedge.entry_price);
       if (!Number.isFinite(rawEntryPrice) || rawEntryPrice <= 0) {
         // AUTO-FIX: Set entry price to current market price (with small offset)
-        logger.warn('[HedgeManager] Auto-fixing null/invalid entry_price for hedge', { 
-          hedgeId: hedge.id, 
+        logger.warn('[HedgeManager] Auto-fixing null/invalid entry_price for hedge', {
+          hedgeId: hedge.id,
           entryPrice: hedge.entry_price,
           asset: hedge.asset,
-          currentPrice: snapshotPrice.price
+          currentPrice: snapshotPrice.price,
         });
-        
+
         try {
           await fixHedgeEntryPrice(hedge.id, snapshotPrice.price, hedge.side);
           // Use the fixed price for this cycle (with offset already applied)
           const entryOffset = hedge.side === 'LONG' ? 1.005 : 0.995;
           const fixedEntryPrice = snapshotPrice.price * entryOffset;
-          
+
           // Calculate PnL with fixed entry price
           const rawNotionalValue = Number(hedge.notional_value);
           if (!Number.isFinite(rawNotionalValue) || rawNotionalValue <= 0) {
@@ -792,8 +830,11 @@ export class CentralizedHedgeManager {
             continue;
           }
           const rawLeverage = Number(hedge.leverage);
-          const leverage = (Number.isFinite(rawLeverage) && rawLeverage >= 1 && rawLeverage <= 125) ? rawLeverage : 1;
-          
+          const leverage =
+            Number.isFinite(rawLeverage) && rawLeverage >= 1 && rawLeverage <= 125
+              ? rawLeverage
+              : 1;
+
           let pnlMultiplier: number;
           if (hedge.side === 'SHORT') {
             pnlMultiplier = (fixedEntryPrice - snapshotPrice.price) / fixedEntryPrice;
@@ -806,7 +847,10 @@ export class CentralizedHedgeManager {
           }
           continue;
         } catch (fixError) {
-          logger.error('[HedgeManager] Failed to auto-fix entry_price', { hedgeId: hedge.id, error: fixError });
+          logger.error('[HedgeManager] Failed to auto-fix entry_price', {
+            hedgeId: hedge.id,
+            error: fixError,
+          });
           errors++;
           continue;
         }
@@ -816,9 +860,9 @@ export class CentralizedHedgeManager {
       // PRODUCTION SAFETY: Validate notional value
       const rawNotionalValue = Number(hedge.notional_value);
       if (!Number.isFinite(rawNotionalValue) || rawNotionalValue <= 0) {
-        logger.error('[HedgeManager] Invalid notional_value for hedge', { 
-          hedgeId: hedge.id, 
-          notionalValue: hedge.notional_value 
+        logger.error('[HedgeManager] Invalid notional_value for hedge', {
+          hedgeId: hedge.id,
+          notionalValue: hedge.notional_value,
         });
         errors++;
         continue;
@@ -832,9 +876,9 @@ export class CentralizedHedgeManager {
         leverage = rawLeverage;
       } else if (rawLeverage !== undefined && rawLeverage !== null && rawLeverage !== 0) {
         // Non-default but invalid leverage
-        logger.error('[HedgeManager] Invalid leverage for hedge', { 
-          hedgeId: hedge.id, 
-          leverage: hedge.leverage 
+        logger.error('[HedgeManager] Invalid leverage for hedge', {
+          hedgeId: hedge.id,
+          leverage: hedge.leverage,
         });
         if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
           errors++;
@@ -852,7 +896,8 @@ export class CentralizedHedgeManager {
       const sign = hedge.side === 'SHORT' ? 1 : -1;
       const unrealizedPnL = size * (entryPrice - snapshotPrice.price) * sign;
       if (!isFinite(unrealizedPnL)) continue;
-      void notionalValue; void leverage;  // legacy locals; intentionally unused now
+      void notionalValue;
+      void leverage; // legacy locals; intentionally unused now
 
       updates.push({ id: hedge.id, pnl: unrealizedPnL, price: snapshotPrice.price });
     }
@@ -887,7 +932,7 @@ export class CentralizedHedgeManager {
    * 3. Assess risk for each (pure computation)
    * 4. Execute hedges where needed
    * 5. Batch PnL update
-   * 
+   *
    * This replaces the serial per-portfolio approach.
    */
   async runCycle(configs: Map<number, AutoHedgeConfig>): Promise<CycleResult> {
@@ -935,8 +980,8 @@ export class CentralizedHedgeManager {
     logger.info('[CentralHedge] Portfolio contexts gathered', {
       requested: configs.size,
       gathered: contexts.length,
-      communityPools: contexts.filter(c => c.isCommunityPool).length,
-      userPortfolios: contexts.filter(c => !c.isCommunityPool).length,
+      communityPools: contexts.filter((c) => c.isCommunityPool).length,
+      userPortfolios: contexts.filter((c) => !c.isCommunityPool).length,
     });
 
     // ── 3. ASSESS ALL RISKS (pure computation — no I/O) ──
@@ -964,14 +1009,21 @@ export class CentralizedHedgeManager {
       const assessment = assessments.get(ctx.portfolioId);
       if (!assessment) continue;
 
-      if (assessment.riskScore >= ctx.config.riskThreshold && assessment.recommendations.length > 0) {
+      if (
+        assessment.riskScore >= ctx.config.riskThreshold &&
+        assessment.recommendations.length > 0
+      ) {
         logger.info('[CentralHedge] Executing hedges for portfolio', {
           portfolioId: ctx.portfolioId,
           riskScore: assessment.riskScore,
           recommendations: assessment.recommendations.length,
         });
 
-        const { executed, failed } = await this.executeHedges(ctx, assessment.recommendations, snapshot);
+        const { executed, failed } = await this.executeHedges(
+          ctx,
+          assessment.recommendations,
+          snapshot
+        );
         totalExecuted += executed;
         totalFailed += failed;
       }

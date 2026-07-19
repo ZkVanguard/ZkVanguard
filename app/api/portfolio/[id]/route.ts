@@ -21,16 +21,16 @@ export const maxDuration = 30;
 
 // Token decimals (static - these don't change)
 const TOKEN_DECIMALS: Record<string, number> = {
-  '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 6,   // devUSDC = 6 decimals
-  '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 18,  // WCRO = 18 decimals
-  '0x28217daddc55e3c4831b4a48a00ce04880786967': 6,   // Testnet USDC = 6 decimals
+  '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 6, // devUSDC = 6 decimals
+  '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 18, // WCRO = 18 decimals
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 6, // Testnet USDC = 6 decimals
 };
 
 // Token symbols (for price lookup)
 const TOKEN_SYMBOLS: Record<string, string> = {
-  '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'USDC',  // Treat devUSDC as USDC
-  '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'CRO',   // WCRO -> CRO price
-  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'USDC',  // Testnet USDC -> USDC price
+  '0xc01efaaf7c5c61bebfaeb358e1161b537b8bc0e0': 'USDC', // Treat devUSDC as USDC
+  '0x6a3173618859c7cd40faf6921b5e9eb6a76f1fd4': 'CRO', // WCRO -> CRO price
+  '0x28217daddc55e3c4831b4a48a00ce04880786967': 'USDC', // Testnet USDC -> USDC price
 };
 
 // Token display names
@@ -46,7 +46,7 @@ const TOKEN_DISPLAY_NAMES: Record<string, string> = {
 async function getLiveTokenPrice(tokenAddress: string): Promise<number> {
   const addr = tokenAddress.toLowerCase();
   const symbol = TOKEN_SYMBOLS[addr];
-  
+
   if (!symbol) {
     logger.warn('[Portfolio API] Unknown token address - cannot fetch price', { tokenAddress });
     if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
@@ -54,11 +54,11 @@ async function getLiveTokenPrice(tokenAddress: string): Promise<number> {
     }
     return 0;
   }
-  
+
   try {
     const marketService = getMarketDataService();
     const priceData = await marketService.getTokenPrice(symbol);
-    
+
     // Validate price is reasonable
     const validated = ProductionGuard.requireLivePrice(
       symbol,
@@ -66,15 +66,15 @@ async function getLiveTokenPrice(tokenAddress: string): Promise<number> {
       priceData.timestamp,
       priceData.source
     );
-    
+
     return validated.price;
   } catch (error) {
     logger.error('[Portfolio API] Failed to fetch live price', { symbol, tokenAddress, error });
-    
+
     if (ProductionGuard.ENFORCE_PRODUCTION_SAFETY) {
       throw new Error(`Unable to fetch price for ${symbol}. Portfolio valuation halted.`);
     }
-    
+
     // Dev mode only - return 0 (will show clearly something is wrong)
     return 0;
   }
@@ -94,22 +94,21 @@ async function getDbCachedPortfolio(id: string): Promise<unknown | null> {
 
 async function setAllPortfolioCaches(id: string, data: unknown): Promise<void> {
   portfolioCache.set(`portfolio-${id}`, { data, timestamp: Date.now() });
-  setCached('portfolio', `detail:${id}`, data, CACHE_TTL).catch(err => logger.warn('Portfolio detail cache write failed', { error: String(err) }));
+  setCached('portfolio', `detail:${id}`, data, CACHE_TTL).catch((err) =>
+    logger.warn('Portfolio detail cache write failed', { error: String(err) })
+  );
 }
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     // In Next.js 14+, params is a Promise
     const { id } = await context.params;
     const portfolioId = BigInt(id);
-    
+
     // Check for cache bypass in query params
     const { searchParams } = new URL(request.url);
     const bypassCache = searchParams.get('refresh') === 'true';
-    
+
     // Two-tier cache check (memory → DB)
     const cacheKey = `portfolio-${id}`;
     if (!bypassCache) {
@@ -119,7 +118,7 @@ export async function GET(
         logger.info(`[Portfolio API] Memory cache HIT for portfolio ${id}`);
         return NextResponse.json(memCached.data);
       }
-      
+
       // Tier 2: DB cache (survives cold starts)
       const dbCached = await getDbCachedPortfolio(id);
       if (dbCached) {
@@ -128,9 +127,11 @@ export async function GET(
         return NextResponse.json(dbCached);
       }
     }
-    
-    logger.info(`[Portfolio API] Fetching portfolio ${portfolioId}${bypassCache ? ' (cache bypassed)' : ''}...`);
-    
+
+    logger.info(
+      `[Portfolio API] Fetching portfolio ${portfolioId}${bypassCache ? ' (cache bypassed)' : ''}...`
+    );
+
     // Create public client for Cronos (with retry for rate-limit protection)
     const client = createPublicClient({
       chain: getCronosChainId() === 25 ? cronos : cronosTestnet,
@@ -145,46 +146,53 @@ export async function GET(
     logger.info(`[Portfolio API] Using RWA Manager: ${addresses.rwaManager}`);
 
     // Read portfolio data from contract using 'portfolios' mapping getter
-    const portfolio = await client.readContract({
+    const portfolio = (await client.readContract({
       address: addresses.rwaManager as `0x${string}`,
       abi: RWA_MANAGER_ABI,
       functionName: 'portfolios',
       args: [portfolioId],
-    }) as [string, bigint, bigint, bigint, bigint, boolean];
+    })) as [string, bigint, bigint, bigint, bigint, boolean];
 
     logger.debug('[Portfolio API] Raw portfolio data', { data: portfolio });
 
     // Also fetch asset list
-    const assets = await client.readContract({
+    const assets = (await client.readContract({
       address: addresses.rwaManager as `0x${string}`,
       abi: RWA_MANAGER_ABI,
       functionName: 'getPortfolioAssets',
       args: [portfolioId],
-    }) as string[];
+    })) as string[];
 
     logger.debug('[Portfolio API] Portfolio assets', { data: assets });
 
     // Calculate actual portfolio value using getAssetAllocation (reads from portfolio's internal accounting)
     let calculatedValue = 0;
-    const assetBalances: Array<{ token: string; symbol: string; balance: string; valueUSD: number }> = [];
-    
+    const assetBalances: Array<{
+      token: string;
+      symbol: string;
+      balance: string;
+      valueUSD: number;
+    }> = [];
+
     if (assets && assets.length > 0) {
       // Batch fetch all asset allocations in parallel (avoids N+1)
       const allocationResults = await Promise.allSettled(
-        assets.map(assetAddress =>
-          client.readContract({
-            address: addresses.rwaManager as `0x${string}`,
-            abi: RWA_MANAGER_ABI,
-            functionName: 'getAssetAllocation',
-            args: [portfolioId, assetAddress as `0x${string}`],
-          }).then(allocation => ({ assetAddress, allocation: allocation as bigint }))
+        assets.map((assetAddress) =>
+          client
+            .readContract({
+              address: addresses.rwaManager as `0x${string}`,
+              abi: RWA_MANAGER_ABI,
+              functionName: 'getAssetAllocation',
+              args: [portfolioId, assetAddress as `0x${string}`],
+            })
+            .then((allocation) => ({ assetAddress, allocation: allocation as bigint }))
         )
       );
 
       // PRODUCTION SAFETY: Fetch live prices for all unique assets first
-      const uniqueAssets = [...new Set(assets.map(a => a.toLowerCase()))];
+      const uniqueAssets = [...new Set(assets.map((a) => a.toLowerCase()))];
       const priceMap: Map<string, number> = new Map();
-      
+
       for (const addr of uniqueAssets) {
         try {
           const price = await getLiveTokenPrice(addr);
@@ -199,7 +207,9 @@ export async function GET(
 
       for (const result of allocationResults) {
         if (result.status === 'rejected') {
-          logger.warn(`[Portfolio API] Failed to fetch allocation`, { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
+          logger.warn(`[Portfolio API] Failed to fetch allocation`, {
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          });
           continue;
         }
         const { assetAddress, allocation } = result.value;
@@ -209,18 +219,25 @@ export async function GET(
         const symbol = TOKEN_DISPLAY_NAMES[addr] || 'Unknown';
         const balanceNum = Number(allocation) / Math.pow(10, decimals);
         const valueUSD = balanceNum * price;
-        logger.debug(`[Portfolio API] Asset ${symbol}: allocation=${allocation.toString()}, balance=${balanceNum.toFixed(4)}, price=$${price}, value=$${valueUSD.toFixed(2)}`);
+        logger.debug(
+          `[Portfolio API] Asset ${symbol}: allocation=${allocation.toString()}, balance=${balanceNum.toFixed(4)}, price=$${price}, value=$${valueUSD.toFixed(2)}`
+        );
         if (balanceNum > 0) {
-          assetBalances.push({ token: assetAddress, symbol, balance: balanceNum.toFixed(4), valueUSD });
+          assetBalances.push({
+            token: assetAddress,
+            symbol,
+            balance: balanceNum.toFixed(4),
+            valueUSD,
+          });
           calculatedValue += valueUSD;
         }
       }
     }
-    
+
     // Also check the contract's totalValue field
     const contractTotalValue = portfolio[1] ? Number(portfolio[1]) : 0;
     logger.debug(`[Portfolio API] Contract totalValue field: ${contractTotalValue}`);
-    
+
     // The contract totalValue is stored in raw token units (usually the deposited amount)
     // Try to interpret it - if it's small, it might already be normalized, if large, normalize it
     let normalizedContractValue = 0;
@@ -235,18 +252,20 @@ export async function GET(
         normalizedContractValue = contractTotalValue;
       }
     }
-    
-    logger.debug(`[Portfolio API] Calculated value: $${calculatedValue.toFixed(2)}, Normalized contract value: $${normalizedContractValue.toFixed(2)}`);
-    
+
+    logger.debug(
+      `[Portfolio API] Calculated value: $${calculatedValue.toFixed(2)}, Normalized contract value: $${normalizedContractValue.toFixed(2)}`
+    );
+
     // Use the calculated value from asset allocations (more accurate), fall back to contract value
     const finalValueUSD = calculatedValue > 0 ? calculatedValue : normalizedContractValue;
 
     // Check if portfolio contains testnet USDC - if so, create virtual allocations for BTC/ETH/CRO/SUI
-    const testnetUsdcAsset = assetBalances.find(a => 
-      a.token.toLowerCase() === '0x28217daddc55e3c4831b4a48a00ce04880786967'
+    const testnetUsdcAsset = assetBalances.find(
+      (a) => a.token.toLowerCase() === '0x28217daddc55e3c4831b4a48a00ce04880786967'
     );
-    
-    let virtualAllocations: Array<{
+
+    const virtualAllocations: Array<{
       symbol: string;
       percentage: number;
       valueUSD: number;
@@ -257,13 +276,13 @@ export async function GET(
       pnlPercentage: number;
       chain: string;
     }> = [];
-    
+
     // ⚠️ TESTNET ONLY: Entry prices should come from on-chain transaction history
     // On mainnet, testnet USDC doesn't exist so this code path is never hit
     // For demo, we use current market prices (P&L will be minimal)
     const entryPrices: Record<string, number> = {};
     // Entry prices are fetched dynamically below from market service
-    
+
     // For institutional portfolios with testnet USDC, use the ACTUAL wallet balance
     // This ensures the portfolio value matches the wallet balance
     let actualUsdcBalance = 0;
@@ -271,29 +290,33 @@ export async function GET(
       try {
         // Read actual USDC balance from wallet (not from portfolio allocation)
         const usdcAddress = '0x28217daddc55e3c4831b4a48a00ce04880786967' as `0x${string}`;
-        const walletBalance = await client.readContract({
+        const walletBalance = (await client.readContract({
           address: usdcAddress,
           abi: erc20Abi,
           functionName: 'balanceOf',
           args: [portfolio[0] as `0x${string}`], // portfolio owner
-        }) as bigint;
-        
+        })) as bigint;
+
         actualUsdcBalance = Number(walletBalance) / 1e6; // USDC has 6 decimals
-        logger.info(`[Portfolio API] Actual wallet USDC balance: $${actualUsdcBalance.toLocaleString()}`);
-        
+        logger.info(
+          `[Portfolio API] Actual wallet USDC balance: $${actualUsdcBalance.toLocaleString()}`
+        );
+
         // Use actual wallet balance if it's greater than the on-chain allocation
         if (actualUsdcBalance > finalValueUSD) {
-          logger.info(`[Portfolio API] Using wallet balance ($${actualUsdcBalance.toLocaleString()}) instead of allocation ($${finalValueUSD.toLocaleString()})`);
+          logger.info(
+            `[Portfolio API] Using wallet balance ($${actualUsdcBalance.toLocaleString()}) instead of allocation ($${finalValueUSD.toLocaleString()})`
+          );
           calculatedValue = actualUsdcBalance;
         }
       } catch (error) {
         logger.warn(`[Portfolio API] Failed to read actual USDC balance`, { error: String(error) });
       }
     }
-    
+
     // Recalculate finalValueUSD after potential update
     const finalEntryValue = Math.max(calculatedValue, finalValueUSD);
-    
+
     // ⚠️ TESTNET ONLY: Virtual allocations for testnet USDC demo portfolios
     // Testnet USDC only exists on testnet - this code never runs on mainnet
     if (testnetUsdcAsset && finalEntryValue > 1000000 && !isMainnet()) {
@@ -305,24 +328,24 @@ export async function GET(
         { symbol: 'CRO', percentage: Number(process.env.DEMO_ALLOC_CRO || 20), chain: 'cronos' },
         { symbol: 'SUI', percentage: Number(process.env.DEMO_ALLOC_SUI || 15), chain: 'sui' },
       ];
-      
+
       const marketService = getMarketDataService();
-      
+
       for (const alloc of allocations) {
         try {
           const priceData = await marketService.getTokenPrice(alloc.symbol);
           const currentPrice = priceData.price;
           const entryPrice = entryPrices[alloc.symbol] || currentPrice;
-          
+
           // Calculate amount based on entry price (what we "bought")
           const valueAtEntry = finalEntryValue * (alloc.percentage / 100);
           const amount = valueAtEntry / entryPrice;
-          
+
           // Current value based on current price
           const currentValue = amount * currentPrice;
           const pnl = currentValue - valueAtEntry;
           const pnlPercentage = ((currentPrice - entryPrice) / entryPrice) * 100;
-          
+
           virtualAllocations.push({
             symbol: alloc.symbol,
             percentage: alloc.percentage,
@@ -338,15 +361,18 @@ export async function GET(
           logger.warn(`Failed to get price for ${alloc.symbol}`);
         }
       }
-      
-      logger.info(`[Portfolio API] Created ${virtualAllocations.length} virtual allocations for $${finalEntryValue.toLocaleString()} portfolio`);
+
+      logger.info(
+        `[Portfolio API] Created ${virtualAllocations.length} virtual allocations for $${finalEntryValue.toLocaleString()} portfolio`
+      );
     }
 
     // Calculate total portfolio P&L
     const totalPnl = virtualAllocations.reduce((sum, v) => sum + v.pnl, 0);
     const totalCurrentValue = virtualAllocations.reduce((sum, v) => sum + v.valueUSD, 0);
     const totalEntryValue = finalEntryValue;
-    const totalPnlPercentage = totalEntryValue > 0 ? ((totalCurrentValue - totalEntryValue) / totalEntryValue) * 100 : 0;
+    const totalPnlPercentage =
+      totalEntryValue > 0 ? ((totalCurrentValue - totalEntryValue) / totalEntryValue) * 100 : 0;
 
     // Format response
     const portfolioData = {
@@ -359,27 +385,34 @@ export async function GET(
       lastRebalance: portfolio[4]?.toString() || '0',
       isActive: portfolio[5] ?? false,
       assets: assets || [],
-      assetBalances: virtualAllocations.length > 0 ? virtualAllocations.map(v => ({
-        token: v.symbol,
-        symbol: v.symbol,
-        balance: v.amount.toFixed(4),
-        valueUSD: v.valueUSD,
-        // Calculate ACTUAL percentage based on current market values (for drift detection)
-        percentage: totalCurrentValue > 0 ? (v.valueUSD / totalCurrentValue) * 100 : v.percentage,
-        targetPercentage: v.percentage, // Keep target for reference
-        price: v.price,
-        entryPrice: v.entryPrice,
-        pnl: v.pnl,
-        pnlPercentage: v.pnlPercentage,
-        chain: v.chain,
-      })) : assetBalances, // Use virtual allocations if available
+      assetBalances:
+        virtualAllocations.length > 0
+          ? virtualAllocations.map((v) => ({
+              token: v.symbol,
+              symbol: v.symbol,
+              balance: v.amount.toFixed(4),
+              valueUSD: v.valueUSD,
+              // Calculate ACTUAL percentage based on current market values (for drift detection)
+              percentage:
+                totalCurrentValue > 0 ? (v.valueUSD / totalCurrentValue) * 100 : v.percentage,
+              targetPercentage: v.percentage, // Keep target for reference
+              price: v.price,
+              entryPrice: v.entryPrice,
+              pnl: v.pnl,
+              pnlPercentage: v.pnlPercentage,
+              chain: v.chain,
+            }))
+          : assetBalances, // Use virtual allocations if available
       virtualAllocations: virtualAllocations.length > 0 ? virtualAllocations : undefined,
-      targetAllocations: virtualAllocations.length > 0 ? {
-        'BTC': 35,
-        'ETH': 30,
-        'CRO': 20,
-        'SUI': 15,
-      } : undefined,
+      targetAllocations:
+        virtualAllocations.length > 0
+          ? {
+              BTC: 35,
+              ETH: 30,
+              CRO: 20,
+              SUI: 15,
+            }
+          : undefined,
       pnl: {
         total: totalPnl,
         percentage: totalPnlPercentage,
@@ -389,7 +422,9 @@ export async function GET(
       isInstitutional: virtualAllocations.length > 0,
     };
 
-    logger.info(`[Portfolio API] Portfolio ${id} final value: $${finalEntryValue.toFixed(2)}, assets: ${assetBalances.length}`);
+    logger.info(
+      `[Portfolio API] Portfolio ${id} final value: $${finalEntryValue.toFixed(2)}, assets: ${assetBalances.length}`
+    );
 
     // Cache the response (two-tier: memory + DB)
     await setAllPortfolioCaches(id, portfolioData);

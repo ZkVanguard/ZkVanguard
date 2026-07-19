@@ -25,13 +25,19 @@ import 'server-only';
 
 import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
-import { WDK_CHAINS, type WDKChainConfig } from '@/lib/config/wdk';
+import { WDK_CHAINS } from '@/lib/config/wdk';
 
 // ============================================
 // TYPES
 // ============================================
 
-export type WdkChainKey = 'sepolia' | 'cronos-mainnet' | 'cronos-testnet' | 'hedera-mainnet' | 'plasma' | 'stable';
+export type WdkChainKey =
+  | 'sepolia'
+  | 'cronos-mainnet'
+  | 'cronos-testnet'
+  | 'hedera-mainnet'
+  | 'plasma'
+  | 'stable';
 
 export interface ChainBalance {
   chain: WdkChainKey;
@@ -90,20 +96,20 @@ const USDT0_ABI = [
 
 // LayerZero endpoint IDs for USD₮0 bridging
 const LZ_ENDPOINT_IDS: Partial<Record<WdkChainKey, number>> = {
-  'sepolia': 40161,      // Sepolia testnet endpoint
+  sepolia: 40161, // Sepolia testnet endpoint
   'cronos-mainnet': 30125, // Cronos mainnet endpoint
-  'plasma': 40333,       // Plasma endpoint (estimated)
-  'stable': 40334,       // Stable endpoint (estimated)
+  plasma: 40333, // Plasma endpoint (estimated)
+  stable: 40334, // Stable endpoint (estimated)
 };
 
 // Minimum gas reserve (in native token, 18 decimals)
 const MIN_GAS_RESERVE: Record<string, bigint> = {
-  'sepolia': ethers.parseEther('0.01'),        // 0.01 ETH
-  'cronos-mainnet': ethers.parseEther('1'),    // 1 CRO
-  'cronos-testnet': ethers.parseEther('1'),    // 1 tCRO
-  'hedera-mainnet': ethers.parseEther('1'),    // 1 HBAR
-  'plasma': ethers.parseEther('0.01'),
-  'stable': ethers.parseEther('0.01'),
+  sepolia: ethers.parseEther('0.01'), // 0.01 ETH
+  'cronos-mainnet': ethers.parseEther('1'), // 1 CRO
+  'cronos-testnet': ethers.parseEther('1'), // 1 tCRO
+  'hedera-mainnet': ethers.parseEther('1'), // 1 HBAR
+  plasma: ethers.parseEther('0.01'),
+  stable: ethers.parseEther('0.01'),
 };
 
 // ============================================
@@ -124,9 +130,7 @@ export class WdkBridgeService {
     if (this.initialized) return true;
 
     try {
-      const key = this.privateKey.startsWith('0x')
-        ? this.privateKey
-        : `0x${this.privateKey}`;
+      const key = this.privateKey.startsWith('0x') ? this.privateKey : `0x${this.privateKey}`;
 
       for (const [chainKey, config] of Object.entries(WDK_CHAINS)) {
         if (!config.rpcUrl) continue;
@@ -147,7 +151,9 @@ export class WdkBridgeService {
       logger.info('[WdkBridge] Initialized', { chains: Array.from(this.wallets.keys()) });
       return true;
     } catch (err) {
-      logger.error('[WdkBridge] Init failed', { error: err instanceof Error ? err.message : String(err) });
+      logger.error('[WdkBridge] Init failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return false;
     }
   }
@@ -195,7 +201,13 @@ export class WdkBridgeService {
     const chainBalances: ChainBalance[] = [];
     let totalUsdt = 0;
 
-    const chainKeys: WdkChainKey[] = ['sepolia', 'cronos-mainnet', 'hedera-mainnet', 'plasma', 'stable'];
+    const chainKeys: WdkChainKey[] = [
+      'sepolia',
+      'cronos-mainnet',
+      'hedera-mainnet',
+      'plasma',
+      'stable',
+    ];
 
     for (const chainKey of chainKeys) {
       const config = WDK_CHAINS[chainKey];
@@ -235,25 +247,33 @@ export class WdkBridgeService {
   async getBridgeQuote(
     sourceChain: WdkChainKey,
     destChain: WdkChainKey,
-    amount: string,
+    amount: string
   ): Promise<BridgeQuote> {
     const sourceConfig = WDK_CHAINS[sourceChain];
     const destConfig = WDK_CHAINS[destChain];
 
     if (!sourceConfig?.usdtAddress) {
       return {
-        sourceChain, destChain, amount,
-        estimatedFee: '0', estimatedTime: 'N/A',
-        route: 'N/A', canExecute: false,
+        sourceChain,
+        destChain,
+        amount,
+        estimatedFee: '0',
+        estimatedTime: 'N/A',
+        route: 'N/A',
+        canExecute: false,
         error: `USDT not configured on ${sourceChain}`,
       };
     }
 
     if (!destConfig?.usdtAddress) {
       return {
-        sourceChain, destChain, amount,
-        estimatedFee: '0', estimatedTime: 'N/A',
-        route: 'N/A', canExecute: false,
+        sourceChain,
+        destChain,
+        amount,
+        estimatedFee: '0',
+        estimatedTime: 'N/A',
+        route: 'N/A',
+        canExecute: false,
         error: `USDT not configured on ${destChain}`,
       };
     }
@@ -262,9 +282,13 @@ export class WdkBridgeService {
     const balance = await this.getUsdtBalance(sourceChain);
     if (parseFloat(balance) < parseFloat(amount)) {
       return {
-        sourceChain, destChain, amount,
-        estimatedFee: '0', estimatedTime: 'N/A',
-        route: 'insufficient balance', canExecute: false,
+        sourceChain,
+        destChain,
+        amount,
+        estimatedFee: '0',
+        estimatedTime: 'N/A',
+        route: 'insufficient balance',
+        canExecute: false,
         error: `Insufficient USDT on ${sourceChain}: ${balance} < ${amount}`,
       };
     }
@@ -292,8 +316,12 @@ export class WdkBridgeService {
     }
 
     return {
-      sourceChain, destChain, amount,
-      estimatedFee, estimatedTime, route,
+      sourceChain,
+      destChain,
+      amount,
+      estimatedFee,
+      estimatedTime,
+      route,
       canExecute: true,
     };
   }
@@ -301,19 +329,19 @@ export class WdkBridgeService {
   /**
    * Execute a same-chain USDT transfer.
    */
-  async transferUsdt(
-    chainKey: WdkChainKey,
-    to: string,
-    amount: string,
-  ): Promise<BridgeResult> {
+  async transferUsdt(chainKey: WdkChainKey, to: string, amount: string): Promise<BridgeResult> {
     await this.initialize();
     const wallet = this.wallets.get(chainKey);
     const config = WDK_CHAINS[chainKey];
 
     if (!wallet || !config?.usdtAddress) {
       return {
-        success: false, sourceChain: chainKey, destChain: chainKey,
-        amount, error: `USDT not configured on ${chainKey}`, timestamp: Date.now(),
+        success: false,
+        sourceChain: chainKey,
+        destChain: chainKey,
+        amount,
+        error: `USDT not configured on ${chainKey}`,
+        timestamp: Date.now(),
       };
     }
 
@@ -325,18 +353,29 @@ export class WdkBridgeService {
       const receipt = await tx.wait();
 
       logger.info('[WdkBridge] USDT transfer', {
-        chain: chainKey, to, amount, txHash: receipt.hash,
+        chain: chainKey,
+        to,
+        amount,
+        txHash: receipt.hash,
       });
 
       return {
-        success: true, sourceChain: chainKey, destChain: chainKey,
-        amount, txHash: receipt.hash, timestamp: Date.now(),
+        success: true,
+        sourceChain: chainKey,
+        destChain: chainKey,
+        amount,
+        txHash: receipt.hash,
+        timestamp: Date.now(),
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return {
-        success: false, sourceChain: chainKey, destChain: chainKey,
-        amount, error: msg, timestamp: Date.now(),
+        success: false,
+        sourceChain: chainKey,
+        destChain: chainKey,
+        amount,
+        error: msg,
+        timestamp: Date.now(),
       };
     }
   }
@@ -353,15 +392,19 @@ export class WdkBridgeService {
   async bridgeUsdt(
     sourceChain: WdkChainKey,
     destChain: WdkChainKey,
-    amount: string,
+    amount: string
   ): Promise<BridgeResult> {
     await this.initialize();
 
     const quote = await this.getBridgeQuote(sourceChain, destChain, amount);
     if (!quote.canExecute) {
       return {
-        success: false, sourceChain, destChain, amount,
-        error: quote.error, timestamp: Date.now(),
+        success: false,
+        sourceChain,
+        destChain,
+        amount,
+        error: quote.error,
+        timestamp: Date.now(),
       };
     }
 
@@ -369,7 +412,10 @@ export class WdkBridgeService {
     const destWallet = this.wallets.get(destChain);
     if (!sourceWallet || !destWallet) {
       return {
-        success: false, sourceChain, destChain, amount,
+        success: false,
+        sourceChain,
+        destChain,
+        amount,
         error: 'Wallets not initialized for source/dest chains',
         timestamp: Date.now(),
       };
@@ -380,11 +426,15 @@ export class WdkBridgeService {
     const destEid = LZ_ENDPOINT_IDS[destChain];
 
     // USD₮0 direct bridge (source has USD₮0 token)
-    if ((sourceChain === 'plasma' || sourceChain === 'stable') && destEid && sourceConfig?.usdtAddress) {
+    if (
+      (sourceChain === 'plasma' || sourceChain === 'stable') &&
+      destEid &&
+      sourceConfig?.usdtAddress
+    ) {
       try {
         const usdt0 = new ethers.Contract(sourceConfig.usdtAddress, USDT0_ABI, sourceWallet);
         const amountLD = ethers.parseUnits(amount, 6);
-        const minAmountLD = amountLD * 99n / 100n; // 1% slippage
+        const minAmountLD = (amountLD * 99n) / 100n; // 1% slippage
 
         // Encode destination address as bytes32
         const toBytes32 = ethers.zeroPadValue(destAddress, 32);
@@ -399,32 +449,49 @@ export class WdkBridgeService {
           oftCmd: '0x',
         };
 
-        const tx = await usdt0.send(sendParam, '0x', destAddress, { value: ethers.parseEther('0.01') });
+        const tx = await usdt0.send(sendParam, '0x', destAddress, {
+          value: ethers.parseEther('0.01'),
+        });
         const receipt = await tx.wait();
 
         logger.info('[WdkBridge] USD₮0 bridge executed', {
-          sourceChain, destChain, amount, txHash: receipt.hash,
+          sourceChain,
+          destChain,
+          amount,
+          txHash: receipt.hash,
         });
 
         return {
-          success: true, sourceChain, destChain, amount,
-          bridgeTxHash: receipt.hash, timestamp: Date.now(),
+          success: true,
+          sourceChain,
+          destChain,
+          amount,
+          bridgeTxHash: receipt.hash,
+          timestamp: Date.now(),
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error('[WdkBridge] USD₮0 bridge failed', { error: msg });
         return {
-          success: false, sourceChain, destChain, amount,
-          error: msg, timestamp: Date.now(),
+          success: false,
+          sourceChain,
+          destChain,
+          amount,
+          error: msg,
+          timestamp: Date.now(),
         };
       }
     }
 
     // Fallback: same-chain transfer (for chains without direct bridge)
     // In production, this would route through Plasma/Stable as intermediary
-    logger.warn('[WdkBridge] Cross-chain bridge not available for this route — using same-chain transfer', {
-      sourceChain, destChain,
-    });
+    logger.warn(
+      '[WdkBridge] Cross-chain bridge not available for this route — using same-chain transfer',
+      {
+        sourceChain,
+        destChain,
+      }
+    );
 
     return this.transferUsdt(sourceChain, destAddress, amount);
   }
@@ -448,7 +515,8 @@ let bridgeInstance: WdkBridgeService | null = null;
 export function getWdkBridgeService(): WdkBridgeService | null {
   if (bridgeInstance) return bridgeInstance;
 
-  const key = process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY;
+  const key =
+    process.env.TREASURY_PRIVATE_KEY || process.env.PRIVATE_KEY || process.env.HEDERA_PRIVATE_KEY;
   if (!key) {
     logger.warn('[WdkBridge] No private key configured — bridge disabled');
     return null;

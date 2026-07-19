@@ -8,7 +8,6 @@ import { safeErrorResponse } from '@/lib/security/safe-error';
 import { validatePrice, seedPrice } from '@/lib/security/price-circuit-breaker';
 import { batchPriceCoalescer, priceCoalescer } from '@/lib/utils/request-deduplication';
 import { readLimiter } from '@/lib/security/rate-limiter';
-
 export const runtime = 'nodejs';
 
 export const maxDuration = 15;
@@ -26,20 +25,23 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const symbol = searchParams.get('symbol');
-    const symbols = searchParams.get('symbols')?.split(',').map(s => s.trim());
+    const symbols = searchParams
+      .get('symbols')
+      ?.split(',')
+      .map((s) => s.trim());
     const source = searchParams.get('source') || 'auto'; // 'auto', 'exchange', 'fallback'
 
     // Batch request
     if (symbols && symbols.length > 0) {
       logger.info(`[Market Data API] Fetching batch prices for: ${symbols.join(', ')}`);
-      
+
       if (source === 'exchange') {
         // Direct from Exchange API — coalesced to deduplicate concurrent requests
         const cacheKey = `exchange:${symbols.sort().join(',')}`;
         const prices = await batchPriceCoalescer.get(cacheKey, () =>
           cryptocomExchangeService.getBatchPrices(symbols)
         );
-        
+
         // ═══ CIRCUIT BREAKER: Validate prices before use ═══
         const validatedPrices: Record<string, number> = {};
         Object.entries(prices).forEach(([sym, price]) => {
@@ -49,33 +51,44 @@ export async function GET(request: NextRequest) {
             recordPriceUpdate(sym, price);
           }
         });
-        
+
         const priceMap = Object.fromEntries(
           Object.entries(validatedPrices).map(([sym, price]) => [sym, price])
         );
 
-        return NextResponse.json({
-          success: true,
-          data: Object.entries(priceMap).map(([sym, price]) => ({
-            symbol: sym,
-            price,
+        return NextResponse.json(
+          {
+            success: true,
+            data: Object.entries(priceMap).map(([sym, price]) => ({
+              symbol: sym,
+              price,
+              source: 'cryptocom-exchange',
+            })),
+            prices: priceMap,
             source: 'cryptocom-exchange',
-          })),
-          prices: priceMap,
-          source: 'cryptocom-exchange',
-          timestamp: new Date().toISOString(),
-        }, {
-          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
-        });
+            timestamp: new Date().toISOString(),
+          },
+          {
+            headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+          }
+        );
       } else {
         // Use fallback system (auto). Use allSettled so one unresolvable symbol
         // does not poison the whole batch — a common failure mode when the
         // frontend requests a mix of real tickers (BTC/ETH/USDC) and derived
         // symbols like SUIPOOL that may be temporarily unavailable.
         const marketData = getMarketDataService();
-        const settled = await Promise.allSettled(symbols.map(sym => marketData.getTokenPrice(sym)));
-        const prices = settled
-          .map((r, i) => r.status === 'fulfilled' ? r.value : { rejected: true, symbol: symbols[i], reason: r.reason }) as Array<import('@/lib/services/market-data/RealMarketDataService').MarketPrice | { rejected: true; symbol: string; reason: unknown }>;
+        const settled = await Promise.allSettled(
+          symbols.map((sym) => marketData.getTokenPrice(sym))
+        );
+        const prices = settled.map((r, i) =>
+          r.status === 'fulfilled'
+            ? r.value
+            : { rejected: true, symbol: symbols[i], reason: r.reason }
+        ) as Array<
+          | import('@/lib/services/market-data/RealMarketDataService').MarketPrice
+          | { rejected: true; symbol: string; reason: unknown }
+        >;
         for (const p of prices) {
           if ('rejected' in p) {
             logger.warn(`[Market Data API] batch: skipping ${p.symbol}`, {
@@ -84,35 +97,38 @@ export async function GET(request: NextRequest) {
           }
         }
         // Circuit breaker + webhook trigger, keeping only accepted prices
-        const validatedPrices = prices.filter((p): p is import('@/lib/services/market-data/RealMarketDataService').MarketPrice => {
-          if ('rejected' in p) return false;
-          const result = validatePrice(p.symbol, p.price);
-          if (result.accepted) {
-            recordPriceUpdate(p.symbol, p.price);
-            return true;
+        const validatedPrices = prices.filter(
+          (p): p is import('@/lib/services/market-data/RealMarketDataService').MarketPrice => {
+            if ('rejected' in p) return false;
+            const result = validatePrice(p.symbol, p.price);
+            if (result.accepted) {
+              recordPriceUpdate(p.symbol, p.price);
+              return true;
+            }
+            return false;
           }
-          return false;
-        });
-        
-        const priceMap = Object.fromEntries(
-          validatedPrices.map(p => [p.symbol, p.price])
         );
 
-        return NextResponse.json({
-          success: true,
-          data: validatedPrices.map(p => ({
-            symbol: p.symbol,
-            price: p.price,
-            change24h: p.change24h,
-            volume24h: p.volume24h,
-            source: p.source,
-          })),
-          prices: priceMap,
-          source: 'multi-source-fallback',
-          timestamp: new Date().toISOString(),
-        }, {
-          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
-        });
+        const priceMap = Object.fromEntries(validatedPrices.map((p) => [p.symbol, p.price]));
+
+        return NextResponse.json(
+          {
+            success: true,
+            data: validatedPrices.map((p) => ({
+              symbol: p.symbol,
+              price: p.price,
+              change24h: p.change24h,
+              volume24h: p.volume24h,
+              source: p.source,
+            })),
+            prices: priceMap,
+            source: 'multi-source-fallback',
+            timestamp: new Date().toISOString(),
+          },
+          {
+            headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+          }
+        );
       }
     }
 
@@ -130,27 +146,30 @@ export async function GET(request: NextRequest) {
       try {
         const cached = await Promise.race([
           getCachedPrice(symbol, 30_000),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)) // 2s timeout
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)), // 2s timeout
         ]);
         if (cached) {
           // Seed circuit breaker with known-good cached price
           seedPrice(cached.symbol, cached.price);
           logger.info(`[Market Data API] Cache HIT for ${symbol}`);
-        return NextResponse.json({
-          success: true,
-          data: {
-            symbol: cached.symbol,
-            price: cached.price,
-            change24h: cached.change_24h,
-            volume24h: cached.volume_24h,
-            source: 'db-cache',
-          },
-          source: 'db-cache',
-          timestamp: new Date().toISOString(),
-        }, {
-          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
-        });
-      }
+          return NextResponse.json(
+            {
+              success: true,
+              data: {
+                symbol: cached.symbol,
+                price: cached.price,
+                change24h: cached.change_24h,
+                volume24h: cached.volume_24h,
+                source: 'db-cache',
+              },
+              source: 'db-cache',
+              timestamp: new Date().toISOString(),
+            },
+            {
+              headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+            }
+          );
+        }
       } catch (cacheError) {
         logger.warn(`[Market Data API] DB cache timeout/error for ${symbol}, proceeding to fetch`);
       }
@@ -163,9 +182,15 @@ export async function GET(request: NextRequest) {
       // Direct from Exchange API with full market data — coalesced
       const marketData = await priceCoalescer.get(`exchange:${symbol}`, async () => {
         const md = await cryptocomExchangeService.getMarketData(symbol);
-        return { symbol: md.symbol, price: md.price, change24h: md.change24h, volume24h: md.volume24h, source: md.source };
+        return {
+          symbol: md.symbol,
+          price: md.price,
+          change24h: md.change24h,
+          volume24h: md.volume24h,
+          source: md.source,
+        };
       });
-      
+
       // ═══ CIRCUIT BREAKER: Validate before accepting ═══
       const cbResult = validatePrice(marketData.symbol, marketData.price);
       if (!cbResult.accepted) {
@@ -175,18 +200,20 @@ export async function GET(request: NextRequest) {
           { status: 422 }
         );
       }
-      
+
       // Cache in DB for other routes
-      upsertPrices([{
-        symbol: marketData.symbol,
-        price: marketData.price,
-        change24h: marketData.change24h,
-        volume24h: marketData.volume24h,
-        source: marketData.source,
-      }]).catch(err => logger.warn('Price cache write failed', { error: String(err) }));
-      
+      upsertPrices([
+        {
+          symbol: marketData.symbol,
+          price: marketData.price,
+          change24h: marketData.change24h,
+          volume24h: marketData.volume24h,
+          source: marketData.source,
+        },
+      ]).catch((err) => logger.warn('Price cache write failed', { error: String(err) }));
+
       recordPriceUpdate(marketData.symbol, marketData.price);
-      
+
       return NextResponse.json({
         success: true,
         data: {
@@ -202,17 +229,19 @@ export async function GET(request: NextRequest) {
     } else {
       // Use fallback system (auto) with timeout
       const marketData = getMarketDataService();
-      
+
       // Race with 8s timeout to prevent Vercel function timeout
       const price = await Promise.race([
         marketData.getTokenPrice(symbol),
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Price fetch timeout')), 8000))
+        new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error('Price fetch timeout')), 8000)
+        ),
       ]);
-      
+
       if (!price) {
         throw new Error('Price fetch returned null');
       }
-      
+
       // ═══ CIRCUIT BREAKER: Validate before accepting ═══
       const cbResult = validatePrice(price.symbol, price.price);
       if (!cbResult.accepted) {
@@ -222,65 +251,72 @@ export async function GET(request: NextRequest) {
           { status: 422 }
         );
       }
-      
+
       // Cache in DB (fire and forget)
-      upsertPrices([{
-        symbol: price.symbol,
-        price: price.price,
-        change24h: price.change24h,
-        volume24h: price.volume24h,
-        source: price.source,
-      }]).catch(err => logger.warn('Price cache write failed', { error: String(err) }));
-      
-      // ═══ WEBHOOK TRIGGER: Check for significant price moves ═══
-      recordPriceUpdate(price.symbol, price.price);
-      
-      return NextResponse.json({
-        success: true,
-        data: {
+      upsertPrices([
+        {
           symbol: price.symbol,
           price: price.price,
           change24h: price.change24h,
           volume24h: price.volume24h,
           source: price.source,
         },
-        source: 'multi-source-fallback',
-        timestamp: new Date().toISOString(),
-      }, {
-        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
-      });
+      ]).catch((err) => logger.warn('Price cache write failed', { error: String(err) }));
+
+      // ═══ WEBHOOK TRIGGER: Check for significant price moves ═══
+      recordPriceUpdate(price.symbol, price.price);
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            symbol: price.symbol,
+            price: price.price,
+            change24h: price.change24h,
+            volume24h: price.volume24h,
+            source: price.source,
+          },
+          source: 'multi-source-fallback',
+          timestamp: new Date().toISOString(),
+        },
+        {
+          headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=30' },
+        }
+      );
     }
   } catch (error: unknown) {
     logger.error('[Market Data API] Error', error);
-    
+
     // Return error — do NOT return stale hardcoded prices as if they are valid
     const { searchParams } = new URL(request.url);
     const symbol = searchParams.get('symbol');
-    
-    logger.error(`[Market Data API] All price sources failed for ${symbol || 'unknown'}`, { error });
-    
-    return NextResponse.json({
-      success: false,
-      error: 'All price sources unavailable',
-      symbol: symbol?.toUpperCase(),
-      timestamp: new Date().toISOString(),
-    }, { 
-      status: 503,
-      headers: { 'Cache-Control': 'no-store' },
+
+    logger.error(`[Market Data API] All price sources failed for ${symbol || 'unknown'}`, {
+      error,
     });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'All price sources unavailable',
+        symbol: symbol?.toUpperCase(),
+        timestamp: new Date().toISOString(),
+      },
+      {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store' },
+      }
+    );
   }
 }
-      
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { symbols, action = 'prices' } = body;
 
     if (!symbols || !Array.isArray(symbols)) {
-      return NextResponse.json(
-        { error: 'Symbols array is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Symbols array is required' }, { status: 400 });
     }
 
     logger.info(`[Market Data API] POST request for ${symbols.length} symbols, action: ${action}`);
@@ -300,14 +336,14 @@ export async function POST(request: NextRequest) {
 
       case 'market-data': {
         // Full market data for each symbol
-        const dataPromises = symbols.map(sym => 
-          cryptocomExchangeService.getMarketData(sym).catch((err: unknown) => ({
+        const dataPromises = symbols.map((sym) =>
+          cryptocomExchangeService.getMarketData(sym).catch((_err: unknown) => ({
             symbol: sym,
             error: 'Failed to fetch market data',
           }))
         );
         const marketData = await Promise.all(dataPromises);
-        
+
         return NextResponse.json({
           success: true,
           action: 'market-data',
@@ -333,10 +369,7 @@ export async function POST(request: NextRequest) {
       }
 
       default: {
-        return NextResponse.json(
-          { error: `Unknown action: ${action}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
       }
     }
   } catch (error: unknown) {

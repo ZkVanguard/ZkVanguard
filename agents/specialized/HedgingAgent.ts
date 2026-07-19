@@ -1,7 +1,7 @@
 /**
  * Hedging Agent
  * Specialized agent for automated hedging strategies using perpetual futures
- * 
+ *
  * Enhanced with AIMarketIntelligence for comprehensive market context:
  * - Multi-timeframe streak analysis
  * - Cross-market correlation
@@ -12,14 +12,30 @@
 
 import { BaseAgent } from '../core/BaseAgent';
 import { AgentCapability, AgentTask, TaskResult, AgentMessage } from '@shared/types/agent';
-import { MoonlanderClient, OrderResult, PerpetualPosition, LiquidationRisk } from '@integrations/moonlander/MoonlanderClient';
+import {
+  MoonlanderClient,
+  OrderResult,
+  PerpetualPosition,
+  LiquidationRisk,
+} from '@integrations/moonlander/MoonlanderClient';
 import { MCPClient } from '@integrations/mcp/MCPClient';
-import { HedgeExecutorClient, HedgeExecutorConfig, OnChainHedgeResult } from '@integrations/hedge-executor/HedgeExecutorClient';
+import {
+  HedgeExecutorClient,
+  HedgeExecutorConfig,
+  OnChainHedgeResult,
+} from '@integrations/hedge-executor/HedgeExecutorClient';
 import { DelphiMarketService } from '../../lib/services/market-data/DelphiMarketService';
-import { AIMarketIntelligence, type AIMarketContext } from '../../lib/services/AIMarketIntelligence';
+import {
+  AIMarketIntelligence,
+  type AIMarketContext,
+} from '../../lib/services/AIMarketIntelligence';
 import { logger } from '@shared/utils/logger';
 import { ethers } from 'ethers';
-import type { FiveMinBTCSignal, FiveMinSignalHistory, SignalEvent } from '../../lib/services/market-data/Polymarket5MinService';
+import type {
+  FiveMinBTCSignal,
+  FiveMinSignalHistory,
+  SignalEvent,
+} from '../../lib/services/market-data/Polymarket5MinService';
 
 // Re-export types from the dedicated types module
 export { type HedgeStrategy, type HedgeAnalysis } from '@/lib/types/hedge-strategy-types';
@@ -27,7 +43,14 @@ import type { HedgeStrategy, HedgeAnalysis } from '@/lib/types/hedge-strategy-ty
 
 /** Extended client interface for duck-typing compatibility with varying implementations */
 interface MoonlanderClientExt {
-  openHedge?: (params: { market: string; side: 'LONG' | 'SHORT'; notionalValue: string; leverage?: number; stopLoss?: string; takeProfit?: string }) => Promise<OrderResult>;
+  openHedge?: (params: {
+    market: string;
+    side: 'LONG' | 'SHORT';
+    notionalValue: string;
+    leverage?: number;
+    stopLoss?: string;
+    takeProfit?: string;
+  }) => Promise<OrderResult>;
   createOrder?: (params: Record<string, unknown>) => Promise<OrderResult>;
   getPosition?: (market: string) => Promise<PerpetualPosition | null>;
   getPositions?: () => Promise<PerpetualPosition[]>;
@@ -95,7 +118,8 @@ export class HedgingAgent extends BaseAgent {
 
       // Subscribe to the proactive 5-min signal ticker — never late
       try {
-        const { Polymarket5MinService } = await import('../../lib/services/market-data/Polymarket5MinService');
+        const { Polymarket5MinService } =
+          await import('../../lib/services/market-data/Polymarket5MinService');
         this.fiveMinUnsubscribers.push(
           Polymarket5MinService.on('signal:update', (evt: SignalEvent) => {
             this.cachedFiveMinSignal = evt.signal;
@@ -108,7 +132,7 @@ export class HedgingAgent extends BaseAgent {
               recommendation: evt.signal.recommendation,
               agentId: this.agentId,
             });
-          }),
+          })
         );
         // Seed with current signal
         this.cachedFiveMinSignal = await Polymarket5MinService.getLatest5MinSignal();
@@ -124,7 +148,7 @@ export class HedgingAgent extends BaseAgent {
       throw error;
     }
   }
-  
+
   /**
    * Handle incoming messages
    */
@@ -137,7 +161,9 @@ export class HedgingAgent extends BaseAgent {
    * This avoids redundant API calls when CentralizedHedgeManager has
    * already fetched all prices for the current cycle.
    */
-  private async getPriceFromSnapshotOrMCP(assetSymbol: string): Promise<{ price: number; priceChange24h: number; volume24h: number }> {
+  private async getPriceFromSnapshotOrMCP(
+    assetSymbol: string
+  ): Promise<{ price: number; priceChange24h: number; volume24h: number }> {
     // Try centralized snapshot via orchestrator
     try {
       const { getAgentOrchestrator } = await import('../../lib/services/agent-orchestrator');
@@ -146,7 +172,10 @@ export class HedgingAgent extends BaseAgent {
         const sym = assetSymbol.toUpperCase().replace('-PERP', '').replace('-USD-PERP', '');
         const data = snapshot.prices.get(sym);
         if (data) {
-          logger.debug('[HedgingAgent] Using centralized snapshot price', { asset: sym, price: data.price });
+          logger.debug('[HedgingAgent] Using centralized snapshot price', {
+            asset: sym,
+            price: data.price,
+          });
           return {
             price: data.price,
             priceChange24h: data.change24h,
@@ -166,7 +195,7 @@ export class HedgingAgent extends BaseAgent {
       volume24h: mcpData.volume24h ?? 0,
     };
   }
-  
+
   /**
    * Cleanup on shutdown
    */
@@ -197,29 +226,29 @@ export class HedgingAgent extends BaseAgent {
         case 'analyze_hedge':
         case 'analyze-hedge':
           return await this.analyzeHedgeOpportunity(task);
-        
+
         case 'open_hedge':
         case 'open-hedge':
           return await this.openHedgePosition(task);
-        
+
         case 'close_hedge':
         case 'close-hedge':
           return await this.closeHedgePosition(task);
-        
+
         case 'rebalance_hedge':
         case 'rebalance-hedge':
           return await this.rebalanceHedge(task);
-        
+
         case 'create_strategy':
         case 'create-strategy':
         case 'create_hedge':
         case 'create-hedge':
           return await this.createHedgeStrategy(task);
-        
+
         case 'monitor_positions':
         case 'monitor-positions':
           return await this.monitorPositions(task);
-        
+
         default:
           // Return error for unknown actions
           logger.warn(`Unknown hedging action: ${taskAction}`, { taskId: task.id });
@@ -248,7 +277,11 @@ export class HedgingAgent extends BaseAgent {
    */
   private async analyzeHedgeOpportunity(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const { portfolioId, assetSymbol, notionalValue } = task.parameters as { portfolioId: string; assetSymbol: string; notionalValue: number };
+    const { portfolioId, assetSymbol, notionalValue } = task.parameters as {
+      portfolioId: string;
+      assetSymbol: string;
+      notionalValue: number;
+    };
 
     if (!portfolioId || !assetSymbol || !notionalValue) {
       throw new Error('Missing required parameters: portfolioId, assetSymbol, or notionalValue');
@@ -256,7 +289,7 @@ export class HedgingAgent extends BaseAgent {
 
     try {
       // Get current market data — try centralized snapshot first, then MCP fallback
-      let priceData = await this.getPriceFromSnapshotOrMCP(assetSymbol);
+      const priceData = await this.getPriceFromSnapshotOrMCP(assetSymbol);
       if (!priceData) {
         throw new Error(`Could not retrieve price data for ${assetSymbol}`);
       }
@@ -264,17 +297,19 @@ export class HedgingAgent extends BaseAgent {
 
       // 🔮 NEW: Get Delphi prediction market insights
       const delphiInsights = await DelphiMarketService.getAssetInsights(assetSymbol);
-      const highRiskPredictions = delphiInsights.predictions.filter(p => 
-        p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
+      const highRiskPredictions = delphiInsights.predictions.filter(
+        (p) => p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
       );
 
       // ⚡ Proactive 5-min signal — always fresh via ticker subscription (no fetch delay)
       let fiveMinSignal: FiveMinBTCSignal | null = this.cachedFiveMinSignal;
       let fiveMinSignalHistory: FiveMinSignalHistory | null = this.cachedFiveMinHistory;
-      
+
       // Freshness check: only use if less than 20 s old
-      if (fiveMinSignal && (Date.now() - fiveMinSignal.fetchedAt) > 20_000) {
-        logger.debug('HedgingAgent: 5-min signal too stale, discarding', { ageMs: Date.now() - fiveMinSignal.fetchedAt });
+      if (fiveMinSignal && Date.now() - fiveMinSignal.fetchedAt > 20_000) {
+        logger.debug('HedgingAgent: 5-min signal too stale, discarding', {
+          ageMs: Date.now() - fiveMinSignal.fetchedAt,
+        });
         fiveMinSignal = null;
         fiveMinSignalHistory = null;
       }
@@ -305,17 +340,17 @@ export class HedgingAgent extends BaseAgent {
         notionalValue,
         volatility
       );
-      
+
       // Increase hedge ratio if Delphi predicts high-probability risk events
       if (highRiskPredictions.length > 0) {
-        const maxPredictionProb = Math.max(...highRiskPredictions.map(p => p.probability));
+        const maxPredictionProb = Math.max(...highRiskPredictions.map((p) => p.probability));
         const delphiMultiplier = 1 + (maxPredictionProb - 50) / 100; // 60% prob -> 1.1x, 80% prob -> 1.3x
         hedgeRatio = Math.min(hedgeRatio * delphiMultiplier, 1.0); // Cap at 100% hedge
-        logger.info('Hedge ratio adjusted based on Delphi predictions', { 
-          original: hedgeRatio / delphiMultiplier, 
+        logger.info('Hedge ratio adjusted based on Delphi predictions', {
+          original: hedgeRatio / delphiMultiplier,
           adjusted: hedgeRatio,
           delphiMultiplier,
-          predictions: highRiskPredictions.length
+          predictions: highRiskPredictions.length,
         });
       }
 
@@ -323,17 +358,20 @@ export class HedgingAgent extends BaseAgent {
       // Strong DOWN signals in real-time = increase urgency of hedge
       // Strong UP signals = can slightly relax hedge ratio
       if (fiveMinSignal && assetSymbol === 'BTC' && fiveMinSignal.signalStrength !== 'WEAK') {
-        const fiveMinMultiplier = fiveMinSignal.direction === 'DOWN'
-          ? 1 + (fiveMinSignal.probability - 50) / 200  // DOWN: 70% prob → 1.1x boost
-          : 1 - (fiveMinSignal.probability - 50) / 400; // UP: 70% prob → 0.95x slight relaxation
-        
+        const fiveMinMultiplier =
+          fiveMinSignal.direction === 'DOWN'
+            ? 1 + (fiveMinSignal.probability - 50) / 200 // DOWN: 70% prob → 1.1x boost
+            : 1 - (fiveMinSignal.probability - 50) / 400; // UP: 70% prob → 0.95x slight relaxation
+
         // If there's a streak, amplify the signal
-        const streakAmplifier = fiveMinSignalHistory?.streak?.direction === fiveMinSignal.direction
-          && (fiveMinSignalHistory?.streak?.count ?? 0) >= 3
-          ? 1.05 : 1.0;
-        
+        const streakAmplifier =
+          fiveMinSignalHistory?.streak?.direction === fiveMinSignal.direction &&
+          (fiveMinSignalHistory?.streak?.count ?? 0) >= 3
+            ? 1.05
+            : 1.0;
+
         hedgeRatio = Math.min(Math.max(hedgeRatio * fiveMinMultiplier * streakAmplifier, 0.1), 1.0);
-        
+
         logger.info('Hedge ratio adjusted by 5-min BTC signal', {
           direction: fiveMinSignal.direction,
           probability: fiveMinSignal.probability,
@@ -347,9 +385,16 @@ export class HedgingAgent extends BaseAgent {
       let avgFundingRate = 0;
       try {
         const fundingHistory = await this.moonlanderClient.getFundingHistory(hedgeMarket, 24);
-        avgFundingRate = fundingHistory.reduce((sum, f) => { const v = parseFloat(f.rate); return sum + (isNaN(v) ? 0 : v); }, 0) / (fundingHistory.length || 1);
+        avgFundingRate =
+          fundingHistory.reduce((sum, f) => {
+            const v = parseFloat(f.rate);
+            return sum + (isNaN(v) ? 0 : v);
+          }, 0) / (fundingHistory.length || 1);
       } catch (e) {
-        logger.warn('Funding rate data unavailable, using 0 (conservative)', { hedgeMarket, error: e });
+        logger.warn('Funding rate data unavailable, using 0 (conservative)', {
+          hedgeMarket,
+          error: e,
+        });
       }
 
       // Calculate hedge effectiveness
@@ -358,46 +403,56 @@ export class HedgingAgent extends BaseAgent {
 
       // Determine recommendation
       // 🔮 NEW: Factor in Delphi predictions + 5-min signals
-      const delphiRecommendHedge = delphiInsights.overallRisk === 'HIGH' || highRiskPredictions.length >= 2;
-      const fiveMinRecommendHedge = fiveMinSignal?.recommendation === 'HEDGE_SHORT' && fiveMinSignal.signalStrength === 'STRONG';
-      const shouldHedge = (volatility > 0.3 || delphiRecommendHedge || fiveMinRecommendHedge) && hedgeEffectiveness > 70 && Math.abs(avgFundingRate) < 0.01;
-      
+      const delphiRecommendHedge =
+        delphiInsights.overallRisk === 'HIGH' || highRiskPredictions.length >= 2;
+      const fiveMinRecommendHedge =
+        fiveMinSignal?.recommendation === 'HEDGE_SHORT' &&
+        fiveMinSignal.signalStrength === 'STRONG';
+      const shouldHedge =
+        (volatility > 0.3 || delphiRecommendHedge || fiveMinRecommendHedge) &&
+        hedgeEffectiveness > 70 &&
+        Math.abs(avgFundingRate) < 0.01;
+
       // Build reason with Delphi insights + 5-min signal and AI analysis
       let reason = shouldHedge
         ? `High volatility (${(volatility * 100).toFixed(2)}%) warrants hedging`
         : 'Volatility acceptable, no immediate hedge needed';
-      
+
       // ⚡ Append 5-min signal context when available
       if (fiveMinSignal && assetSymbol === 'BTC' && fiveMinSignal.signalStrength !== 'WEAK') {
         reason += ` | ⚡ 5-Min Signal: ${fiveMinSignal.direction} (${fiveMinSignal.probability}% prob, ${fiveMinSignal.signalStrength})`;
       }
-      
+
       // 🤖 NEW: Use AI to enhance hedge reasoning
       try {
         const { llmProvider } = await import('@/lib/ai/llm-provider');
-        
-        const predictionsSummary = highRiskPredictions.length > 0
-          ? highRiskPredictions.map(p => `${p.question} (${p.probability}%)`).join('; ')
-          : 'No high-risk signals';
+
+        const predictionsSummary =
+          highRiskPredictions.length > 0
+            ? highRiskPredictions.map((p) => `${p.question} (${p.probability}%)`).join('; ')
+            : 'No high-risk signals';
 
         const aiPrompt = `You are a DeFi hedging strategist. Analyze this hedge opportunity:\n\nAsset: ${assetSymbol}\nNotional Value: $${notionalValue.toFixed(2)}\nCurrent Price: $${priceData.price}\nVolatility: ${(volatility * 100).toFixed(1)}%\nHedge Ratio: ${(hedgeRatio * 100).toFixed(1)}%\nFunding Rate: ${(avgFundingRate * 100).toFixed(4)}%\nHedge Effectiveness: ${hedgeEffectiveness.toFixed(1)}%\nDelphi Signals: ${predictionsSummary}\n\nShould hedge: ${shouldHedge ? 'YES' : 'NO'}\n\nProvide:\n1. One-sentence hedge recommendation\n2. Key risk factor to monitor\n\nBe concise and actionable.`;
 
-        const aiResponse = await llmProvider.generateResponse(aiPrompt, `hedge-${portfolioId}-${assetSymbol}`);
-        const aiLines = aiResponse.content.split('\\n').filter(l => l.trim());
+        const aiResponse = await llmProvider.generateResponse(
+          aiPrompt,
+          `hedge-${portfolioId}-${assetSymbol}`
+        );
+        const aiLines = aiResponse.content.split('\\n').filter((l) => l.trim());
         if (aiLines.length > 0) {
           reason = `🤖 ${aiLines[0]} | ${reason}`;
         }
-        
+
         logger.info('🤖 AI hedge analysis completed', { model: aiResponse.model });
       } catch (error) {
         logger.warn('AI hedge analysis failed, using rule-based reasoning', { error });
       }
-      
+
       if (delphiRecommendHedge && highRiskPredictions.length > 0) {
         const topPrediction = highRiskPredictions[0];
         reason = `🔮 Delphi: ${topPrediction.probability}% risk - "${topPrediction.question}". ${reason}`;
       }
-      
+
       const analysis: HedgeAnalysis = {
         portfolioId,
         exposure: {
@@ -411,7 +466,10 @@ export class HedgingAgent extends BaseAgent {
           market: hedgeMarket,
           side: 'SHORT', // Typically short perp to hedge long spot
           size: (notionalValue * hedgeRatio).toFixed(4),
-          leverage: Math.min(Math.floor(1 / volatility), marketInfo?.maxLeverage ? Math.min(marketInfo.maxLeverage, 5) : 5),
+          leverage: Math.min(
+            Math.floor(1 / volatility),
+            marketInfo?.maxLeverage ? Math.min(marketInfo.maxLeverage, 5) : 5
+          ),
           reason,
         },
         riskMetrics: {
@@ -431,7 +489,10 @@ export class HedgingAgent extends BaseAgent {
         agentId: this.agentId,
       };
     } catch (error) {
-      const details = error instanceof Error ? { message: error.message, stack: error.stack } : { error: String(error) };
+      const details =
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : { error: String(error) };
       logger.error('Failed to analyze hedge opportunity', details);
       throw error;
     }
@@ -453,7 +514,7 @@ export class HedgingAgent extends BaseAgent {
     };
   }> {
     const context = await AIMarketIntelligence.getMarketContext(assets);
-    
+
     // Analyze context for hedging decision
     const reasons: string[] = [];
     const riskFactors: string[] = [];
@@ -461,16 +522,16 @@ export class HedgingAgent extends BaseAgent {
     let urgency: 'IMMEDIATE' | 'SOON' | 'MONITOR' | 'NO_ACTION' = 'NO_ACTION';
     let direction: 'SHORT' | 'LONG' | 'NEUTRAL' = 'NEUTRAL';
     let confidenceScore = 50;
-    
+
     // 1. Check risk cascade
     if (context.riskCascade.detected) {
       shouldHedge = true;
       urgency = context.riskCascade.recommendation === 'HEDGE_IMMEDIATELY' ? 'IMMEDIATE' : 'SOON';
       reasons.push(`Risk cascade detected (severity: ${context.riskCascade.severity}%)`);
-      context.riskCascade.signals.forEach(s => riskFactors.push(s.description));
+      context.riskCascade.signals.forEach((s) => riskFactors.push(s.description));
       confidenceScore = Math.max(confidenceScore, context.riskCascade.confidence);
     }
-    
+
     // 2. Check 5-min signal
     if (context.fiveMinSignal) {
       const signal = context.fiveMinSignal;
@@ -482,7 +543,7 @@ export class HedgingAgent extends BaseAgent {
         confidenceScore = Math.max(confidenceScore, signal.confidence);
       }
     }
-    
+
     // 3. Check streak analysis
     if (context.streaks.streak5Min.count >= 4 && context.streaks.streak5Min.direction !== 'MIXED') {
       const streakDir = context.streaks.streak5Min.direction;
@@ -493,14 +554,16 @@ export class HedgingAgent extends BaseAgent {
       }
       reasons.push(`${context.streaks.streak5Min.count}-signal ${streakDir} streak`);
     }
-    
+
     // 4. Check 30-min and 4-hour trends for confirmation
-    if (context.streaks.streak30Min.direction === context.streaks.streak5Min.direction && 
-        context.streaks.trend4Hour.direction === context.streaks.streak5Min.direction) {
+    if (
+      context.streaks.streak30Min.direction === context.streaks.streak5Min.direction &&
+      context.streaks.trend4Hour.direction === context.streaks.streak5Min.direction
+    ) {
       confidenceScore = Math.min(confidenceScore + 15, 95);
       reasons.push('Multi-timeframe trend alignment');
     }
-    
+
     // 5. Check market sentiment
     if (context.marketSentiment.label === 'EXTREME_FEAR') {
       shouldHedge = true;
@@ -510,7 +573,7 @@ export class HedgingAgent extends BaseAgent {
     } else if (context.marketSentiment.label === 'EXTREME_GREED') {
       riskFactors.push('Market sentiment at extreme greed - potential reversal risk');
     }
-    
+
     // 6. Check cross-market correlation
     if (context.correlation.divergingAssets.length >= 2) {
       riskFactors.push(`${context.correlation.divergingAssets.length} assets diverging from BTC`);
@@ -518,33 +581,33 @@ export class HedgingAgent extends BaseAgent {
     if (context.correlation.correlationBoost > 0) {
       confidenceScore = Math.min(confidenceScore + context.correlation.correlationBoost, 95);
     }
-    
+
     // 7. Adjust confidence for liquidity
     if (!context.liquidity.sufficientLiquidity) {
       confidenceScore += context.liquidity.liquidityConfidencePenalty;
       riskFactors.push('Low prediction market liquidity - signals less reliable');
     }
-    
+
     // 8. Check HEDGE predictions
-    const hedgePredictions = context.predictions.filter(p => p.recommendation === 'HEDGE');
+    const hedgePredictions = context.predictions.filter((p) => p.recommendation === 'HEDGE');
     if (hedgePredictions.length >= 2) {
       shouldHedge = true;
       urgency = urgency === 'NO_ACTION' ? 'MONITOR' : urgency;
       reasons.push(`${hedgePredictions.length} prediction markets recommend HEDGE`);
-      hedgePredictions.slice(0, 2).forEach(p => {
+      hedgePredictions.slice(0, 2).forEach((p) => {
         riskFactors.push(`${p.question}: ${p.probability}%`);
       });
     }
-    
+
     // Ensure confidence is bounded
     confidenceScore = Math.max(20, Math.min(95, confidenceScore));
-    
+
     // If not hedging, set urgency appropriately
     if (!shouldHedge) {
       urgency = riskFactors.length > 0 ? 'MONITOR' : 'NO_ACTION';
       direction = 'NEUTRAL';
     }
-    
+
     logger.info('Enhanced market context analyzed for hedging', {
       shouldHedge,
       urgency,
@@ -553,7 +616,7 @@ export class HedgingAgent extends BaseAgent {
       reasonCount: reasons.length,
       riskFactorCount: riskFactors.length,
     });
-    
+
     return {
       context,
       hedgingRecommendation: {
@@ -572,7 +635,14 @@ export class HedgingAgent extends BaseAgent {
    */
   private async openHedgePosition(task: AgentTask): Promise<TaskResult> {
     const startTime = Date.now();
-    const parameters = task.parameters as { market: string; side: 'LONG' | 'SHORT'; notionalValue: string; leverage?: number; stopLoss?: string; takeProfit?: string };
+    const parameters = task.parameters as {
+      market: string;
+      side: 'LONG' | 'SHORT';
+      notionalValue: string;
+      leverage?: number;
+      stopLoss?: string;
+      takeProfit?: string;
+    };
     const { market, side, notionalValue, leverage, stopLoss, takeProfit } = parameters;
 
     try {
@@ -632,14 +702,14 @@ export class HedgingAgent extends BaseAgent {
         const markPrice = parseFloat(marketInfo.markPrice || '0');
         if (!Number.isFinite(markPrice) || markPrice <= 0) {
           throw new Error(
-            `[HedgingAgent] Invalid mark price for ${market}: ${marketInfo.markPrice} — refusing to size order (would divide by zero)`,
+            `[HedgingAgent] Invalid mark price for ${market}: ${marketInfo.markPrice} — refusing to size order (would divide by zero)`
           );
         }
         const notional = parseFloat(notionalValue);
         if (!Number.isFinite(notional) || notional <= 0) {
           throw new Error(`[HedgingAgent] Invalid notional value: ${notionalValue}`);
         }
-        const size = (notional * (leverage || 1) / markPrice).toFixed(4);
+        const size = ((notional * (leverage || 1)) / markPrice).toFixed(4);
 
         if (typeof extClient.createOrder === 'function') {
           order = await extClient.createOrder({
@@ -854,7 +924,7 @@ export class HedgingAgent extends BaseAgent {
       }
 
       const hedgeAnalysis = analysis.data as HedgeAnalysis;
-      
+
       // Check if rebalance is needed
       const currentSize = parseFloat(position.size);
       const targetSize = parseFloat(hedgeAnalysis.recommendation.size);
@@ -863,9 +933,14 @@ export class HedgingAgent extends BaseAgent {
       if (sizeChange > strategy.rebalanceThreshold) {
         // Adjust position size
         const adjustmentSize = Math.abs(targetSize - currentSize).toFixed(4);
-        const adjustmentSide = targetSize > currentSize ? 
-          (position.side === 'LONG' ? 'BUY' : 'SELL') :
-          (position.side === 'LONG' ? 'SELL' : 'BUY');
+        const adjustmentSide =
+          targetSize > currentSize
+            ? position.side === 'LONG'
+              ? 'BUY'
+              : 'SELL'
+            : position.side === 'LONG'
+              ? 'SELL'
+              : 'BUY';
 
         let order: OrderResult;
         const rebalExtClient = this.moonlanderClient as unknown as MoonlanderClientExt;
@@ -926,11 +1001,15 @@ export class HedgingAgent extends BaseAgent {
     // For Cronos: use default Moonlander/HedgeExecutor path
     if (chain === 'sui') {
       try {
-        const { getSuiAutoHedgingAdapter } = await import('../../lib/services/sui/SuiAutoHedgingAdapter');
+        const { getSuiAutoHedgingAdapter } =
+          await import('../../lib/services/sui/SuiAutoHedgingAdapter');
         const suiAdapter = getSuiAutoHedgingAdapter();
-        const riskResult = await suiAdapter.assessRisk(params.portfolioId as string || 'community-pool');
+        const riskResult = await suiAdapter.assessRisk(
+          (params.portfolioId as string) || 'community-pool'
+        );
         logger.info('SUI hedge strategy created via SuiAutoHedgingAdapter', {
-          chain, recommendations: riskResult.recommendations?.length || 0,
+          chain,
+          recommendations: riskResult.recommendations?.length || 0,
         });
         return {
           success: true,
@@ -950,11 +1029,15 @@ export class HedgingAgent extends BaseAgent {
       }
     } else if (chain === 'oasis-sapphire' || chain === 'oasis') {
       try {
-        const { getOasisAutoHedgingAdapter } = await import('../../lib/services/oasis/OasisAutoHedgingAdapter');
+        const { getOasisAutoHedgingAdapter } =
+          await import('../../lib/services/oasis/OasisAutoHedgingAdapter');
         const oasisAdapter = getOasisAutoHedgingAdapter();
-        const riskResult = await oasisAdapter.assessRisk(params.portfolioId as string || 'community-pool');
+        const riskResult = await oasisAdapter.assessRisk(
+          (params.portfolioId as string) || 'community-pool'
+        );
         logger.info('Oasis hedge strategy created via OasisAutoHedgingAdapter', {
-          chain, recommendations: riskResult.recommendations?.length || 0,
+          chain,
+          recommendations: riskResult.recommendations?.length || 0,
         });
         return {
           success: true,
@@ -1003,20 +1086,20 @@ export class HedgingAgent extends BaseAgent {
     try {
       // Get all positions (guard if client only exposes getPositions)
       const monExtClient = this.moonlanderClient as unknown as MoonlanderClientExt;
-      const positions: PerpetualPosition[] = typeof monExtClient.getPositions === 'function'
-        ? await monExtClient.getPositions()
-        : [];
+      const positions: PerpetualPosition[] =
+        typeof monExtClient.getPositions === 'function' ? await monExtClient.getPositions() : [];
 
       // Calculate liquidation risks if available on the client
-      const risks: LiquidationRisk[] = typeof monExtClient.calculateLiquidationRisk === 'function'
-        ? await monExtClient.calculateLiquidationRisk()
-        : [];
-      
+      const risks: LiquidationRisk[] =
+        typeof monExtClient.calculateLiquidationRisk === 'function'
+          ? await monExtClient.calculateLiquidationRisk()
+          : [];
+
       // Check each position against strategies
       const alerts = [];
       for (const position of positions) {
         const risk = risks.find((r) => r.positionId === position.positionId);
-        
+
         if (risk && (risk.riskLevel === 'HIGH' || risk.riskLevel === 'CRITICAL')) {
           alerts.push({
             positionId: position.positionId,
@@ -1139,7 +1222,8 @@ export class HedgingAgent extends BaseAgent {
 
       // Calculate standard deviation (sample variance with n-1)
       const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-      const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (returns.length - 1);
+      const variance =
+        returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (returns.length - 1);
       const dailyVol = Math.sqrt(variance);
 
       // Annualize (crypto trades 365 days)
@@ -1191,24 +1275,17 @@ export class HedgingAgent extends BaseAgent {
   private async calculateSpotFutureCorrelation(assetSymbol: string): Promise<number> {
     try {
       // Get real spot candlestick data
-      const spotPrices = await this.mcpClient.getHistoricalPrices(
-        assetSymbol,
-        '1d',
-        30
-      );
+      const spotPrices = await this.mcpClient.getHistoricalPrices(assetSymbol, '1d', 30);
 
       // Get real perpetual candlestick data
       let perpPrices: { price: number }[] = [];
       try {
-        const perpData = await this.mcpClient.getHistoricalPrices(
-          assetSymbol,
-          '1d',
-          30,
-          'perp'
-        );
+        const perpData = await this.mcpClient.getHistoricalPrices(assetSymbol, '1d', 30, 'perp');
         perpPrices = perpData;
       } catch {
-        logger.info('No perp candlestick data available, using spot self-analysis', { assetSymbol });
+        logger.info('No perp candlestick data available, using spot self-analysis', {
+          assetSymbol,
+        });
       }
 
       // Case 1: Both spot and perp data available → real Pearson correlation
@@ -1235,7 +1312,9 @@ export class HedgingAgent extends BaseAgent {
           const spotMean = spotSlice.reduce((a, b) => a + b, 0) / n;
           const perpMean = perpSlice.reduce((a, b) => a + b, 0) / n;
 
-          let num = 0, spotVar = 0, perpVar = 0;
+          let num = 0,
+            spotVar = 0,
+            perpVar = 0;
           for (let i = 0; i < n; i++) {
             const sd = spotSlice[i] - spotMean;
             const pd = perpSlice[i] - perpMean;
@@ -1248,7 +1327,8 @@ export class HedgingAgent extends BaseAgent {
           // If variance is zero (identical returns), correlation is undefined — compute autocorrelation instead
           if (denom === 0) {
             // Compute lag-1 autocorrelation of spot returns as market efficiency proxy
-            let autocov = 0, autoVar = 0;
+            let autocov = 0,
+              autoVar = 0;
             for (let i = 1; i < spotSlice.length; i++) {
               autocov += (spotSlice[i] - spotMean) * (spotSlice[i - 1] - spotMean);
               autoVar += (spotSlice[i] - spotMean) * (spotSlice[i] - spotMean);
@@ -1257,7 +1337,10 @@ export class HedgingAgent extends BaseAgent {
             // Low autocorrelation → efficient market → high correlation estimate
             const correlation = Math.max(0.5, Math.min(0.99, 1 - autocorr * 0.4));
             logger.info('Spot-perp correlation from autocorrelation (degenerate variance)', {
-              assetSymbol, autocorr, correlation, dataPoints: n,
+              assetSymbol,
+              autocorr,
+              correlation,
+              dataPoints: n,
             });
             return correlation;
           }
@@ -1285,15 +1368,18 @@ export class HedgingAgent extends BaseAgent {
 
         if (spotReturns.length >= 5) {
           // Use volume × liquidity as proxy: higher volume → tighter spot-perp tracking
-          const avgVolume = spotPrices.reduce((sum, p) => sum + (p.volume24h || 0), 0) / spotPrices.length;
+          const avgVolume =
+            spotPrices.reduce((sum, p) => sum + (p.volume24h || 0), 0) / spotPrices.length;
 
           // Also compute return variance to assess market regime
           const mean = spotReturns.reduce((a, b) => a + b, 0) / spotReturns.length;
-          const variance = spotReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / spotReturns.length;
+          const variance =
+            spotReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / spotReturns.length;
           const dailyVol = Math.sqrt(variance);
 
           // Compute lag-1 autocorrelation as market efficiency proxy
-          let autocov = 0, autoVar = 0;
+          let autocov = 0,
+            autoVar = 0;
           for (let i = 1; i < spotReturns.length; i++) {
             autocov += (spotReturns[i] - mean) * (spotReturns[i - 1] - mean);
             autoVar += (spotReturns[i] - mean) * (spotReturns[i] - mean);
@@ -1332,7 +1418,10 @@ export class HedgingAgent extends BaseAgent {
       const volAdjust = priceChange * 0.3; // Higher daily move → more basis divergence
       const tickerCorr = Math.max(0.5, Math.min(0.99, 0.5 + volScore * 0.47 - volAdjust));
       logger.info('Derived correlation from real ticker data (minimal candlestick)', {
-        assetSymbol, volume: volume.toFixed(0), priceChange: (priceChange * 100).toFixed(2) + '%', correlation: tickerCorr,
+        assetSymbol,
+        volume: volume.toFixed(0),
+        priceChange: (priceChange * 100).toFixed(2) + '%',
+        correlation: tickerCorr,
       });
       return tickerCorr;
     } catch (error) {
@@ -1348,7 +1437,10 @@ export class HedgingAgent extends BaseAgent {
         const change = Math.abs(spot.priceChange24h || 0) / 100;
         const volScore = volume > 0 ? Math.min(1, Math.log10(volume) / 10) : 0;
         const fallbackCorr = Math.max(0.5, Math.min(0.99, 0.5 + volScore * 0.47 - change * 0.3));
-        logger.info('Last-resort correlation from real ticker', { assetSymbol, correlation: fallbackCorr });
+        logger.info('Last-resort correlation from real ticker', {
+          assetSymbol,
+          correlation: fallbackCorr,
+        });
         return fallbackCorr;
       } catch {
         // Absolute last resort - but this path should be extremely rare
@@ -1385,7 +1477,7 @@ export class HedgingAgent extends BaseAgent {
       // Factor in 5-min Polymarket BTC signal
       let signalPenalty = 0;
       const signal = this.cachedFiveMinSignal;
-      if (signal && (Date.now() - signal.fetchedAt) < 20_000) {
+      if (signal && Date.now() - signal.fetchedAt < 20_000) {
         if (signal.direction === 'DOWN' && signal.signalStrength === 'STRONG') {
           signalPenalty = 15; // Strong bearish → increase risk concern
         } else if (signal.direction === 'DOWN' && signal.signalStrength === 'MODERATE') {
@@ -1396,10 +1488,11 @@ export class HedgingAgent extends BaseAgent {
       // Factor in Delphi prediction insights
       let delphiPenalty = 0;
       try {
-        const { DelphiMarketService } = await import('../../lib/services/market-data/DelphiMarketService');
+        const { DelphiMarketService } =
+          await import('../../lib/services/market-data/DelphiMarketService');
         const btcInsights = await DelphiMarketService.getAssetInsights('BTC');
         const highRiskHedge = btcInsights.predictions.filter(
-          p => p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
+          (p) => p.impact === 'HIGH' && p.probability > 60 && p.recommendation === 'HEDGE'
         );
         if (highRiskHedge.length >= 2) {
           delphiPenalty = 10;
@@ -1421,7 +1514,8 @@ export class HedgingAgent extends BaseAgent {
       const positionSizeAcceptable = proposal.estimatedPositionSize <= 10_000_000;
       const riskAcceptable = effectiveRisk < 80;
 
-      const approved = isAnalysisOnly || (volatilityAcceptable && positionSizeAcceptable && riskAcceptable);
+      const approved =
+        isAnalysisOnly || (volatilityAcceptable && positionSizeAcceptable && riskAcceptable);
 
       const reason = approved
         ? `Market conditions acceptable (vol: ${(volatility * 100).toFixed(1)}%, risk: ${effectiveRisk.toFixed(1)}, size: $${proposal.estimatedPositionSize.toLocaleString()})`
@@ -1440,8 +1534,14 @@ export class HedgingAgent extends BaseAgent {
 
       return { approved, reason };
     } catch (error) {
-      logger.error('HedgingAgent vote failed — defaulting to cautious reject', { error, agentId: this.agentId });
-      return { approved: false, reason: `Vote evaluation error: ${error instanceof Error ? error.message : String(error)}` };
+      logger.error('HedgingAgent vote failed — defaulting to cautious reject', {
+        error,
+        agentId: this.agentId,
+      });
+      return {
+        approved: false,
+        reason: `Vote evaluation error: ${error instanceof Error ? error.message : String(error)}`,
+      };
     }
   }
 

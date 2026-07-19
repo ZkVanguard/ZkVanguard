@@ -1,20 +1,19 @@
 /**
  * On-Chain Portfolio History Service
- * 
+ *
  * Real on-chain data with DB caching for performance.
  * Uses actual testnet contracts and real prices - NO mock data.
- * 
+ *
  * Data sources:
  * - Positions: Real wallet balances from RPC/PositionsContext
  * - Hedges: Real hedge PnL from HedgePnLTracker + PostgreSQL
  * - Prices: Real prices from Crypto.com Exchange API
- * 
+ *
  * DB is cache layer only - source of truth is on-chain.
  */
 
 import { query, queryOne } from '@/lib/db/postgres';
 import { hedgePnLTracker, type HedgePnLUpdate } from '../hedging/HedgePnLTracker';
-import { type Hedge } from '@/lib/db/hedges';
 import { logger } from '@/lib/utils/logger';
 
 // ============================================
@@ -100,7 +99,7 @@ class OnChainPortfolioHistoryService {
    */
   private async ensureTables(): Promise<void> {
     if (this.tablesInitialized) return;
-    
+
     try {
       // Create portfolio_snapshots table if not exists
       await query(`
@@ -151,15 +150,23 @@ class OnChainPortfolioHistoryService {
       `);
 
       // Create indexes
-      await query(`CREATE INDEX IF NOT EXISTS idx_psnap_wallet ON portfolio_snapshots(wallet_address)`);
-      await query(`CREATE INDEX IF NOT EXISTS idx_psnap_time ON portfolio_snapshots(snapshot_time DESC)`);
-      await query(`CREATE INDEX IF NOT EXISTS idx_psnap_wallet_time ON portfolio_snapshots(wallet_address, snapshot_time DESC)`);
+      await query(
+        `CREATE INDEX IF NOT EXISTS idx_psnap_wallet ON portfolio_snapshots(wallet_address)`
+      );
+      await query(
+        `CREATE INDEX IF NOT EXISTS idx_psnap_time ON portfolio_snapshots(snapshot_time DESC)`
+      );
+      await query(
+        `CREATE INDEX IF NOT EXISTS idx_psnap_wallet_time ON portfolio_snapshots(wallet_address, snapshot_time DESC)`
+      );
 
       this.tablesInitialized = true;
       logger.info('Portfolio history tables initialized');
     } catch (error) {
       // Log but don't throw - allow graceful degradation
-      logger.warn('Failed to initialize portfolio tables - will return empty data', { error: String(error) });
+      logger.warn('Failed to initialize portfolio tables - will return empty data', {
+        error: String(error),
+      });
     }
   }
 
@@ -171,7 +178,7 @@ class OnChainPortfolioHistoryService {
     walletAddress: string,
     positionsData: {
       totalValue: number;
-      positions: Array<{ symbol: string; balanceUSD: string; balance: string; price: string; }>;
+      positions: Array<{ symbol: string; balanceUSD: string; balance: string; price: string }>;
     },
     hedgeSummary?: {
       totalNotional: number;
@@ -183,7 +190,7 @@ class OnChainPortfolioHistoryService {
   ): Promise<PortfolioSnapshotData | null> {
     // Ensure tables exist
     await this.ensureTables();
-    
+
     const now = Date.now();
     const lastTime = this.lastSnapshotTime.get(walletAddress) || 0;
 
@@ -194,7 +201,7 @@ class OnChainPortfolioHistoryService {
 
     try {
       // Convert positions to storage format
-      const positions: OnChainPosition[] = positionsData.positions.map(p => ({
+      const positions: OnChainPosition[] = positionsData.positions.map((p) => ({
         symbol: p.symbol,
         value: parseFloat(p.balanceUSD || '0'),
         amount: parseFloat(p.balance || '0'),
@@ -310,56 +317,56 @@ class OnChainPortfolioHistoryService {
   ): Promise<PortfolioSnapshotData[]> {
     // Ensure tables exist
     await this.ensureTables();
-    
+
     const intervals: Record<string, string> = {
       '1D': '1 day',
       '1W': '7 days',
       '1M': '30 days',
       '3M': '90 days',
       '1Y': '365 days',
-      'ALL': '10 years',
+      ALL: '10 years',
     };
 
     const interval = intervals[timeRange] || '7 days';
 
     try {
       const rows = await query<{
-      id: number;
-      wallet_address: string;
-      total_value: string;
-      positions: string;
-      hedges_data: string;
-      positions_value: string;
-      hedges_value: string;
-      unrealized_pnl: string;
-      realized_pnl: string;
-      chain: string;
-      block_number: number | null;
-      verified_onchain: boolean;
-      snapshot_time: Date;
-    }>(
-      `SELECT * FROM portfolio_snapshots 
+        id: number;
+        wallet_address: string;
+        total_value: string;
+        positions: string;
+        hedges_data: string;
+        positions_value: string;
+        hedges_value: string;
+        unrealized_pnl: string;
+        realized_pnl: string;
+        chain: string;
+        block_number: number | null;
+        verified_onchain: boolean;
+        snapshot_time: Date;
+      }>(
+        `SELECT * FROM portfolio_snapshots 
        WHERE wallet_address = $1 
          AND snapshot_time > NOW() - INTERVAL '${interval}'
        ORDER BY snapshot_time ASC`,
-      [walletAddress.toLowerCase()]
-    );
+        [walletAddress.toLowerCase()]
+      );
 
-    return rows.map(row => ({
-      id: row.id,
-      walletAddress: row.wallet_address,
-      totalValue: parseFloat(row.total_value),
-      positions: JSON.parse(row.positions || '[]'),
-      hedgesData: JSON.parse(row.hedges_data || '{}'),
-      positionsValue: parseFloat(row.positions_value || '0'),
-      hedgesValue: parseFloat(row.hedges_value || '0'),
-      unrealizedPnL: parseFloat(row.unrealized_pnl || '0'),
-      realizedPnL: parseFloat(row.realized_pnl || '0'),
-      chain: row.chain,
-      blockNumber: row.block_number || undefined,
-      verifiedOnchain: row.verified_onchain,
-      snapshotTime: new Date(row.snapshot_time),
-    }));
+      return rows.map((row) => ({
+        id: row.id,
+        walletAddress: row.wallet_address,
+        totalValue: parseFloat(row.total_value),
+        positions: JSON.parse(row.positions || '[]'),
+        hedgesData: JSON.parse(row.hedges_data || '{}'),
+        positionsValue: parseFloat(row.positions_value || '0'),
+        hedgesValue: parseFloat(row.hedges_value || '0'),
+        unrealizedPnL: parseFloat(row.unrealized_pnl || '0'),
+        realizedPnL: parseFloat(row.realized_pnl || '0'),
+        chain: row.chain,
+        blockNumber: row.block_number || undefined,
+        verifiedOnchain: row.verified_onchain,
+        snapshotTime: new Date(row.snapshot_time),
+      }));
     } catch (error) {
       logger.warn('Failed to fetch history - returning empty', { error: String(error) });
       return [];
@@ -381,7 +388,7 @@ class OnChainPortfolioHistoryService {
 
     const initialValue = snapshots[0].totalValue;
 
-    return snapshots.map(s => ({
+    return snapshots.map((s) => ({
       timestamp: s.snapshotTime.getTime(),
       date: s.snapshotTime.toISOString(),
       value: s.totalValue,
@@ -398,7 +405,7 @@ class OnChainPortfolioHistoryService {
   async getPerformanceMetrics(walletAddress: string): Promise<PerformanceMetrics> {
     // Ensure tables exist
     await this.ensureTables();
-    
+
     try {
       // Try to get from cached metrics table first
       const cached = await queryOne<{
@@ -420,42 +427,43 @@ class OnChainPortfolioHistoryService {
         win_rate: string;
         active_hedges: number;
         total_hedge_pnl: string;
-      }>(
-        `SELECT * FROM portfolio_metrics WHERE wallet_address = $1`,
-        [walletAddress.toLowerCase()]
-      );
+      }>(`SELECT * FROM portfolio_metrics WHERE wallet_address = $1`, [
+        walletAddress.toLowerCase(),
+      ]);
 
-    if (cached) {
-      // Get real-time hedge PnL to ensure freshness
-      const hedgeSummary = await hedgePnLTracker.getPortfolioPnLSummary(undefined, walletAddress);
+      if (cached) {
+        // Get real-time hedge PnL to ensure freshness
+        const hedgeSummary = await hedgePnLTracker.getPortfolioPnLSummary(undefined, walletAddress);
 
-      return {
-        currentValue: parseFloat(cached.current_value),
-        initialValue: parseFloat(cached.initial_value),
-        highestValue: parseFloat(cached.highest_value),
-        lowestValue: parseFloat(cached.lowest_value),
-        totalPnL: parseFloat(cached.total_pnl),
-        totalPnLPercentage: parseFloat(cached.total_pnl_percentage),
-        dailyPnL: parseFloat(cached.daily_pnl),
-        dailyPnLPercentage: parseFloat(cached.daily_pnl_percentage),
-        weeklyPnL: parseFloat(cached.weekly_pnl),
-        weeklyPnLPercentage: parseFloat(cached.weekly_pnl_percentage),
-        monthlyPnL: parseFloat(cached.monthly_pnl),
-        monthlyPnLPercentage: parseFloat(cached.monthly_pnl_percentage),
-        volatility: parseFloat(cached.volatility),
-        sharpeRatio: parseFloat(cached.sharpe_ratio),
-        maxDrawdown: parseFloat(cached.max_drawdown),
-        winRate: parseFloat(cached.win_rate),
-        activeHedges: hedgeSummary.totalHedges,
-        totalHedgePnL: hedgeSummary.totalUnrealizedPnL,
-        verifiedOnchain: true,
-      };
-    }
+        return {
+          currentValue: parseFloat(cached.current_value),
+          initialValue: parseFloat(cached.initial_value),
+          highestValue: parseFloat(cached.highest_value),
+          lowestValue: parseFloat(cached.lowest_value),
+          totalPnL: parseFloat(cached.total_pnl),
+          totalPnLPercentage: parseFloat(cached.total_pnl_percentage),
+          dailyPnL: parseFloat(cached.daily_pnl),
+          dailyPnLPercentage: parseFloat(cached.daily_pnl_percentage),
+          weeklyPnL: parseFloat(cached.weekly_pnl),
+          weeklyPnLPercentage: parseFloat(cached.weekly_pnl_percentage),
+          monthlyPnL: parseFloat(cached.monthly_pnl),
+          monthlyPnLPercentage: parseFloat(cached.monthly_pnl_percentage),
+          volatility: parseFloat(cached.volatility),
+          sharpeRatio: parseFloat(cached.sharpe_ratio),
+          maxDrawdown: parseFloat(cached.max_drawdown),
+          winRate: parseFloat(cached.win_rate),
+          activeHedges: hedgeSummary.totalHedges,
+          totalHedgePnL: hedgeSummary.totalUnrealizedPnL,
+          verifiedOnchain: true,
+        };
+      }
 
-    // Calculate from snapshots if no cached metrics
-    return this.calculateMetricsFromHistory(walletAddress);
+      // Calculate from snapshots if no cached metrics
+      return this.calculateMetricsFromHistory(walletAddress);
     } catch (error) {
-      logger.warn('Failed to fetch performance metrics - returning empty', { error: String(error) });
+      logger.warn('Failed to fetch performance metrics - returning empty', {
+        error: String(error),
+      });
       return this.emptyMetrics();
     }
   }
@@ -471,7 +479,7 @@ class OnChainPortfolioHistoryService {
 
     // Get snapshots
     const allSnapshots = await this.getHistory(walletAddress, 'ALL');
-    
+
     if (allSnapshots.length === 0) {
       return this.emptyMetrics();
     }
@@ -506,9 +514,10 @@ class OnChainPortfolioHistoryService {
     const volatility = this.calculateVolatility(dailyReturns);
     const sharpeRatio = this.calculateSharpeRatio(dailyReturns, volatility);
     const maxDrawdown = this.calculateMaxDrawdown(allSnapshots);
-    const winRate = dailyReturns.length > 0 
-      ? (dailyReturns.filter(r => r > 0).length / dailyReturns.length) * 100 
-      : 50;
+    const winRate =
+      dailyReturns.length > 0
+        ? (dailyReturns.filter((r) => r > 0).length / dailyReturns.length) * 100
+        : 50;
 
     return {
       currentValue,
@@ -518,11 +527,17 @@ class OnChainPortfolioHistoryService {
       totalPnL,
       totalPnLPercentage: initialValue > 0 ? (totalPnL / initialValue) * 100 : 0,
       dailyPnL,
-      dailyPnLPercentage: dayAgoSnapshot?.totalValue ? (dailyPnL / dayAgoSnapshot.totalValue) * 100 : 0,
+      dailyPnLPercentage: dayAgoSnapshot?.totalValue
+        ? (dailyPnL / dayAgoSnapshot.totalValue) * 100
+        : 0,
       weeklyPnL,
-      weeklyPnLPercentage: weekAgoSnapshot?.totalValue ? (weeklyPnL / weekAgoSnapshot.totalValue) * 100 : 0,
+      weeklyPnLPercentage: weekAgoSnapshot?.totalValue
+        ? (weeklyPnL / weekAgoSnapshot.totalValue) * 100
+        : 0,
       monthlyPnL,
-      monthlyPnLPercentage: monthAgoSnapshot?.totalValue ? (monthlyPnL / monthAgoSnapshot.totalValue) * 100 : 0,
+      monthlyPnLPercentage: monthAgoSnapshot?.totalValue
+        ? (monthlyPnL / monthAgoSnapshot.totalValue) * 100
+        : 0,
       volatility,
       sharpeRatio,
       maxDrawdown,
@@ -603,7 +618,10 @@ class OnChainPortfolioHistoryService {
   // HELPER METHODS
   // ============================================
 
-  private findClosest(snapshots: PortfolioSnapshotData[], target: Date): PortfolioSnapshotData | null {
+  private findClosest(
+    snapshots: PortfolioSnapshotData[],
+    target: Date
+  ): PortfolioSnapshotData | null {
     if (snapshots.length === 0) return null;
 
     let closest = snapshots[0];
@@ -638,7 +656,7 @@ class OnChainPortfolioHistoryService {
     if (returns.length < 2) return 0;
 
     const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-    const squaredDiffs = returns.map(r => Math.pow(r - mean, 2));
+    const squaredDiffs = returns.map((r) => Math.pow(r - mean, 2));
     const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (returns.length - 1);
 
     // Annualized volatility
@@ -703,7 +721,7 @@ class OnChainPortfolioHistoryService {
    */
   async getSnapshotCount(walletAddress: string): Promise<number> {
     await this.ensureTables();
-    
+
     try {
       const result = await queryOne<{ count: string }>(
         `SELECT COUNT(*) as count FROM portfolio_snapshots WHERE wallet_address = $1`,

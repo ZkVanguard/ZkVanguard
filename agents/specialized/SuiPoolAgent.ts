@@ -1,19 +1,19 @@
 /**
  * SUI Pool Agent — AI-driven community pool management on SUI chain
- * 
+ *
  * Specialized agent for the USDC-denominated 4-asset community pool:
  * - Analyzes market conditions (BTC, ETH, SUI, CRO)
  * - Generates smart allocations aware of on-chain vs hedged positions
  * - Plans and executes rebalance swaps via BlueFin aggregator
  * - Tracks hedge positions for non-swappable assets
  * - Integrates with SafeExecutionGuard for position limits
- * 
+ *
  * Enhanced with AIMarketIntelligence for comprehensive market context:
  * - Multi-timeframe streak analysis
  * - Cross-market correlation
  * - Risk cascade detection
  * - Market sentiment integration
- * 
+ *
  * On testnet: SUI is swappable, BTC/ETH are virtual (price-tracked)
  * On mainnet: BTC/ETH/SUI are all swappable via BlueFin DEX aggregator
  */
@@ -26,11 +26,8 @@ import {
   type PoolAsset,
   type NetworkType,
   type RebalanceSwapPlan,
-  type SwapQuoteResult,
 } from '../../lib/services/sui/BluefinAggregatorService';
-import { AIMarketIntelligence, type AIMarketContext, type EnhancedPrediction } from '../../lib/services/AIMarketIntelligence';
-
-// ============================================================================
+import { AIMarketIntelligence } from '../../lib/services/AIMarketIntelligence'; // ============================================================================
 // Types
 // ============================================================================
 
@@ -62,7 +59,12 @@ export interface RebalanceResult {
   plan: RebalanceSwapPlan | null;
   executionResults: {
     onChainSwaps: { asset: PoolAsset; success: boolean; txDigest?: string; error?: string }[];
-    hedgedPositions: { asset: PoolAsset; method: string; usdcAmount: number; estimatedQty: string }[];
+    hedgedPositions: {
+      asset: PoolAsset;
+      method: string;
+      usdcAmount: number;
+      estimatedQty: string;
+    }[];
     totalExecuted: number;
     totalHedged: number;
     totalFailed: number;
@@ -84,11 +86,7 @@ export class SuiPoolAgent extends BaseAgent {
   }> = [];
 
   constructor(agentId: string = 'sui-pool-agent', network: NetworkType = 'testnet') {
-    super(agentId, 'sui-pool', [
-      'PORTFOLIO_MANAGEMENT',
-      'MARKET_INTEGRATION',
-      'RISK_ANALYSIS',
-    ]);
+    super(agentId, 'sui-pool', ['PORTFOLIO_MANAGEMENT', 'MARKET_INTEGRATION', 'RISK_ANALYSIS']);
     this.network = network;
   }
 
@@ -174,7 +172,8 @@ export class SuiPoolAgent extends BaseAgent {
    * Checks which assets are actually swappable on the current network.
    */
   async analyzeMarket(): Promise<MarketIndicator[]> {
-    const { getMarketDataService } = await import('../../lib/services/market-data/RealMarketDataService');
+    const { getMarketDataService } =
+      await import('../../lib/services/market-data/RealMarketDataService');
     const mds = getMarketDataService();
     const aggregator = getBluefinAggregatorService(this.network);
     const indicators: MarketIndicator[] = [];
@@ -182,15 +181,22 @@ export class SuiPoolAgent extends BaseAgent {
     // Determine swappability deterministically (avoids 4x unnecessary $10 test quotes)
     // On testnet: nothing is on-chain swappable (all hedged via BlueFin)
     // On mainnet: BTC/ETH/SUI are all swappable via BlueFin
-    const swappabilityMap: Partial<Record<PoolAsset, boolean>> = this.network === 'mainnet'
-      ? { BTC: true, ETH: true, SUI: true }
-      : { BTC: false, ETH: false, SUI: false };
+    const swappabilityMap: Partial<Record<PoolAsset, boolean>> =
+      this.network === 'mainnet'
+        ? { BTC: true, ETH: true, SUI: true }
+        : { BTC: false, ETH: false, SUI: false };
 
     // Fetch all market data in parallel
     const marketDataPromises = POOL_ASSETS.map(async (asset) => {
       try {
         const data = await mds.getTokenPrice(asset);
-        return { asset, price: data.price, change24h: data.change24h ?? 0, volume24h: data.volume24h ?? 0, ok: true };
+        return {
+          asset,
+          price: data.price,
+          change24h: data.change24h ?? 0,
+          volume24h: data.volume24h ?? 0,
+          ok: true,
+        };
       } catch {
         return { asset, price: 0, change24h: 0, volume24h: 0, ok: false };
       }
@@ -219,13 +225,24 @@ export class SuiPoolAgent extends BaseAgent {
       const isSwappable = !!(swappabilityMap[asset] && aggregator.canSwapOnChain(asset));
 
       indicators.push({
-        asset, price, change24h, volume24h, volatility, trend, score, isSwappable,
+        asset,
+        price,
+        change24h,
+        volume24h,
+        volatility,
+        trend,
+        score,
+        isSwappable,
       });
     }
 
     logger.info('[SuiPoolAgent] Market analysis complete', {
-      assets: indicators.map(i => ({
-        asset: i.asset, price: i.price, trend: i.trend, score: i.score, swappable: i.isSwappable,
+      assets: indicators.map((i) => ({
+        asset: i.asset,
+        price: i.price,
+        trend: i.trend,
+        score: i.score,
+        swappable: i.isSwappable,
       })),
     });
 
@@ -243,10 +260,10 @@ export class SuiPoolAgent extends BaseAgent {
    */
   generateAllocation(
     indicators: MarketIndicator[],
-    currentAllocations?: Record<PoolAsset, number>,
+    currentAllocations?: Record<PoolAsset, number>
   ): AllocationDecision {
-    const swappableAssets = indicators.filter(i => i.isSwappable).map(i => i.asset);
-    const hedgedAssets = indicators.filter(i => !i.isSwappable).map(i => i.asset);
+    const swappableAssets = indicators.filter((i) => i.isSwappable).map((i) => i.asset);
+    const hedgedAssets = indicators.filter((i) => !i.isSwappable).map((i) => i.asset);
 
     const totalScore = indicators.reduce((s, i) => s + i.score, 0) || 1;
     const sorted = [...indicators].sort((a, b) => b.score - a.score);
@@ -268,7 +285,11 @@ export class SuiPoolAgent extends BaseAgent {
 
     // On testnet, boost swappable assets slightly (SUI) since they can actually execute
     const allocations = { ...rawAllocations } as Record<PoolAsset, number>;
-    if (this.network === 'testnet' && swappableAssets.length > 0 && swappableAssets.length < POOL_ASSETS.length) {
+    if (
+      this.network === 'testnet' &&
+      swappableAssets.length > 0 &&
+      swappableAssets.length < POOL_ASSETS.length
+    ) {
       const boostPer = 5; // Give +5% per swappable asset
       const hedgeCount = hedgedAssets.length;
       const swapCount = swappableAssets.length;
@@ -290,30 +311,35 @@ export class SuiPoolAgent extends BaseAgent {
     }
 
     // Confidence
-    const clearTrends = indicators.filter(i => i.trend !== 'neutral').length;
-    const highVol = indicators.filter(i => i.volatility === 'high').length;
+    const clearTrends = indicators.filter((i) => i.trend !== 'neutral').length;
+    const highVol = indicators.filter((i) => i.volatility === 'high').length;
     const confidence = Math.max(50, Math.min(95, 60 + clearTrends * 8 - highVol * 5));
 
     // Risk score (0-100, higher = riskier)
-    const avgVolScore = indicators.reduce((s, i) => s + (i.volatility === 'high' ? 30 : i.volatility === 'medium' ? 15 : 5), 0) / indicators.length;
-    const bearishCount = indicators.filter(i => i.trend === 'bearish').length;
+    const avgVolScore =
+      indicators.reduce(
+        (s, i) => s + (i.volatility === 'high' ? 30 : i.volatility === 'medium' ? 15 : 5),
+        0
+      ) / indicators.length;
+    const bearishCount = indicators.filter((i) => i.trend === 'bearish').length;
     const riskScore = Math.min(100, avgVolScore + bearishCount * 15);
 
     // Reasoning
     const top = sorted[0];
     const bottom = sorted[sorted.length - 1];
-    const reasoning = `SUI Pool AI [${this.network}] (${new Date().toISOString().split('T')[0]}): ` +
+    const reasoning =
+      `SUI Pool AI [${this.network}] (${new Date().toISOString().split('T')[0]}): ` +
       `Overweight ${top.asset} (${allocations[top.asset]}%) — ${top.trend}, score ${top.score.toFixed(0)}. ` +
       `Underweight ${bottom.asset} (${allocations[bottom.asset]}%) — ${bottom.trend}, score ${bottom.score.toFixed(0)}. ` +
       `Swappable: [${swappableAssets.join(',')}]. Hedged: [${hedgedAssets.join(',')}]. ` +
       `Risk: ${riskScore.toFixed(0)}/100. ` +
-      `Prices: ${indicators.map(i => `${i.asset}=$${i.price.toLocaleString()}`).join(', ')}.`;
+      `Prices: ${indicators.map((i) => `${i.asset}=$${i.price.toLocaleString()}`).join(', ')}.`;
 
     // Check drift
     let shouldRebalance = false;
     if (currentAllocations) {
       const maxDrift = Math.max(
-        ...POOL_ASSETS.map(a => Math.abs((allocations[a] || 25) - (currentAllocations[a] || 25)))
+        ...POOL_ASSETS.map((a) => Math.abs((allocations[a] || 25) - (currentAllocations[a] || 25)))
       );
       shouldRebalance = maxDrift > 3;
     } else {
@@ -350,84 +376,104 @@ export class SuiPoolAgent extends BaseAgent {
     reasoning: string;
   }> {
     const context = await AIMarketIntelligence.getMarketContext();
-    
+
     // Get base allocation from market indicators
     const indicators = await this.analyzeMarket();
     const baseDecision = this.generateAllocation(indicators);
-    
+
     // Adjust allocations based on AI context
     const adjustedAllocations = { ...baseDecision.allocations };
     const recommendations: string[] = [];
     const riskAlerts: string[] = [];
-    
+
     // 1. Adjust for risk cascade (severity is 0-100)
     if (context.riskCascade.detected) {
-      const cascadeSignals = context.riskCascade.signals.map(s => s.source).join(', ');
-      riskAlerts.push(`RISK CASCADE: Severity ${context.riskCascade.severity}/100 - ${cascadeSignals}`);
-      
+      const cascadeSignals = context.riskCascade.signals.map((s) => s.source).join(', ');
+      riskAlerts.push(
+        `RISK CASCADE: Severity ${context.riskCascade.severity}/100 - ${cascadeSignals}`
+      );
+
       if (context.riskCascade.severity > 70) {
         // High severity - reduce risk exposure by shifting to more stable allocation
         recommendations.push('Reduce volatile asset exposure due to high risk cascade');
         const suiBoost = 10;
         adjustedAllocations['SUI'] = Math.min(50, (adjustedAllocations['SUI'] || 25) + suiBoost);
-        adjustedAllocations['BTC'] = Math.max(15, (adjustedAllocations['BTC'] || 25) - suiBoost / 2);
-        adjustedAllocations['ETH'] = Math.max(15, (adjustedAllocations['ETH'] || 25) - suiBoost / 2);
+        adjustedAllocations['BTC'] = Math.max(
+          15,
+          (adjustedAllocations['BTC'] || 25) - suiBoost / 2
+        );
+        adjustedAllocations['ETH'] = Math.max(
+          15,
+          (adjustedAllocations['ETH'] || 25) - suiBoost / 2
+        );
       }
     }
-    
+
     // 2. Adjust for BTC/ETH correlation (btcEthCorrelation is 0-1)
     const btcEthAligned = context.correlation.btcEthCorrelation > 0.7;
     if (btcEthAligned) {
       // Check direction from aligned assets
       const isBullish = context.correlation.marketAlignment > 50;
       if (isBullish) {
-        recommendations.push('BTC/ETH highly correlated with positive alignment - consider overweight crypto majors');
+        recommendations.push(
+          'BTC/ETH highly correlated with positive alignment - consider overweight crypto majors'
+        );
         adjustedAllocations['BTC'] = Math.min(40, (adjustedAllocations['BTC'] || 25) + 5);
         adjustedAllocations['ETH'] = Math.min(35, (adjustedAllocations['ETH'] || 25) + 5);
         adjustedAllocations['SUI'] = Math.max(10, (adjustedAllocations['SUI'] || 25) - 10);
       } else {
-        recommendations.push('BTC/ETH correlated with weak alignment - defensive allocation recommended');
+        recommendations.push(
+          'BTC/ETH correlated with weak alignment - defensive allocation recommended'
+        );
         adjustedAllocations['SUI'] = Math.min(45, (adjustedAllocations['SUI'] || 25) + 10);
         adjustedAllocations['BTC'] = Math.max(15, (adjustedAllocations['BTC'] || 25) - 5);
         adjustedAllocations['ETH'] = Math.max(15, (adjustedAllocations['ETH'] || 25) - 5);
       }
     }
-    
+
     // 3. Analyze prediction market signals AND use them to adjust allocations
     const predictionSignals: Array<{ market: string; signal: string; probability: number }> = [];
     let bullishSignals = 0;
     let bearishSignals = 0;
     let totalSignalWeight = 0;
-    
+
     for (const pred of context.predictions.slice(0, 10)) {
       let signal = 'NEUTRAL';
       if (pred.probability > 65) signal = 'BULLISH';
       else if (pred.probability < 35) signal = 'BEARISH';
-      
+
       predictionSignals.push({
         market: pred.question.substring(0, 60),
         signal,
         probability: pred.probability,
       });
-      
+
       // Weight signals by how far from 50% they are (stronger conviction = more weight)
       const conviction = Math.abs(pred.probability - 50);
-      if (signal === 'BULLISH') { bullishSignals++; totalSignalWeight += conviction; }
-      if (signal === 'BEARISH') { bearishSignals++; totalSignalWeight += conviction; }
-      
+      if (signal === 'BULLISH') {
+        bullishSignals++;
+        totalSignalWeight += conviction;
+      }
+      if (signal === 'BEARISH') {
+        bearishSignals++;
+        totalSignalWeight += conviction;
+      }
+
       // Map prediction signals to asset allocation adjustments
       const q = pred.question.toLowerCase();
       const relatedAssets = pred.relatedAssets || [];
       const assetMatches: PoolAsset[] = [];
-      if (relatedAssets.includes('BTC') || q.includes('bitcoin') || q.includes('btc')) assetMatches.push('BTC');
-      if (relatedAssets.includes('ETH') || q.includes('ethereum') || q.includes('eth')) assetMatches.push('ETH');
+      if (relatedAssets.includes('BTC') || q.includes('bitcoin') || q.includes('btc'))
+        assetMatches.push('BTC');
+      if (relatedAssets.includes('ETH') || q.includes('ethereum') || q.includes('eth'))
+        assetMatches.push('ETH');
       if (relatedAssets.includes('SUI') || q.includes('sui')) assetMatches.push('SUI');
       // CRO not in SUI pool — skip CRO signals
       // General crypto market signals affect BTC and ETH
       if (assetMatches.length === 0 && (q.includes('crypto') || q.includes('market cap'))) {
         assetMatches.push('BTC', 'ETH');
       }
-      
+
       // Adjust allocations based on signal strength (±2-5% per strong signal)
       for (const asset of assetMatches) {
         const adjustPct = Math.round(conviction / 10); // 0-5% adjustment
@@ -438,7 +484,7 @@ export class SuiPoolAgent extends BaseAgent {
         }
       }
     }
-    
+
     // 3b. Use 5-min BTC signal for immediate allocation adjustment
     if (context.fiveMinSignal) {
       const sig = context.fiveMinSignal;
@@ -473,10 +519,14 @@ export class SuiPoolAgent extends BaseAgent {
         const step = sig.signalStrength === 'STRONG' ? 6 : 3;
         if (sig.direction === 'UP') {
           adjustedAllocations[asset] = Math.min(45, (adjustedAllocations[asset] || 25) + step);
-          recommendations.push(`${signalAsset} 5-min UP ${sig.probability.toFixed(0)}% (${sig.signalStrength}) → +${step}% ${asset}`);
+          recommendations.push(
+            `${signalAsset} 5-min UP ${sig.probability.toFixed(0)}% (${sig.signalStrength}) → +${step}% ${asset}`
+          );
         } else {
           adjustedAllocations[asset] = Math.max(10, (adjustedAllocations[asset] || 25) - step);
-          recommendations.push(`${signalAsset} 5-min DOWN ${sig.probability.toFixed(0)}% (${sig.signalStrength}) → -${step}% ${asset}`);
+          recommendations.push(
+            `${signalAsset} 5-min DOWN ${sig.probability.toFixed(0)}% (${sig.signalStrength}) → -${step}% ${asset}`
+          );
         }
       }
       // Add a cross-asset consensus alert when binaries agree
@@ -484,7 +534,7 @@ export class SuiPoolAgent extends BaseAgent {
         const dir = context.multiAssetSignals.netScore > 0 ? 'BULLISH' : 'BEARISH';
         recommendations.push(
           `Cross-asset binary consensus: ${context.multiAssetSignals.strongCount} STRONG, ${dir} ` +
-          `(${context.multiAssetSignals.bullishCount}↑ / ${context.multiAssetSignals.bearishCount}↓)`,
+            `(${context.multiAssetSignals.bullishCount}↑ / ${context.multiAssetSignals.bearishCount}↓)`
         );
       }
     }
@@ -499,26 +549,34 @@ export class SuiPoolAgent extends BaseAgent {
       for (const up of context.fusedPredictions.syntheticStrong) {
         const target = up.asset as PoolAsset;
         if (!['BTC', 'ETH'].includes(target)) continue;
-        const fundingConfirmed = up.reasons.some(r => r.startsWith('funding ') && r.includes('confirms'));
+        const fundingConfirmed = up.reasons.some(
+          (r) => r.startsWith('funding ') && r.includes('confirms')
+        );
         const tilt = fundingConfirmed ? 7 : 5;
         if (up.direction === 'UP') {
           adjustedAllocations[target] = Math.min(50, (adjustedAllocations[target] || 25) + tilt);
           // Defensive complement: shave SUI to fund the tilt
-          adjustedAllocations['SUI'] = Math.max(10, (adjustedAllocations['SUI'] || 25) - Math.round(tilt / 2));
+          adjustedAllocations['SUI'] = Math.max(
+            10,
+            (adjustedAllocations['SUI'] || 25) - Math.round(tilt / 2)
+          );
         } else {
           adjustedAllocations[target] = Math.max(8, (adjustedAllocations[target] || 25) - tilt);
           // Risk-off: bias toward SUI (lower-beta on the pool's directional book)
-          adjustedAllocations['SUI'] = Math.min(50, (adjustedAllocations['SUI'] || 25) + Math.round(tilt / 2));
+          adjustedAllocations['SUI'] = Math.min(
+            50,
+            (adjustedAllocations['SUI'] || 25) + Math.round(tilt / 2)
+          );
         }
         recommendations.push(
-          `Synthetic STRONG ${up.direction} on ${up.asset} (conf=${up.confidence.toFixed(0)}, ${up.reasons.length} confirms) → ${up.direction === 'UP' ? '+' : '-'}${tilt}% ${target}`,
+          `Synthetic STRONG ${up.direction} on ${up.asset} (conf=${up.confidence.toFixed(0)}, ${up.reasons.length} confirms) → ${up.direction === 'UP' ? '+' : '-'}${tilt}% ${target}`
         );
       }
       // Cross-asset alignment as its own context line for the LLM prompt
       const align = context.fusedPredictions.alignment;
       if (align.totalAssets >= 3 && align.dominancePct >= 67) {
         recommendations.push(
-          `Drift-fusion alignment: ${align.dominantDirection} ${align.dominancePct.toFixed(0)}% across ${align.totalAssets} assets (avgConf=${align.meanConfidence.toFixed(0)})`,
+          `Drift-fusion alignment: ${align.dominantDirection} ${align.dominancePct.toFixed(0)}% across ${align.totalAssets} assets (avgConf=${align.meanConfidence.toFixed(0)})`
         );
       }
     }
@@ -531,7 +589,7 @@ export class SuiPoolAgent extends BaseAgent {
     const combinedScore = sentimentScore + predictionBias * 10;
     if (combinedScore > 20) marketSentiment = 'BULLISH';
     else if (combinedScore < -20) marketSentiment = 'BEARISH';
-    
+
     // 4b. Sentiment-driven allocation shift
     if (marketSentiment === 'BULLISH') {
       adjustedAllocations['BTC'] = Math.min(45, (adjustedAllocations['BTC'] || 25) + 3);
@@ -540,42 +598,50 @@ export class SuiPoolAgent extends BaseAgent {
       adjustedAllocations['BTC'] = Math.max(10, (adjustedAllocations['BTC'] || 25) - 3);
       adjustedAllocations['ETH'] = Math.max(10, (adjustedAllocations['ETH'] || 25) - 2);
     }
-    
+
     // 5. Determine urgency based on streak and risk
     let urgency: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
     const streakActive = context.streaks.streak5Min.count > 2;
     if (context.riskCascade.severity > 70) urgency = 'CRITICAL';
-    else if (streakActive && context.streaks.streak5Min.direction === 'DOWN' && context.streaks.streak5Min.count > 4) urgency = 'HIGH';
+    else if (
+      streakActive &&
+      context.streaks.streak5Min.direction === 'DOWN' &&
+      context.streaks.streak5Min.count > 4
+    )
+      urgency = 'HIGH';
     else if (context.riskCascade.detected || streakActive) urgency = 'MEDIUM';
-    
+
     // 6. Liquidity-based adjustments
     if (!context.liquidity.sufficientLiquidity) {
       riskAlerts.push('Low market liquidity detected - reduce position sizes');
     }
     if (context.liquidity.liquidityRatio < 0.5) {
-      recommendations.push('Low exchange liquidity relative to prediction markets - proceed with caution');
+      recommendations.push(
+        'Low exchange liquidity relative to prediction markets - proceed with caution'
+      );
     }
-    
+
     // 7. Correlation insight
     const correlationInsight = btcEthAligned
       ? `BTC/ETH ${context.correlation.btcEthCorrelation > 0.8 ? 'strongly' : 'moderately'} correlated (${(context.correlation.btcEthCorrelation * 100).toFixed(0)}%)`
       : `BTC/ETH decoupled (${(context.correlation.btcEthCorrelation * 100).toFixed(0)}%) - divergent market dynamics`;
-    
+
     // Normalize allocations to 100%
     const total = Object.values(adjustedAllocations).reduce((a, b) => a + b, 0);
     if (total !== 100) {
       const diff = 100 - total;
       adjustedAllocations['SUI'] = (adjustedAllocations['SUI'] || 25) + diff;
     }
-    
+
     // Build comprehensive reasoning
-    const reasoning = `AI-Enhanced Allocation [${this.network}]: ` +
+    const reasoning =
+      `AI-Enhanced Allocation [${this.network}]: ` +
       `Sentiment=${marketSentiment} (${context.marketSentiment.label}). ` +
       `${streakActive ? `Active ${context.streaks.streak5Min.direction} streak (${context.streaks.streak5Min.count} periods).` : 'No active streak.'} ` +
       `${context.riskCascade.detected ? `Risk cascade: ${context.riskCascade.severity}/100.` : ''} ` +
       `Allocations: BTC=${adjustedAllocations['BTC']}%, ETH=${adjustedAllocations['ETH']}%, SUI=${adjustedAllocations['SUI']}%. ` +
       `Urgency: ${urgency}. ${recommendations.length} recommendations, ${riskAlerts.length} alerts.`;
-    
+
     // Calculate enhanced confidence that factors in prediction signals
     // Base confidence (60) + prediction signal conviction + sentiment strength + streak activity
     let enhancedConfidence = baseDecision.confidence;
@@ -616,7 +682,7 @@ export class SuiPoolAgent extends BaseAgent {
    */
   async planRebalance(
     navUsd: number,
-    currentAllocations?: Record<PoolAsset, number>,
+    currentAllocations?: Record<PoolAsset, number>
   ): Promise<{ decision: AllocationDecision; plan: RebalanceSwapPlan }> {
     const indicators = await this.analyzeMarket();
     const decision = this.generateAllocation(indicators, currentAllocations);
@@ -627,8 +693,8 @@ export class SuiPoolAgent extends BaseAgent {
     logger.info('[SuiPoolAgent] Rebalance planned', {
       action: decision.shouldRebalance ? 'REBALANCE' : 'HOLD',
       confidence: decision.confidence,
-      onChainSwaps: plan.swaps.filter(s => s.canSwapOnChain).length,
-      simulatedSwaps: plan.swaps.filter(s => s.isSimulated).length,
+      onChainSwaps: plan.swaps.filter((s) => s.canSwapOnChain).length,
+      simulatedSwaps: plan.swaps.filter((s) => s.isSimulated).length,
       totalUsdcToSwap: plan.totalUsdcToSwap,
     });
 
@@ -640,7 +706,7 @@ export class SuiPoolAgent extends BaseAgent {
    */
   async executeRebalance(
     navUsd: number,
-    currentAllocations?: Record<PoolAsset, number>,
+    currentAllocations?: Record<PoolAsset, number>
   ): Promise<RebalanceResult> {
     const { decision, plan } = await this.planRebalance(navUsd, currentAllocations);
 
@@ -652,7 +718,11 @@ export class SuiPoolAgent extends BaseAgent {
     const aggregator = getBluefinAggregatorService(this.network);
 
     // Execute on-chain swaps
-    const onChainSwaps: RebalanceResult['executionResults'] extends infer T ? T extends null ? never : T : never = {
+    const onChainSwaps: RebalanceResult['executionResults'] extends infer T
+      ? T extends null
+        ? never
+        : T
+      : never = {
       onChainSwaps: [],
       hedgedPositions: [],
       totalExecuted: 0,
@@ -660,8 +730,8 @@ export class SuiPoolAgent extends BaseAgent {
       totalFailed: 0,
     };
 
-    const swappable = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
-    const simulated = plan.swaps.filter(s => s.isSimulated || !s.canSwapOnChain);
+    const swappable = plan.swaps.filter((s) => s.canSwapOnChain && s.routerData);
+    const simulated = plan.swaps.filter((s) => s.isSimulated || !s.canSwapOnChain);
 
     // Execute real swaps
     if (swappable.length > 0 && process.env.SUI_POOL_ADMIN_KEY) {

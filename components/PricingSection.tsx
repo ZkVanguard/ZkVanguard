@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckIcon, SparklesIcon, ShieldCheckIcon, BoltIcon, UserGroupIcon } from '@heroicons/react/24/outline';
-import { useRouter } from '@/i18n/routing';
 import {
-  PRICING_TIERS,
-  getAnnualSavings,
-  formatPrice,
-  type SubscriptionTier,
-} from '@/lib/config/pricing';
-
+  CheckIcon,
+  SparklesIcon,
+  ShieldCheckIcon,
+  BoltIcon,
+  UserGroupIcon,
+} from '@heroicons/react/24/outline';
+import { useRouter } from '@/i18n/routing';
+import { PRICING_TIERS, getAnnualSavings, type SubscriptionTier } from '@/lib/config/pricing';
 interface PricingCardProps {
   tier: SubscriptionTier;
   isAnnual: boolean;
@@ -38,7 +38,7 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
   const colors = TIER_COLORS[tier];
   const isPopular = tier === 'pro';
   const isEnterprise = tier === 'enterprise';
-  
+
   const price = isAnnual ? tierData.priceAnnual / 12 : tierData.priceMonthly;
   const savings = getAnnualSavings(tier);
 
@@ -73,32 +73,24 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
       {/* Price */}
       <div className="mb-6">
         {isEnterprise ? (
-          <div className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">
-            Custom
-          </div>
+          <div className="text-[32px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">Custom</div>
         ) : (
           <>
             <div className="flex items-baseline gap-1">
               <span className="text-[40px] font-semibold text-[#1d1d1f] tracking-[-0.02em]">
                 {price === 0 ? 'Free' : `$${Math.round(price)}`}
               </span>
-              {price > 0 && (
-                <span className="text-[15px] text-[#86868b]">/mo</span>
-              )}
+              {price > 0 && <span className="text-[15px] text-[#86868b]">/mo</span>}
             </div>
             {isAnnual && savings > 0 && (
-              <p className="text-[13px] text-[#34C759] mt-1">
-                Save ${savings}/year
-              </p>
+              <p className="text-[13px] text-[#34C759] mt-1">Save ${savings}/year</p>
             )}
           </>
         )}
       </div>
 
       {/* Description */}
-      <p className="text-[15px] text-[#86868b] mb-6 leading-[1.47]">
-        {tierData.description}
-      </p>
+      <p className="text-[15px] text-[#86868b] mb-6 leading-[1.47]">{tierData.description}</p>
 
       {/* Features */}
       <ul className="space-y-3 mb-8">
@@ -122,7 +114,9 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
           <div>
             <span className="text-[#86868b]">ZK Proofs</span>
             <p className="text-[#1d1d1f] font-medium">
-              {tierData.limits.zkProofsPerMonth === -1 ? 'Unlimited' : `${tierData.limits.zkProofsPerMonth}/mo`}
+              {tierData.limits.zkProofsPerMonth === -1
+                ? 'Unlimited'
+                : `${tierData.limits.zkProofsPerMonth}/mo`}
             </p>
           </div>
           <div>
@@ -141,7 +135,9 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
               {tierData.limits.apiAccess === 'none' ? '—' : tierData.limits.apiAccess}
               {tierData.limits.apiRateLimitPerMin > 0 && (
                 <span className="text-[11px] text-[#86868b] block">
-                  {tierData.limits.apiRateLimitPerMin === -1 ? 'custom' : `${tierData.limits.apiRateLimitPerMin.toLocaleString()} req/min`}
+                  {tierData.limits.apiRateLimitPerMin === -1
+                    ? 'custom'
+                    : `${tierData.limits.apiRateLimitPerMin.toLocaleString()} req/min`}
                 </span>
               )}
             </p>
@@ -156,11 +152,15 @@ function PricingCard({ tier, isAnnual, onSelect }: PricingCardProps) {
           isPopular
             ? 'bg-[#34C759] text-white hover:bg-[#2fb551]'
             : tier === 'free'
-            ? 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]'
-            : 'bg-[#007AFF] text-white hover:bg-[#0066d6]'
+              ? 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]'
+              : 'bg-[#007AFF] text-white hover:bg-[#0066d6]'
         }`}
       >
-        {tier === 'free' ? 'Start Free Trial' : tier === 'enterprise' ? 'Contact Sales' : 'Get Started'}
+        {tier === 'free'
+          ? 'Start Free Trial'
+          : tier === 'enterprise'
+            ? 'Contact Sales'
+            : 'Get Started'}
       </button>
     </div>
   );
@@ -174,7 +174,8 @@ export function PricingSection() {
     if (tier === 'enterprise') {
       // No /contact route exists; matches the mailto: pattern used elsewhere
       // (see dashboard/custody/page.tsx enterprise CTA).
-      window.location.href = 'mailto:ashishregmi2017@gmail.com?subject=ZkVanguard%20Enterprise%20plan%20inquiry';
+      window.location.href =
+        'mailto:ashishregmi2017@gmail.com?subject=ZkVanguard%20Enterprise%20plan%20inquiry';
     } else {
       router.push(`/subscribe?tier=${tier}&billing=${isAnnual ? 'annual' : 'monthly'}`);
     }
@@ -218,21 +219,14 @@ export function PricingSection() {
       {/* Pricing Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto px-4">
         {displayTiers.map((tier) => (
-          <PricingCard
-            key={tier}
-            tier={tier}
-            isAnnual={isAnnual}
-            onSelect={handleSelect}
-          />
+          <PricingCard key={tier} tier={tier} isAnnual={isAnnual} onSelect={handleSelect} />
         ))}
       </div>
 
       {/* Enterprise CTA */}
       <div className="mt-12 text-center">
         <div className="inline-block bg-gradient-to-r from-[#FF9500]/10 to-[#FF3B30]/10 rounded-[16px] p-6 lg:p-8 max-w-2xl">
-          <h3 className="text-[24px] font-semibold text-[#1d1d1f] mb-2">
-            Enterprise Solutions
-          </h3>
+          <h3 className="text-[24px] font-semibold text-[#1d1d1f] mb-2">Enterprise Solutions</h3>
           <p className="text-[15px] text-[#86868b] mb-4">
             Need a custom solution for your fund, treasury, or platform? Get white-label deployment,
             dedicated support, and custom SLA guarantees.

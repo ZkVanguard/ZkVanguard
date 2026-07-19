@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   const signalSource = url.searchParams.get('source') || 'polymarket-5min';
 
   // ── Hedge PnL ───────────────────────────────────────────────────────
-  let hedgeAggregate = {
+  const hedgeAggregate = {
     total: 0,
     closed: 0,
     active: 0,
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
        FROM hedges
        WHERE simulation_mode = false
          AND (created_at >= $1 OR closed_at >= $1)`,
-      [sinceIso],
+      [sinceIso]
     );
 
     hedgeAggregate.total = rows.length;
@@ -104,7 +104,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Per-asset breakdown
-    const byAsset: Record<string, { closed: number; realized: number; funding: number; winners: number }> = {};
+    const byAsset: Record<
+      string,
+      { closed: number; realized: number; funding: number; winners: number }
+    > = {};
     for (const r of rows) {
       if (r.status === 'active') continue;
       const a = (r.asset || 'UNKNOWN').toUpperCase();
@@ -114,19 +117,23 @@ export async function GET(req: NextRequest) {
       byAsset[a].funding += Number(r.funding_paid ?? 0);
       if (Number(r.realized_pnl ?? 0) > 0.01) byAsset[a].winners++;
     }
-    hedgeByAsset = Object.entries(byAsset).map(([asset, b]) => ({
-      asset,
-      closed: b.closed,
-      realized: Number(b.realized.toFixed(2)),
-      funding: Number(b.funding.toFixed(2)),
-      winRate: b.closed > 0 ? Number((b.winners / b.closed).toFixed(3)) : 0,
-    })).sort((x, y) => y.closed - x.closed);
+    hedgeByAsset = Object.entries(byAsset)
+      .map(([asset, b]) => ({
+        asset,
+        closed: b.closed,
+        realized: Number(b.realized.toFixed(2)),
+        funding: Number(b.funding.toFixed(2)),
+        winRate: b.closed > 0 ? Number((b.winners / b.closed).toFixed(3)) : 0,
+      }))
+      .sort((x, y) => y.closed - x.closed);
   } catch (err) {
-    logger.warn('[strategy-pnl] hedge aggregate failed', { error: err instanceof Error ? err.message : err });
+    logger.warn('[strategy-pnl] hedge aggregate failed', {
+      error: err instanceof Error ? err.message : err,
+    });
   }
 
   // ── NAV trajectory (share-price drift) ─────────────────────────────
-  let nav = {
+  const nav = {
     firstSharePrice: 0,
     lastSharePrice: 0,
     deltaPct: 0,
@@ -142,23 +149,26 @@ export async function GET(req: NextRequest) {
       `SELECT share_price, created_at FROM community_pool_nav_history
        WHERE chain = 'sui' AND created_at >= $1
        ORDER BY created_at ASC`,
-      [sinceIso],
+      [sinceIso]
     );
     if (navRows.length > 0) {
       nav.snapshots = navRows.length;
-      const prices = navRows.map(r => Number(r.share_price ?? 0)).filter(p => p > 0);
+      const prices = navRows.map((r) => Number(r.share_price ?? 0)).filter((p) => p > 0);
       if (prices.length > 0) {
         nav.firstSharePrice = prices[0];
         nav.lastSharePrice = prices[prices.length - 1];
         nav.minSharePrice = Math.min(...prices);
         nav.maxSharePrice = Math.max(...prices);
-        nav.deltaPct = nav.firstSharePrice > 0
-          ? ((nav.lastSharePrice - nav.firstSharePrice) / nav.firstSharePrice) * 100
-          : 0;
+        nav.deltaPct =
+          nav.firstSharePrice > 0
+            ? ((nav.lastSharePrice - nav.firstSharePrice) / nav.firstSharePrice) * 100
+            : 0;
       }
     }
   } catch (err) {
-    logger.warn('[strategy-pnl] NAV trajectory failed', { error: err instanceof Error ? err.message : err });
+    logger.warn('[strategy-pnl] NAV trajectory failed', {
+      error: err instanceof Error ? err.message : err,
+    });
   }
 
   // ── Signal accuracy ────────────────────────────────────────────────
@@ -167,29 +177,43 @@ export async function GET(req: NextRequest) {
   // ── Rough cost estimate ────────────────────────────────────────────
   // Friction-cost bound: assume 0.1% slippage per leg + 0.05% perp round-trip
   // on every closed hedge, plus funding actually paid.
-  const estFrictionCost = (hedgeAggregate.grossNotionalUsd * 0.0015) + hedgeAggregate.fundingPaidUsd;
+  const estFrictionCost = hedgeAggregate.grossNotionalUsd * 0.0015 + hedgeAggregate.fundingPaidUsd;
   const netPnl = hedgeAggregate.realizedPnlUsd - hedgeAggregate.fundingPaidUsd;
   const profitability =
-    hedgeAggregate.closed === 0 ? 'NO_DATA' :
-    netPnl > 0.5 ? 'PROFITABLE' :
-    netPnl > -0.5 ? 'BREAK_EVEN' : 'LOSING';
+    hedgeAggregate.closed === 0
+      ? 'NO_DATA'
+      : netPnl > 0.5
+        ? 'PROFITABLE'
+        : netPnl > -0.5
+          ? 'BREAK_EVEN'
+          : 'LOSING';
 
   // ── Verdict / recommendation ───────────────────────────────────────
   const recommendations: string[] = [];
   if (hedgeAggregate.closed < 5) {
-    recommendations.push('Insufficient closed hedges — keep KILL_SWITCH on or run defensively until ≥20 closes accumulate.');
+    recommendations.push(
+      'Insufficient closed hedges — keep KILL_SWITCH on or run defensively until ≥20 closes accumulate.'
+    );
   }
   if (signalStats && signalStats.resolved >= 20 && signalStats.winRate < 0.55) {
-    recommendations.push(`Signal win-rate ${(signalStats.winRate * 100).toFixed(1)}% < 55% breakeven. Disable HEDGE_REQUIRE_PREDICTION_SIGNAL gate or set KILL_SWITCH.`);
+    recommendations.push(
+      `Signal win-rate ${(signalStats.winRate * 100).toFixed(1)}% < 55% breakeven. Disable HEDGE_REQUIRE_PREDICTION_SIGNAL gate or set KILL_SWITCH.`
+    );
   }
   if (signalStats && signalStats.resolved >= 20 && signalStats.winRate >= 0.58) {
-    recommendations.push(`Signal win-rate ${(signalStats.winRate * 100).toFixed(1)}% — above breakeven. Safe to run.`);
+    recommendations.push(
+      `Signal win-rate ${(signalStats.winRate * 100).toFixed(1)}% — above breakeven. Safe to run.`
+    );
   }
   if (hedgeAggregate.closed >= 10 && hedgeAggregate.winRate < 0.45) {
-    recommendations.push(`Hedge win-rate ${(hedgeAggregate.winRate * 100).toFixed(1)}% < 45%. Strategy is likely losing — set KILL_SWITCH=true.`);
+    recommendations.push(
+      `Hedge win-rate ${(hedgeAggregate.winRate * 100).toFixed(1)}% < 45%. Strategy is likely losing — set KILL_SWITCH=true.`
+    );
   }
   if (nav.deltaPct < -1) {
-    recommendations.push(`Share price drifted ${nav.deltaPct.toFixed(2)}% in ${days}d. Drawdown brake should already be engaged.`);
+    recommendations.push(
+      `Share price drifted ${nav.deltaPct.toFixed(2)}% in ${days}d. Drawdown brake should already be engaged.`
+    );
   }
 
   return NextResponse.json({
@@ -223,17 +247,19 @@ export async function GET(req: NextRequest) {
       maxSharePriceUsd: Number(nav.maxSharePrice.toFixed(6)),
       snapshots: nav.snapshots,
     },
-    signal: signalStats ? {
-      source: signalSource,
-      total: signalStats.total,
-      resolved: signalStats.resolved,
-      pending: signalStats.pending,
-      correct: signalStats.correct,
-      incorrect: signalStats.incorrect,
-      winRate: Number(signalStats.winRate.toFixed(3)),
-      avgConfidence: Number(signalStats.avgConfidence.toFixed(2)),
-      byStrength: signalStats.byStrength,
-    } : null,
+    signal: signalStats
+      ? {
+          source: signalSource,
+          total: signalStats.total,
+          resolved: signalStats.resolved,
+          pending: signalStats.pending,
+          correct: signalStats.correct,
+          incorrect: signalStats.incorrect,
+          winRate: Number(signalStats.winRate.toFixed(3)),
+          avgConfidence: Number(signalStats.avgConfidence.toFixed(2)),
+          byStrength: signalStats.byStrength,
+        }
+      : null,
     recommendations,
     note: 'Friction cost is a lower bound (slippage 0.1% × 1.5 legs + actual funding). Actual cost typically 1.5–2x this.',
   });

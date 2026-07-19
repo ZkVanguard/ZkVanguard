@@ -4,7 +4,7 @@
  * Production-grade service for continuous AI operation management.
  * Handles WebSocket streaming, task scheduling, health monitoring,
  * rate limiting, and graceful recovery.
- * 
+ *
  * Features:
  * - WebSocket price streaming (no polling overhead)
  * - Priority-based task queue
@@ -17,9 +17,7 @@
 import { logger } from '@/lib/utils/logger';
 import crypto from 'crypto';
 import { AIPriceIntegration, SERVICE_CONFIGS } from './market-data/ai-price-integration';
-import { onAIEvent, invalidateCache, AIEvent } from './ai-decisions';
-
-// ============================================================================
+import { onAIEvent, invalidateCache, AIEvent } from './ai-decisions'; // ============================================================================
 // Types
 // ============================================================================
 
@@ -92,10 +90,10 @@ const PRIORITY_WEIGHTS: Record<TaskPriority, number> = {
 };
 
 const DEFAULT_INTERVALS: Record<AIServiceType, number> = {
-  risk: 60000,      // 1 minute
-  hedges: 30000,    // 30 seconds
+  risk: 60000, // 1 minute
+  hedges: 30000, // 30 seconds
   insights: 120000, // 2 minutes
-  action: 45000,    // 45 seconds
+  action: 45000, // 45 seconds
 };
 
 const MAX_CONSECUTIVE_FAILURES = 5;
@@ -127,8 +125,8 @@ class AIManagerService {
   private createInitialState(): AIManagerState {
     const services = new Map<AIServiceType, ServiceStatus>();
     const serviceTypes: AIServiceType[] = ['risk', 'hedges', 'insights', 'action'];
-    
-    serviceTypes.forEach(type => {
+
+    serviceTypes.forEach((type) => {
       services.set(type, {
         type,
         health: 'unknown',
@@ -183,7 +181,7 @@ class AIManagerService {
     } = options || {};
 
     logger.info('[AIManager] Starting continuous management');
-    
+
     this.state.isRunning = true;
     this.state.startedAt = Date.now();
 
@@ -243,7 +241,7 @@ class AIManagerService {
     this.disconnectWebSocket();
 
     // Unsubscribe from events
-    this.eventUnsubscribes.forEach(unsub => unsub());
+    this.eventUnsubscribes.forEach((unsub) => unsub());
     this.eventUnsubscribes = [];
 
     // Stop price monitoring
@@ -271,15 +269,15 @@ class AIManagerService {
   private connectWebSocket(): void {
     // Use Crypto.com WebSocket API for real-time prices
     const wsUrl = 'wss://stream.crypto.com/exchange/v1/market';
-    
+
     try {
       this.websocket = new WebSocket(wsUrl);
-      
+
       this.websocket.onopen = () => {
         logger.info('[AIManager] WebSocket connected');
         this.state.websocketConnected = true;
         this.websocketRetryCount = 0; // Reset on successful connection
-        
+
         // Subscribe to price channels for common assets
         this.subscribeToChannels(['BTC_USD', 'ETH_USD', 'CRO_USD', 'SUI_USD']);
       };
@@ -289,7 +287,10 @@ class AIManagerService {
           const data = JSON.parse(event.data);
           this.handleWebSocketMessage(data);
         } catch (e) {
-          logger.error('[AIManager] Failed to parse WebSocket message', e instanceof Error ? e : undefined);
+          logger.error(
+            '[AIManager] Failed to parse WebSocket message',
+            e instanceof Error ? e : undefined
+          );
         }
       };
 
@@ -301,11 +302,13 @@ class AIManagerService {
       this.websocket.onclose = () => {
         this.state.websocketConnected = false;
         this.websocketRetryCount++;
-        
+
         // Schedule reconnection with exponential backoff, up to max retries
         if (this.state.isRunning && this.websocketRetryCount <= WEBSOCKET_MAX_RETRIES) {
           const delay = WEBSOCKET_RECONNECT_DELAY * Math.pow(2, this.websocketRetryCount - 1);
-          logger.debug(`[AIManager] WebSocket disconnected, retry ${this.websocketRetryCount}/${WEBSOCKET_MAX_RETRIES} in ${delay}ms`);
+          logger.debug(
+            `[AIManager] WebSocket disconnected, retry ${this.websocketRetryCount}/${WEBSOCKET_MAX_RETRIES} in ${delay}ms`
+          );
           this.websocketReconnectTimeout = setTimeout(() => {
             this.connectWebSocket();
           }, delay);
@@ -315,7 +318,10 @@ class AIManagerService {
         }
       };
     } catch (error) {
-      logger.error('[AIManager] Failed to connect WebSocket', error instanceof Error ? error : undefined);
+      logger.error(
+        '[AIManager] Failed to connect WebSocket',
+        error instanceof Error ? error : undefined
+      );
       // Fall back to polling
       AIPriceIntegration.startPriceMonitoring(['BTC', 'ETH', 'CRO'], 15000);
     }
@@ -328,7 +334,7 @@ class AIManagerService {
       id: Date.now(),
       method: 'subscribe',
       params: {
-        channels: instruments.map(i => `ticker.${i}`),
+        channels: instruments.map((i) => `ticker.${i}`),
       },
     };
 
@@ -349,12 +355,12 @@ class AIManagerService {
         a: string;
         c: string;
       }>;
-      
+
       if (ticker && ticker[0]) {
         const symbol = ticker[0].i.replace('_USD', '');
         const price = parseFloat(ticker[0].a);
         const change = parseFloat(ticker[0].c);
-        
+
         // Check if price change warrants cache invalidation
         this.checkPriceTriggeredRefresh(symbol, price, change);
       }
@@ -364,7 +370,7 @@ class AIManagerService {
   private checkPriceTriggeredRefresh(symbol: string, price: number, change24h: number): void {
     // Check each service's invalidation threshold
     const services: AIServiceType[] = ['hedges', 'risk', 'action', 'insights'];
-    
+
     for (const service of services) {
       const config = SERVICE_CONFIGS[service];
       if (Math.abs(change24h) >= config.invalidationThreshold) {
@@ -372,7 +378,7 @@ class AIManagerService {
         this.queueRequest(service, 'high', async () => {
           invalidateCache(service);
         });
-        
+
         logger.info(`[AIManager] Price-triggered refresh for ${service}`, {
           symbol,
           change: `${change24h.toFixed(2)}%`,
@@ -414,8 +420,8 @@ class AIManagerService {
 
   private registerDefaultTasks(): void {
     const serviceTypes: AIServiceType[] = ['risk', 'hedges', 'insights', 'action'];
-    
-    serviceTypes.forEach(type => {
+
+    serviceTypes.forEach((type) => {
       const config = SERVICE_CONFIGS[type];
       this.registerTask({
         id: `auto-${type}`,
@@ -445,8 +451,8 @@ class AIManagerService {
 
   private processScheduledTasks(): void {
     const now = Date.now();
-    
-    this.state.tasks.forEach((task, id) => {
+
+    this.state.tasks.forEach((task, _id) => {
       if (!task.enabled) return;
       if (now < task.nextRun) return;
 
@@ -454,13 +460,13 @@ class AIManagerService {
       const serviceStatus = this.state.services.get(task.serviceType);
       if ((serviceStatus?.consecutiveFailures ?? 0) >= MAX_CONSECUTIVE_FAILURES) {
         // Skip but reschedule with backoff
-        task.nextRun = now + (task.intervalMs * Math.pow(2, task.failures));
+        task.nextRun = now + task.intervalMs * Math.pow(2, task.failures);
         return;
       }
 
       // Queue the task
       this.queueRequest(task.serviceType, task.priority, task.callback);
-      
+
       // Update task timing
       task.lastRun = now;
       task.nextRun = now + task.intervalMs;
@@ -485,7 +491,7 @@ class AIManagerService {
     execute: () => Promise<void>
   ): string {
     const id = `req-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
-    
+
     const request: QueuedRequest = {
       id,
       serviceType,
@@ -499,7 +505,7 @@ class AIManagerService {
 
     // Insert in priority order
     const insertIndex = this.state.pendingQueue.findIndex(
-      r => PRIORITY_WEIGHTS[r.priority] < PRIORITY_WEIGHTS[priority]
+      (r) => PRIORITY_WEIGHTS[r.priority] < PRIORITY_WEIGHTS[priority]
     );
 
     if (insertIndex === -1) {
@@ -523,7 +529,7 @@ class AIManagerService {
     if (serviceStatus?.isProcessing) return;
 
     // Check backoff
-    const backoffUntil = request.queuedAt + (request.backoffMs * Math.pow(2, request.attempts));
+    const backoffUntil = request.queuedAt + request.backoffMs * Math.pow(2, request.attempts);
     if (Date.now() < backoffUntil) return;
 
     // Remove from queue
@@ -541,13 +547,15 @@ class AIManagerService {
 
     try {
       await request.execute();
-      
+
       // Success
       const latency = Date.now() - startTime;
       this.recordSuccess(request.serviceType, latency);
-      
     } catch (error) {
-      logger.error(`[AIManager] Request failed: ${request.id}`, error instanceof Error ? error : undefined);
+      logger.error(
+        `[AIManager] Request failed: ${request.id}`,
+        error instanceof Error ? error : undefined
+      );
       this.recordFailure(request.serviceType);
 
       // Re-queue if attempts remain
@@ -569,15 +577,13 @@ class AIManagerService {
     status.lastSuccess = Date.now();
     status.consecutiveFailures = 0;
     status.health = 'healthy';
-    
+
     // Update average response time (moving average)
-    status.avgResponseTime = status.avgResponseTime === 0
-      ? latency
-      : (status.avgResponseTime * 0.8) + (latency * 0.2);
+    status.avgResponseTime =
+      status.avgResponseTime === 0 ? latency : status.avgResponseTime * 0.8 + latency * 0.2;
 
     this.state.metrics.successfulRequests++;
-    this.state.metrics.averageLatency = 
-      (this.state.metrics.averageLatency * 0.9) + (latency * 0.1);
+    this.state.metrics.averageLatency = this.state.metrics.averageLatency * 0.9 + latency * 0.1;
   }
 
   private recordFailure(serviceType: AIServiceType): void {
@@ -587,7 +593,7 @@ class AIManagerService {
     status.lastError = Date.now();
     status.errorCount++;
     status.consecutiveFailures++;
-    
+
     // Update health status
     if (status.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
       status.health = 'unhealthy';
@@ -633,7 +639,8 @@ class AIManagerService {
       // Auto-recover unhealthy services
       if (status.health === 'unhealthy' && status.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         // Reset failures to allow retry
-        if (staleness > 300000) { // 5 minutes
+        if (staleness > 300000) {
+          // 5 minutes
           status.consecutiveFailures = 0;
           status.health = 'degraded';
           logger.info(`[AIManager] Auto-recovering ${type} service`);
@@ -660,9 +667,10 @@ class AIManagerService {
       queue: this.state.pendingQueue.length,
       uptime: `${Math.round(this.state.metrics.uptime / 60000)}m`,
       websocket: this.state.websocketConnected ? 'connected' : 'disconnected',
-      successRate: this.state.metrics.totalRequests > 0
-        ? `${Math.round((this.state.metrics.successfulRequests / this.state.metrics.totalRequests) * 100)}%`
-        : 'N/A',
+      successRate:
+        this.state.metrics.totalRequests > 0
+          ? `${Math.round((this.state.metrics.successfulRequests / this.state.metrics.totalRequests) * 100)}%`
+          : 'N/A',
     });
   }
 
@@ -712,7 +720,7 @@ class AIManagerService {
       if (!stored) return;
 
       const data = JSON.parse(stored);
-      
+
       // Restore metrics
       if (data.metrics) {
         this.state.metrics = { ...this.state.metrics, ...data.metrics };
@@ -720,14 +728,21 @@ class AIManagerService {
 
       // Restore service states
       if (data.services) {
-        data.services.forEach((s: { type: AIServiceType; health: ServiceHealth; lastSuccess: number; errorCount: number }) => {
-          const existing = this.state.services.get(s.type);
-          if (existing) {
-            existing.health = s.health;
-            existing.lastSuccess = s.lastSuccess;
-            existing.errorCount = s.errorCount;
+        data.services.forEach(
+          (s: {
+            type: AIServiceType;
+            health: ServiceHealth;
+            lastSuccess: number;
+            errorCount: number;
+          }) => {
+            const existing = this.state.services.get(s.type);
+            if (existing) {
+              existing.health = s.health;
+              existing.lastSuccess = s.lastSuccess;
+              existing.errorCount = s.errorCount;
+            }
           }
-        });
+        );
       }
 
       logger.debug('[AIManager] Restored persisted state');
@@ -747,7 +762,10 @@ class AIManagerService {
     queueLength: number;
     metrics: ManagerMetrics;
   } {
-    const services: Record<AIServiceType, ServiceStatus> = {} as Record<AIServiceType, ServiceStatus>;
+    const services: Record<AIServiceType, ServiceStatus> = {} as Record<
+      AIServiceType,
+      ServiceStatus
+    >;
     this.state.services.forEach((v, k) => {
       services[k] = { ...v };
     });

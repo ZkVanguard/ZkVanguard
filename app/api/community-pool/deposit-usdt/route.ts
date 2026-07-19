@@ -1,14 +1,14 @@
 /**
  * Community Pool USDT Deposit API (AA/Gasless)
- * 
+ *
  * Enables gasless USDT deposits to the community pool using
  * ERC-4337 Account Abstraction with Pimlico/Candide paymasters.
- * 
+ *
  * Endpoints:
  * - GET  /api/community-pool/deposit-usdt - Get deposit quote
  * - POST /api/community-pool/deposit-usdt - Create deposit UserOp
  * - POST /api/community-pool/deposit-usdt?action=submit - Submit signed UserOp
- * 
+ *
  * Flow:
  * 1. Client calls GET to get deposit quote (gas estimate in USDT)
  * 2. Client calls POST to create unsigned UserOp
@@ -33,7 +33,6 @@ import { mutationLimiter, readLimiter, createRateLimiter } from '@/lib/security/
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { ethers } from 'ethers';
 import { errMsg } from '@/lib/utils/error-handler';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120; // Allow up to 2 min for multi-TX deposit flows
@@ -71,7 +70,7 @@ export async function GET(request: NextRequest) {
   // Rate limit
   const limited = readLimiter.check(request);
   if (limited) return limited;
-  
+
   const searchParams = request.nextUrl.searchParams;
   const chainId = parseInt(searchParams.get('chainId') || String(DEFAULT_CHAIN_ID), 10);
   const amount = parseFloat(searchParams.get('amount') || '100');
@@ -84,51 +83,63 @@ export async function GET(request: NextRequest) {
   if (isNaN(amount) || amount <= 0 || amount > 1_000_000) {
     return NextResponse.json({ success: false, error: 'Invalid amount' }, { status: 400 });
   }
-  
+
   try {
     // Check if this chain should use x402 instead of AA
     if (shouldUseX402(chainId)) {
-      return NextResponse.json({
-        success: false,
-        error: `Chain ${chainId} doesn't support ERC-4337 bundlers`,
-        useX402: true,
-        x402Endpoint: '/api/x402/deposit',
-        hint: 'Cronos EVM uses x402 protocol for gasless USDT deposits. Use the x402 endpoint instead.',
-        supportedAAChains: getSupportedAAChains().filter(id => !shouldUseX402(id)),
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Chain ${chainId} doesn't support ERC-4337 bundlers`,
+          useX402: true,
+          x402Endpoint: '/api/x402/deposit',
+          hint: 'Cronos EVM uses x402 protocol for gasless USDT deposits. Use the x402 endpoint instead.',
+          supportedAAChains: getSupportedAAChains().filter((id) => !shouldUseX402(id)),
+        },
+        { status: 400 }
+      );
     }
-    
+
     // Check if chain is supported
     if (!isAASupported(chainId)) {
-      return NextResponse.json({
-        success: false,
-        error: `Chain ${chainId} not supported for AA deposits`,
-        supportedChains: getSupportedAAChains(),
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Chain ${chainId} not supported for AA deposits`,
+          supportedChains: getSupportedAAChains(),
+        },
+        { status: 400 }
+      );
     }
-    
+
     // Get configuration
     const config = getAAConfig(chainId, provider);
     if (!config) {
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to get AA configuration',
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Failed to get AA configuration',
+        },
+        { status: 500 }
+      );
     }
-    
+
     // Check if bundler URL is empty (fallback chain)
     if (!config.bundlerUrl) {
-      return NextResponse.json({
-        success: false,
-        error: `Chain ${config.chainName} doesn't have bundler support`,
-        useX402: true,
-        x402Endpoint: '/api/x402/deposit',
-        hint: 'Use x402 protocol for this chain',
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Chain ${config.chainName} doesn't have bundler support`,
+          useX402: true,
+          x402Endpoint: '/api/x402/deposit',
+          hint: 'Use x402 protocol for this chain',
+        },
+        { status: 400 }
+      );
     }
     // Estimate deposit cost
     const costEstimate = await estimateDepositCost(chainId, amount);
-    
+
     return NextResponse.json({
       success: true,
       quote: {
@@ -147,7 +158,7 @@ export async function GET(request: NextRequest) {
         entryPoint: config.entryPointAddress,
         paymaster: config.paymasterAddress,
       },
-      supportedChains: getSupportedAAChains().map(id => {
+      supportedChains: getSupportedAAChains().map((id) => {
         const cfg = getAAConfig(id, provider);
         return {
           chainId: id,
@@ -156,7 +167,6 @@ export async function GET(request: NextRequest) {
         };
       }),
     });
-    
   } catch (error) {
     return safeErrorResponse(error, 'deposit-usdt GET');
   }
@@ -169,13 +179,13 @@ export async function POST(request: NextRequest) {
   // Rate limit — distributed enforcement for deposit operation
   const limited = await mutationLimiter.checkDistributed(request);
   if (limited) return limited;
-  
+
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
-  
+
   try {
     const body = await request.json();
-    
+
     // Extract common params
     const {
       chainId = DEFAULT_CHAIN_ID,
@@ -186,49 +196,61 @@ export async function POST(request: NextRequest) {
       factory,
       factoryData,
     } = body;
-    
+
     // Validate chain support
     if (!isAASupported(chainId)) {
-      return NextResponse.json({
-        success: false,
-        error: `Chain ${chainId} not supported for AA deposits`,
-        supportedChains: getSupportedAAChains(),
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Chain ${chainId} not supported for AA deposits`,
+          supportedChains: getSupportedAAChains(),
+        },
+        { status: 400 }
+      );
     }
-    
+
     // Create AA client
     const client = AAClient.forChain(chainId, provider);
     if (!client) {
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to create AA client',
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Failed to create AA client',
+        },
+        { status: 500 }
+      );
     }
-    
+
     // Get community pool address
     const communityPoolAddress = COMMUNITY_POOL_ADDRESSES[chainId];
     if (!communityPoolAddress || communityPoolAddress === '0x...') {
-      return NextResponse.json({
-        success: false,
-        error: `Community pool not deployed on chain ${chainId}`,
-        hint: 'Use Cronos testnet (chainId: 338) for testing',
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Community pool not deployed on chain ${chainId}`,
+          hint: 'Use Cronos testnet (chainId: 338) for testing',
+        },
+        { status: 400 }
+      );
     }
-    
+
     switch (action) {
       case 'submit': {
         /**
          * Submit a signed UserOperation
          */
         const { userOp, signature } = body;
-        
+
         if (!userOp || !signature) {
-          return NextResponse.json({
-            success: false,
-            error: 'userOp and signature required',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'userOp and signature required',
+            },
+            { status: 400 }
+          );
         }
-        
+
         // Add signature to UserOp
         const signedUserOp = {
           ...userOp,
@@ -246,24 +268,24 @@ export async function POST(request: NextRequest) {
             ? BigInt(userOp.paymasterPostOpGasLimit)
             : undefined,
         };
-        
+
         // Submit to bundler
         logger.info('[DepositUSDT] Submitting signed UserOp', {
           sender: signedUserOp.sender,
           chainId,
         });
-        
+
         const userOpHash = await client.submitUserOp(signedUserOp);
-        
+
         // Wait for confirmation (with timeout)
         const result = await client.waitForUserOp(userOpHash, 120000); // 2 min timeout
-        
+
         logger.info('[DepositUSDT] UserOp completed', {
           success: result.success,
           txHash: result.txHash,
           gasCost: result.gasCost.toString(),
         });
-        
+
         return NextResponse.json({
           success: result.success,
           txHash: result.txHash,
@@ -274,23 +296,26 @@ export async function POST(request: NextRequest) {
             : 'Deposit transaction failed',
         });
       }
-      
+
       case 'check-balance': {
         /**
          * Check USDT balance and allowance
          */
         const accountAddress = smartAccountAddress || walletAddress;
         if (!accountAddress) {
-          return NextResponse.json({
-            success: false,
-            error: 'walletAddress or smartAccountAddress required',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'walletAddress or smartAccountAddress required',
+            },
+            { status: 400 }
+          );
         }
-        
+
         const balance = await client.getUSDTBalance(accountAddress);
         const allowance = await client.getUSDTAllowance(accountAddress);
         const config = client.getConfig();
-        
+
         return NextResponse.json({
           success: true,
           balance: formatUSDT(balance),
@@ -314,35 +339,47 @@ export async function POST(request: NextRequest) {
 
         const targetAddress = walletAddress || smartAccountAddress;
         if (!targetAddress || !ethers.isAddress(targetAddress)) {
-          return NextResponse.json({
-            success: false,
-            error: 'Valid walletAddress required',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Valid walletAddress required',
+            },
+            { status: 400 }
+          );
         }
 
         // Only allow on testnets
         const allowedTestnets = [11155111, 296]; // Sepolia, Hedera Testnet
         if (!allowedTestnets.includes(chainId)) {
-          return NextResponse.json({
-            success: false,
-            error: 'Gas funding is only available on testnets',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Gas funding is only available on testnets',
+            },
+            { status: 400 }
+          );
         }
 
         const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
         if (!serverPrivateKey) {
-          return NextResponse.json({
-            success: false,
-            error: 'Server wallet not configured',
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Server wallet not configured',
+            },
+            { status: 500 }
+          );
         }
 
         const rpcUrl = CHAIN_RPC_URLS[chainId];
         if (!rpcUrl) {
-          return NextResponse.json({
-            success: false,
-            error: `No RPC configured for chain ${chainId}`,
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: `No RPC configured for chain ${chainId}`,
+            },
+            { status: 400 }
+          );
         }
 
         try {
@@ -368,10 +405,13 @@ export async function POST(request: NextRequest) {
               serverAddress: serverWallet.address,
               balance: ethers.formatEther(serverBalance),
             });
-            return NextResponse.json({
-              success: false,
-              error: 'Gas funding temporarily unavailable',
-            }, { status: 503 });
+            return NextResponse.json(
+              {
+                success: false,
+                error: 'Gas funding temporarily unavailable',
+              },
+              { status: 503 }
+            );
           }
 
           // Send the funding transaction
@@ -401,13 +441,15 @@ export async function POST(request: NextRequest) {
             amount: ethers.formatEther(GAS_FUND_AMOUNT),
             message: `Funded ${ethers.formatEther(GAS_FUND_AMOUNT)} ETH for gas`,
           });
-
         } catch (fundError: unknown) {
           logger.error('[FundGas] Failed to fund gas', { error: errMsg(fundError) });
-          return NextResponse.json({
-            success: false,
-            error: 'Failed to send gas funding',
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Failed to send gas funding',
+            },
+            { status: 500 }
+          );
         }
       }
 
@@ -419,18 +461,24 @@ export async function POST(request: NextRequest) {
          */
         const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
         if (!serverPrivateKey) {
-          return NextResponse.json({
-            success: false,
-            error: 'Server wallet not configured',
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Server wallet not configured',
+            },
+            { status: 500 }
+          );
         }
 
         const rpcUrl = CHAIN_RPC_URLS[chainId];
         if (!rpcUrl) {
-          return NextResponse.json({
-            success: false,
-            error: `No RPC configured for chain ${chainId}`,
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: `No RPC configured for chain ${chainId}`,
+            },
+            { status: 400 }
+          );
         }
 
         // Pyth oracle addresses per chain
@@ -442,7 +490,11 @@ export async function POST(request: NextRequest) {
         const pythAddress = PYTH_ORACLE_ADDRESSES[chainId];
         if (!pythAddress) {
           // No Pyth oracle on this chain — skip silently
-          return NextResponse.json({ success: true, skipped: true, reason: 'No Pyth oracle on this chain' });
+          return NextResponse.json({
+            success: true,
+            skipped: true,
+            reason: 'No Pyth oracle on this chain',
+          });
         }
 
         // Price IDs for BTC, ETH, SUI, CRO (must match contract asset config)
@@ -455,7 +507,9 @@ export async function POST(request: NextRequest) {
 
         try {
           // Fetch latest VAA from Pyth Hermes
-          const hermesUrl = 'https://hermes.pyth.network/v2/updates/price/latest?ids[]=' + PYTH_PRICE_IDS.join('&ids[]=');
+          const hermesUrl =
+            'https://hermes.pyth.network/v2/updates/price/latest?ids[]=' +
+            PYTH_PRICE_IDS.join('&ids[]=');
           const hermesResp = await fetch(hermesUrl, { signal: AbortSignal.timeout(8000) });
           if (!hermesResp.ok) {
             throw new Error(`Hermes API returned ${hermesResp.status}`);
@@ -491,10 +545,13 @@ export async function POST(request: NextRequest) {
         } catch (priceError: unknown) {
           logger.error('[UpdatePrices] Failed to update prices', { error: errMsg(priceError) });
           // Non-fatal: prices might still be fresh enough
-          return NextResponse.json({
-            success: false,
-            error: 'Price update failed, deposit may still succeed if prices are recent',
-          }, { status: 200 }); // 200 so frontend doesn't block
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Price update failed, deposit may still succeed if prices are recent',
+            },
+            { status: 200 }
+          ); // 200 so frontend doesn't block
         }
       }
 
@@ -502,7 +559,7 @@ export async function POST(request: NextRequest) {
         /**
          * Treasury proxy deposit: Server relays ALL deposits to a single
          * treasury proxy wallet so no user address appears on-chain.
-         * 
+         *
          * Flow:
          * 1. User signs EIP-2612 permit granting server wallet USDT allowance
          * 2. Server transfers USDT from user to itself via transferFrom
@@ -511,35 +568,47 @@ export async function POST(request: NextRequest) {
          * 5. User's real wallet is never exposed on-chain
          */
         if (!walletAddress || !ethers.isAddress(walletAddress)) {
-          return NextResponse.json({
-            success: false,
-            error: 'Valid walletAddress required',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Valid walletAddress required',
+            },
+            { status: 400 }
+          );
         }
 
         if (!amount || amount <= 0) {
-          return NextResponse.json({
-            success: false,
-            error: 'Valid amount required',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Valid amount required',
+            },
+            { status: 400 }
+          );
         }
 
         const { permit } = body; // { deadline, v, r, s }
 
         const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
         if (!serverPrivateKey) {
-          return NextResponse.json({
-            success: false,
-            error: 'Server wallet not configured',
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Server wallet not configured',
+            },
+            { status: 500 }
+          );
         }
 
         const rpcUrl = CHAIN_RPC_URLS[chainId];
         if (!rpcUrl) {
-          return NextResponse.json({
-            success: false,
-            error: `No RPC configured for chain ${chainId}`,
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: `No RPC configured for chain ${chainId}`,
+            },
+            { status: 400 }
+          );
         }
 
         // USDT addresses per chain
@@ -549,11 +618,18 @@ export async function POST(request: NextRequest) {
         };
 
         const usdtAddress = USDT_ADDRESSES[chainId];
-        if (!usdtAddress || usdtAddress === '0x...' || usdtAddress === '0x0000000000000000000000000000000000000000') {
-          return NextResponse.json({
-            success: false,
-            error: `USDT not configured for chain ${chainId}`,
-          }, { status: 400 });
+        if (
+          !usdtAddress ||
+          usdtAddress === '0x...' ||
+          usdtAddress === '0x0000000000000000000000000000000000000000'
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `USDT not configured for chain ${chainId}`,
+            },
+            { status: 400 }
+          );
         }
 
         try {
@@ -573,7 +649,10 @@ export async function POST(request: NextRequest) {
 
           // Step 1: Execute permit if provided (sets allowance from user to server)
           if (permit?.deadline && permit?.v !== undefined && permit?.r && permit?.s) {
-            logger.info('[DepositProxy] Executing permit', { from: walletAddress, to: serverWallet.address });
+            logger.info('[DepositProxy] Executing permit', {
+              from: walletAddress,
+              to: serverWallet.address,
+            });
             try {
               const permitTx = await usdt.permit(
                 walletAddress,
@@ -587,7 +666,9 @@ export async function POST(request: NextRequest) {
               await permitTx.wait(1);
               logger.info('[DepositProxy] Permit executed');
             } catch (permitErr: unknown) {
-              logger.warn('[DepositProxy] Permit failed, checking existing allowance', { error: errMsg(permitErr) });
+              logger.warn('[DepositProxy] Permit failed, checking existing allowance', {
+                error: errMsg(permitErr),
+              });
             }
           }
 
@@ -601,15 +682,19 @@ export async function POST(request: NextRequest) {
             usdt.allowance(serverWallet.address, communityPoolAddress),
             usdt.balanceOf(serverWallet.address),
           ]);
-          
+
           if (BigInt(userAllowance) < amountInUnits) {
-            return NextResponse.json({
-              success: false,
-              error: 'Insufficient allowance from user to server wallet. Please approve or sign permit first.',
-              serverWallet: serverWallet.address,
-              required: amount,
-              currentAllowance: ethers.formatUnits(userAllowance, 6),
-            }, { status: 400 });
+            return NextResponse.json(
+              {
+                success: false,
+                error:
+                  'Insufficient allowance from user to server wallet. Please approve or sign permit first.',
+                serverWallet: serverWallet.address,
+                required: amount,
+                currentAllowance: ethers.formatUnits(userAllowance, 6),
+              },
+              { status: 400 }
+            );
           }
 
           // Step 3: Pre-approve pool with maxUint256 if needed (one-time, persists forever)
@@ -624,15 +709,20 @@ export async function POST(request: NextRequest) {
           // Step 4: Transfer USDT from user → server (SEQUENTIAL - must confirm before deposit)
           logger.info('[DepositProxy] Executing transferFrom', { from: walletAddress, amount });
           const transferTx = await usdt.transferFrom(
-            walletAddress, serverWallet.address, amountInUnits
+            walletAddress,
+            serverWallet.address,
+            amountInUnits
           );
           const transferReceipt = await transferTx.wait(1);
-          
+
           if (!transferReceipt || transferReceipt.status !== 1) {
-            return NextResponse.json({
-              success: false,
-              error: 'Transfer from your wallet failed — no funds were moved.',
-            }, { status: 500 });
+            return NextResponse.json(
+              {
+                success: false,
+                error: 'Transfer from your wallet failed — no funds were moved.',
+              },
+              { status: 500 }
+            );
           }
           logger.info('[DepositProxy] Transfer confirmed', { txHash: transferReceipt.hash });
 
@@ -652,9 +742,9 @@ export async function POST(request: NextRequest) {
               throw new Error('depositFor transaction reverted');
             }
 
-            logger.info('[DepositProxy] Deposit complete!', { 
-              txHash: receipt.hash, 
-              treasuryProxy: proxyAddress, 
+            logger.info('[DepositProxy] Deposit complete!', {
+              txHash: receipt.hash,
+              treasuryProxy: proxyAddress,
               depositor: walletAddress,
             });
 
@@ -665,11 +755,10 @@ export async function POST(request: NextRequest) {
               depositor: walletAddress,
               message: `Deposited ${amount} USDT to treasury proxy wallet`,
             });
-
           } catch (depositErr: unknown) {
             // CRITICAL: depositFor failed but transferFrom succeeded.
             // User's USDT is in the server wallet. Refund immediately.
-            logger.error('[DepositProxy] depositFor FAILED — refunding USDT to user', { 
+            logger.error('[DepositProxy] depositFor FAILED — refunding USDT to user', {
               error: errMsg(depositErr),
               walletAddress,
               amount,
@@ -680,13 +769,16 @@ export async function POST(request: NextRequest) {
               const refundReceipt = await refundTx.wait(1);
               logger.info('[DepositProxy] Refund sent', { txHash: refundReceipt?.hash });
 
-              return NextResponse.json({
-                success: false,
-                error: 'Pool deposit failed but your USDT has been refunded to your wallet.',
-                refunded: true,
-                refundTxHash: refundReceipt?.hash,
-                originalError: errMsg(depositErr),
-              }, { status: 500 });
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: 'Pool deposit failed but your USDT has been refunded to your wallet.',
+                  refunded: true,
+                  refundTxHash: refundReceipt?.hash,
+                  originalError: errMsg(depositErr),
+                },
+                { status: 500 }
+              );
             } catch (refundErr: unknown) {
               // Refund also failed — log critical error for manual recovery
               logger.error('[DepositProxy] CRITICAL: Refund ALSO failed — manual recovery needed', {
@@ -696,23 +788,28 @@ export async function POST(request: NextRequest) {
                 refundError: errMsg(refundErr),
               });
 
-              return NextResponse.json({
-                success: false,
-                error: `Pool deposit failed and auto-refund failed. Your ${amount} USDT is held safely and will be recovered. Contact support.`,
-                refunded: false,
-                recoverable: true,
-                walletAddress,
-                amount,
-              }, { status: 500 });
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: `Pool deposit failed and auto-refund failed. Your ${amount} USDT is held safely and will be recovered. Contact support.`,
+                  refunded: false,
+                  recoverable: true,
+                  walletAddress,
+                  amount,
+                },
+                { status: 500 }
+              );
             }
           }
-
         } catch (proxyErr: unknown) {
           logger.error('[DepositProxy] Failed', { error: errMsg(proxyErr) });
-          return NextResponse.json({
-            success: false,
-            error: errMsg(proxyErr) || 'Proxy deposit failed',
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: errMsg(proxyErr) || 'Proxy deposit failed',
+            },
+            { status: 500 }
+          );
         }
       }
 
@@ -723,20 +820,31 @@ export async function POST(request: NextRequest) {
          * Client can call this on page load or after a failed deposit to recover funds.
          */
         if (!walletAddress || !ethers.isAddress(walletAddress)) {
-          return NextResponse.json({
-            success: false,
-            error: 'Valid walletAddress required',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Valid walletAddress required',
+            },
+            { status: 400 }
+          );
         }
 
         const serverPrivateKey = process.env.PRIVATE_KEY || process.env.SERVER_PRIVATE_KEY;
         if (!serverPrivateKey) {
-          return NextResponse.json({ success: true, orphanedAmount: '0', message: 'No orphaned funds' });
+          return NextResponse.json({
+            success: true,
+            orphanedAmount: '0',
+            message: 'No orphaned funds',
+          });
         }
 
         const rpcUrl = CHAIN_RPC_URLS[chainId];
         if (!rpcUrl) {
-          return NextResponse.json({ success: true, orphanedAmount: '0', message: 'No RPC for this chain' });
+          return NextResponse.json({
+            success: true,
+            orphanedAmount: '0',
+            message: 'No RPC for this chain',
+          });
         }
 
         const USDT_ADDRESSES: Record<number, string> = {
@@ -752,13 +860,17 @@ export async function POST(request: NextRequest) {
         try {
           const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
           const serverWallet = new ethers.Wallet(serverPrivateKey, provider);
-          const usdt = new ethers.Contract(usdtAddress, [
-            'function balanceOf(address) view returns (uint256)',
-            'function transfer(address to, uint256 amount) returns (bool)',
-          ], serverWallet);
+          const usdt = new ethers.Contract(
+            usdtAddress,
+            [
+              'function balanceOf(address) view returns (uint256)',
+              'function transfer(address to, uint256 amount) returns (bool)',
+            ],
+            serverWallet
+          );
 
           const serverBalance = await usdt.balanceOf(serverWallet.address);
-          
+
           // Server wallet should normally hold 0 USDT
           // Any balance means an interrupted deposit left funds behind
           if (BigInt(serverBalance) === 0n) {
@@ -787,87 +899,104 @@ export async function POST(request: NextRequest) {
             refundTxHash: receipt?.hash,
             message: `Recovered ${ethers.formatUnits(serverBalance, 6)} USDT to your wallet`,
           });
-
         } catch (recoverErr: unknown) {
           logger.error('[RecoverDeposit] Recovery failed', { error: errMsg(recoverErr) });
-          return NextResponse.json({
-            success: false,
-            error: 'Recovery check failed',
-          }, { status: 500 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Recovery check failed',
+            },
+            { status: 500 }
+          );
         }
       }
-      
+
       default: {
         /**
          * Create unsigned UserOperation for deposit
          */
         if (!smartAccountAddress) {
-          return NextResponse.json({
-            success: false,
-            error: 'smartAccountAddress required',
-            hint: 'For EOA wallets, first deploy a Safe smart account',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'smartAccountAddress required',
+              hint: 'For EOA wallets, first deploy a Safe smart account',
+            },
+            { status: 400 }
+          );
         }
-        
+
         if (!amount || amount <= 0) {
-          return NextResponse.json({
-            success: false,
-            error: 'Valid amount required (in USDT)',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Valid amount required (in USDT)',
+            },
+            { status: 400 }
+          );
         }
-        
+
         // Check if it's actually a smart account
         const config = client.getConfig();
         const provider = new ethers.JsonRpcProvider(config.provider);
         const isSmart = await isSmartAccount(provider, smartAccountAddress);
-        
+
         // If not deployed, we need factory params to deploy it
         if (!isSmart && !factory) {
-          return NextResponse.json({
-            success: false,
-            error: 'Address is not a deployed smart account',
-            hint: 'Provide factory and factoryData to deploy a counteracttual account',
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Address is not a deployed smart account',
+              hint: 'Provide factory and factoryData to deploy a counteracttual account',
+            },
+            { status: 400 }
+          );
         }
-        
+
         // Check USDT balance
         const balance = await client.getUSDTBalance(smartAccountAddress);
         const amountWei = parseUSDT(amount);
-        
+
         // If deploying a new account, we might be funding it in this text (not implemented)
         // Or users are expected to fund the counterfactual address first.
         // We throw if balance is insufficient
         if (balance < amountWei) {
           // If it's a new deployment, check if walletAddress (EOA) has funds and warn user
           if (factory && walletAddress) {
-             const eoaBalance = await client.getUSDTBalance(walletAddress);
-             if (eoaBalance >= amountWei) {
-                 return NextResponse.json({
-                    success: false,
-                    error: 'Insufficient USDT balance on Safe',
-                    hint: `You must transfer USDT to your Safe address (${smartAccountAddress}) first. Your EOA has ${formatUSDT(eoaBalance)} USDT but cannot use it directly for AA gasless deposit.`,
-                    safeAddress: smartAccountAddress,
-                    eoaBalance: formatUSDT(eoaBalance)
-                 }, { status: 400 });
-             }
+            const eoaBalance = await client.getUSDTBalance(walletAddress);
+            if (eoaBalance >= amountWei) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: 'Insufficient USDT balance on Safe',
+                  hint: `You must transfer USDT to your Safe address (${smartAccountAddress}) first. Your EOA has ${formatUSDT(eoaBalance)} USDT but cannot use it directly for AA gasless deposit.`,
+                  safeAddress: smartAccountAddress,
+                  eoaBalance: formatUSDT(eoaBalance),
+                },
+                { status: 400 }
+              );
+            }
           }
 
-          return NextResponse.json({
-            success: false,
-            error: 'Insufficient USDT balance',
-            balance: formatUSDT(balance),
-            required: amount.toString(),
-            safeAddress: smartAccountAddress 
-          }, { status: 400 });
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Insufficient USDT balance',
+              balance: formatUSDT(balance),
+              required: amount.toString(),
+              safeAddress: smartAccountAddress,
+            },
+            { status: 400 }
+          );
         }
-        
+
         // Create UserOp
         logger.info('[DepositUSDT] Creating deposit UserOp', {
           smartAccount: smartAccountAddress,
           amount,
           chainId,
         });
-        
+
         const { userOp, estimatedGas, paymasterQuote } = await client.createDepositUserOp({
           smartAccountAddress,
           communityPoolAddress,
@@ -875,12 +1004,12 @@ export async function POST(request: NextRequest) {
           factory,
           factoryData,
         });
-        
+
         // Calculate UserOp hash for signing
         const entryPoint = new ethers.Contract(
           config.entryPointAddress,
           [
-            'function getUserOpHash(tuple(address sender, uint256 nonce, bytes initCode, bytes callData, bytes32 accountGasLimits, uint256 preVerificationGas, bytes32 gasFees, bytes paymasterAndData, bytes signature) userOp) view returns (bytes32)'
+            'function getUserOpHash(tuple(address sender, uint256 nonce, bytes initCode, bytes callData, bytes32 accountGasLimits, uint256 preVerificationGas, bytes32 gasFees, bytes paymasterAndData, bytes signature) userOp) view returns (bytes32)',
           ],
           provider
         );
@@ -890,7 +1019,7 @@ export async function POST(request: NextRequest) {
           ethers.zeroPadValue(ethers.toBeHex(userOp.verificationGasLimit || 0n), 16),
           ethers.zeroPadValue(ethers.toBeHex(userOp.callGasLimit || 0n), 16),
         ]);
-        
+
         const gasFees = ethers.concat([
           ethers.zeroPadValue(ethers.toBeHex(userOp.maxPriorityFeePerGas || 0n), 16),
           ethers.zeroPadValue(ethers.toBeHex(userOp.maxFeePerGas || 0n), 16),
@@ -898,33 +1027,33 @@ export async function POST(request: NextRequest) {
 
         let paymasterAndData = '0x';
         if (userOp.paymaster) {
-             paymasterAndData = ethers.concat([
-                userOp.paymaster,
-                ethers.zeroPadValue(ethers.toBeHex(userOp.paymasterVerificationGasLimit || 0n), 16),
-                ethers.zeroPadValue(ethers.toBeHex(userOp.paymasterPostOpGasLimit || 0n), 16),
-                userOp.paymasterData || '0x'
-             ]);
+          paymasterAndData = ethers.concat([
+            userOp.paymaster,
+            ethers.zeroPadValue(ethers.toBeHex(userOp.paymasterVerificationGasLimit || 0n), 16),
+            ethers.zeroPadValue(ethers.toBeHex(userOp.paymasterPostOpGasLimit || 0n), 16),
+            userOp.paymasterData || '0x',
+          ]);
         }
-        
+
         let initCode = '0x';
         if (userOp.factory) {
-            initCode = ethers.concat([userOp.factory, userOp.factoryData || '0x']);
+          initCode = ethers.concat([userOp.factory, userOp.factoryData || '0x']);
         }
-        
+
         const packedUserOp = {
-            sender: userOp.sender,
-            nonce: userOp.nonce,
-            initCode: initCode,
-            callData: userOp.callData,
-            accountGasLimits: accountGasLimits,
-            preVerificationGas: userOp.preVerificationGas,
-            gasFees: gasFees,
-            paymasterAndData: paymasterAndData,
-            signature: userOp.signature || '0x',
+          sender: userOp.sender,
+          nonce: userOp.nonce,
+          initCode: initCode,
+          callData: userOp.callData,
+          accountGasLimits: accountGasLimits,
+          preVerificationGas: userOp.preVerificationGas,
+          gasFees: gasFees,
+          paymasterAndData: paymasterAndData,
+          signature: userOp.signature || '0x',
         };
 
         const userOpHash = await entryPoint.getUserOpHash(packedUserOp);
-        
+
         // Serialize UserOp for client
         const serializedUserOp = {
           sender: userOp.sender,
@@ -942,7 +1071,7 @@ export async function POST(request: NextRequest) {
           paymasterPostOpGasLimit: userOp.paymasterPostOpGasLimit?.toString(),
           paymasterData: userOp.paymasterData,
         };
-        
+
         return NextResponse.json({
           success: true,
           userOp: serializedUserOp,
@@ -966,7 +1095,6 @@ export async function POST(request: NextRequest) {
         });
       }
     }
-    
   } catch (error) {
     return safeErrorResponse(error, 'deposit-usdt POST');
   }

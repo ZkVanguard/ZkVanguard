@@ -31,24 +31,31 @@ export interface TickerOiSnapshot {
  * + a diagnostic reason. The T3-B OI guard will then skip that symbol
  * rather than approve any hedge size.
  */
-export function parseTickerOpenInterest(ticker: {
-  openInterestE9?: string;
-  openInterest?: string;
-  quoteVolume24hrE9?: string;
-}, price: number): TickerOiSnapshot {
+export function parseTickerOpenInterest(
+  ticker: {
+    openInterestE9?: string;
+    openInterest?: string;
+    quoteVolume24hrE9?: string;
+  },
+  price: number
+): TickerOiSnapshot {
   if (!ticker || !(price > 0)) return {};
   const oiRaw = ticker.openInterestE9 ?? ticker.openInterest;
   if (!oiRaw) return {};
   const oiHasE9Suffix = !!ticker.openInterestE9;
   const parsed = parseFloat(oiRaw);
   if (!Number.isFinite(parsed) || parsed <= 0) return {};
-  let openInterestUsd = oiHasE9Suffix ? parsed / 1e9 : parsed;
+  const openInterestUsd = oiHasE9Suffix ? parsed / 1e9 : parsed;
 
   // Sanity floor against 24h quote volume (USD × 1e9).
   const rawQuoteVol = ticker.quoteVolume24hrE9;
   if (typeof rawQuoteVol === 'string') {
     const quoteVol24Usd = parseFloat(rawQuoteVol) / 1e9;
-    if (Number.isFinite(quoteVol24Usd) && quoteVol24Usd > 0 && openInterestUsd > quoteVol24Usd * 10_000) {
+    if (
+      Number.isFinite(quoteVol24Usd) &&
+      quoteVol24Usd > 0 &&
+      openInterestUsd > quoteVol24Usd * 10_000
+    ) {
       return {
         openInterestUsd: undefined,
         rejectedReason: `OI $${openInterestUsd.toFixed(0)} is ${(openInterestUsd / quoteVol24Usd).toFixed(0)}× 24h volume $${quoteVol24Usd.toFixed(2)} — implausibly large`,

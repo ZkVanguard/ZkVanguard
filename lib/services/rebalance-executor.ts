@@ -1,13 +1,12 @@
 /**
  * Rebalance Executor
- * 
+ *
  * Core logic for assessing portfolios and executing rebalances
  * Extracted from AutoRebalanceService for use in Vercel Cron Jobs
  */
 
 import { logger } from '../utils/logger';
 import { generateRebalanceProof } from '@/lib/api/zk';
-
 export interface AllocationDrift {
   asset: string;
   target: number;
@@ -47,17 +46,20 @@ export interface RebalanceResult {
 /**
  * Assess a portfolio and determine if rebalancing is needed
  */
-export async function assessPortfolio(portfolioId: number, walletAddress: string): Promise<RebalanceAssessment | null> {
+export async function assessPortfolio(
+  portfolioId: number,
+  _walletAddress: string
+): Promise<RebalanceAssessment | null> {
   try {
     logger.info(`[RebalanceExecutor] Assessing portfolio ${portfolioId}`);
-    
+
     // Fetch portfolio data from blockchain via API
     // Use different URLs depending on environment to avoid deployment protection
     let baseUrl: string;
-    let headers: Record<string, string> = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    
+
     if (process.env.VERCEL) {
       // Running on Vercel - use production domain (zkvanguard.xyz has no protection)
       baseUrl = 'https://zkvanguard.xyz';
@@ -67,56 +69,66 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
       // Local development
       baseUrl = 'http://localhost:3000';
     }
-    
+
     logger.info(`[RebalanceExecutor] Fetching from: ${baseUrl}/api/portfolio/${portfolioId}`);
-    
+
     const response = await fetch(`${baseUrl}/api/portfolio/${portfolioId}?refresh=true`, {
       method: 'GET',
       headers,
     });
-    
+
     if (!response.ok) {
-      logger.error(`[RebalanceExecutor] Failed to fetch portfolio ${portfolioId}: ${response.status} ${response.statusText}`);
+      logger.error(
+        `[RebalanceExecutor] Failed to fetch portfolio ${portfolioId}: ${response.status} ${response.statusText}`
+      );
       const errorText = await response.text();
       logger.error(`[RebalanceExecutor] Error response: ${errorText}`);
       return null;
     }
-    
+
     const portfolio = await response.json();
-    
+
     if (!portfolio || !portfolio.assetBalances) {
-      logger.error(`[RebalanceExecutor] Invalid portfolio data structure for portfolio ${portfolioId}`);
+      logger.error(
+        `[RebalanceExecutor] Invalid portfolio data structure for portfolio ${portfolioId}`
+      );
       return null;
     }
-    
+
     const totalValue = portfolio.calculatedValueUSD || portfolio.entryValueUSD || 0;
     const entryValue = portfolio.entryValueUSD || totalValue; // If no entry value, use current (0% P&L)
     const pnlPercent = entryValue > 0 ? ((totalValue - entryValue) / entryValue) * 100 : 0;
     const assets = portfolio.assetBalances || [];
-    
+
     // Use target allocations from portfolio API if available, otherwise default
-    const targetAllocations: Record<string, number> = portfolio.targetAllocations || (portfolio.isInstitutional ? {
-      'BTC': 35,
-      'ETH': 30,
-      'CRO': 20,
-      'SUI': 15,
-    } : {});
-    
+    const targetAllocations: Record<string, number> =
+      portfolio.targetAllocations ||
+      (portfolio.isInstitutional
+        ? {
+            BTC: 35,
+            ETH: 30,
+            CRO: 20,
+            SUI: 15,
+          }
+        : {});
+
     // Calculate drifts
     const drifts: AllocationDrift[] = [];
     const proposedActions: any[] = [];
-    
+
     if (!portfolio.isInstitutional || assets.length === 0) {
-      logger.info(`[RebalanceExecutor] Portfolio ${portfolioId} is not institutional or has no assets, skipping`);
+      logger.info(
+        `[RebalanceExecutor] Portfolio ${portfolioId} is not institutional or has no assets, skipping`
+      );
       return null;
     }
-    
+
     for (const asset of assets) {
       const target = targetAllocations[asset.symbol] || 0;
-      const current = asset.percentage || ((asset.valueUSD / totalValue) * 100);
+      const current = asset.percentage || (asset.valueUSD / totalValue) * 100;
       const drift = current - target;
       const driftPercent = target > 0 ? Math.abs((drift / target) * 100) : 0;
-      
+
       drifts.push({
         asset: asset.symbol,
         target,
@@ -125,12 +137,13 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
         driftPercent,
         shouldRebalance: Math.abs(drift) > 1, // Check if drift is more than 1% absolute
       });
-      
+
       // Generate proposed actions
-      if (Math.abs(drift) > 1) { // Only act on drifts > 1%
+      if (Math.abs(drift) > 1) {
+        // Only act on drifts > 1%
         if (drift > 0) {
           // Over-allocated, need to sell
-          const amountToSell = ((drift / 100) * totalValue);
+          const amountToSell = (drift / 100) * totalValue;
           proposedActions.push({
             asset: asset.symbol,
             action: 'SELL' as const,
@@ -139,7 +152,7 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
           });
         } else if (drift < 0) {
           // Under-allocated, need to buy
-          const amountToBuy = ((Math.abs(drift) / 100) * totalValue);
+          const amountToBuy = (Math.abs(drift) / 100) * totalValue;
           proposedActions.push({
             asset: asset.symbol,
             action: 'BUY' as const,
@@ -149,24 +162,30 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
         }
       }
     }
-    
+
     // Estimate cost (gas + slippage)
     const estimatedGas = proposedActions.length * 0.002; // ~$0.002 per transaction on Cronos
-    const estimatedSlippage = proposedActions.reduce((sum, action) => sum + (action.amount * 0.001), 0); // 0.1% slippage
+    const estimatedSlippage = proposedActions.reduce(
+      (sum, action) => sum + action.amount * 0.001,
+      0
+    ); // 0.1% slippage
     const estimatedCost = estimatedGas + estimatedSlippage;
-    
+
     // Check max absolute drift (not percentage)
-    const maxAbsoluteDrift = Math.max(...drifts.map(d => Math.abs(d.drift)));
-    
+    const maxAbsoluteDrift = Math.max(...drifts.map((d) => Math.abs(d.drift)));
+
     logger.info(`[RebalanceExecutor] Portfolio ${portfolioId} assessment complete:`, {
       totalValue: totalValue.toFixed(2),
       entryValue: entryValue.toFixed(2),
       pnlPercent: pnlPercent.toFixed(2),
       maxAbsoluteDrift: maxAbsoluteDrift.toFixed(2),
       proposedActions: proposedActions.length,
-      drifts: drifts.map(d => `${d.asset}: ${d.current.toFixed(1)}% (target ${d.target}%, drift ${d.drift.toFixed(1)}%)`),
+      drifts: drifts.map(
+        (d) =>
+          `${d.asset}: ${d.current.toFixed(1)}% (target ${d.target}%, drift ${d.drift.toFixed(1)}%)`
+      ),
     });
-    
+
     return {
       portfolioId,
       totalValue,
@@ -178,7 +197,6 @@ export async function assessPortfolio(portfolioId: number, walletAddress: string
       estimatedCost,
       timestamp: Date.now(),
     };
-    
   } catch (error: any) {
     logger.error(`[RebalanceExecutor] Error assessing portfolio ${portfolioId}:`, error);
     return null;
@@ -194,15 +212,17 @@ export async function executeRebalance(
   actions: any[]
 ): Promise<RebalanceResult> {
   try {
-    logger.info(`[RebalanceExecutor] Executing rebalance for portfolio ${portfolioId}`, { actions });
-    
+    logger.info(`[RebalanceExecutor] Executing rebalance for portfolio ${portfolioId}`, {
+      actions,
+    });
+
     // Prepare allocation changes for ZK proof
-    const _allocationChanges = actions.map(action => ({
+    const _allocationChanges = actions.map((action) => ({
       asset: action.asset,
       action: action.action,
       amount: action.amount,
     }));
-    
+
     // Generate ZK proof
     logger.info(`[RebalanceExecutor] Generating ZK proof for portfolio ${portfolioId}`);
     const zkProof = await generateRebalanceProof(
@@ -212,50 +232,57 @@ export async function executeRebalance(
       },
       portfolioId
     );
-    
+
     // Call rebalance API
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/agents/portfolio/rebalance`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-wallet-address': walletAddress,
-      },
-      body: JSON.stringify({
-        portfolioId,
-        walletAddress,
-        newAllocations: actions.map(a => ({
-          asset: a.asset,
-          percentage: 0, // Will be calculated by backend
-          action: a.action,
-          amount: a.amount,
-        })),
-        zkProof,
-      }),
-    });
-    
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/agents/portfolio/rebalance`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-wallet-address': walletAddress,
+        },
+        body: JSON.stringify({
+          portfolioId,
+          walletAddress,
+          newAllocations: actions.map((a) => ({
+            asset: a.asset,
+            percentage: 0, // Will be calculated by backend
+            action: a.action,
+            amount: a.amount,
+          })),
+          zkProof,
+        }),
+      }
+    );
+
     if (!response.ok) {
       const error = await response.json();
       throw new Error(`Rebalance API error: ${error.error || response.statusText}`);
     }
-    
+
     const result = await response.json();
-    
-    logger.info(`[RebalanceExecutor] Rebalance successful for portfolio ${portfolioId}: ${result.txHash}`);
-    
+
+    logger.info(
+      `[RebalanceExecutor] Rebalance successful for portfolio ${portfolioId}: ${result.txHash}`
+    );
+
     // Trigger risk assessment after rebalancing (fire and forget)
-    triggerPostRebalanceRiskAssessment(portfolioId, walletAddress).catch(error => {
+    triggerPostRebalanceRiskAssessment(portfolioId, walletAddress).catch((error) => {
       logger.error(`[RebalanceExecutor] Failed to trigger post-rebalance risk assessment:`, error);
     });
-    
+
     return {
       txHash: result.txHash,
       zkProof: result.zkProof,
       actions: result.actions,
       timestamp: Date.now(),
     };
-    
   } catch (error: any) {
-    logger.error(`[RebalanceExecutor] Error executing rebalance for portfolio ${portfolioId}:`, error);
+    logger.error(
+      `[RebalanceExecutor] Error executing rebalance for portfolio ${portfolioId}:`,
+      error
+    );
     throw error;
   }
 }
@@ -264,23 +291,31 @@ export async function executeRebalance(
  * Trigger risk assessment and auto-hedging after rebalancing
  * This ensures the portfolio is automatically hedged after allocation changes
  */
-async function triggerPostRebalanceRiskAssessment(portfolioId: number, walletAddress: string): Promise<void> {
+async function triggerPostRebalanceRiskAssessment(
+  portfolioId: number,
+  walletAddress: string
+): Promise<void> {
   try {
-    logger.info(`[RebalanceExecutor] Triggering post-rebalance risk assessment for portfolio ${portfolioId}`);
-    
+    logger.info(
+      `[RebalanceExecutor] Triggering post-rebalance risk assessment for portfolio ${portfolioId}`
+    );
+
     // Call auto-hedging service to assess risk
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/agents/auto-hedge`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'trigger_assessment',
-        portfolioId,
-        walletAddress,
-      }),
-    });
-    
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/agents/auto-hedge`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'trigger_assessment',
+          portfolioId,
+          walletAddress,
+        }),
+      }
+    );
+
     if (response.ok) {
       const result = await response.json();
       logger.info(`[RebalanceExecutor] Risk assessment triggered for portfolio ${portfolioId}`, {
@@ -302,9 +337,9 @@ export async function estimateRebalanceCost(actions: any[]): Promise<number> {
   // Rough estimates for Cronos network
   const gasPerTx = 0.002; // $0.002 per transaction
   const slippageRate = 0.001; // 0.1% slippage
-  
+
   const gasCost = actions.length * gasPerTx;
-  const slippageCost = actions.reduce((sum, action) => sum + (action.amount * slippageRate), 0);
-  
+  const slippageCost = actions.reduce((sum, action) => sum + action.amount * slippageRate, 0);
+
   return gasCost + slippageCost;
 }

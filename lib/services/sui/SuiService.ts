@@ -1,6 +1,6 @@
 /**
  * SUI Blockchain Service
- * 
+ *
  * Provides integration with the SUI blockchain for:
  * - Wallet connections (@mysten/dapp-kit)
  * - Transaction execution
@@ -19,7 +19,7 @@ export const SUI_NETWORKS = {
     faucetUrl: null,
   },
   testnet: {
-    name: 'SUI Testnet', 
+    name: 'SUI Testnet',
     rpcUrl: 'https://fullnode.testnet.sui.io:443',
     explorerUrl: 'https://suiexplorer.com/?network=testnet',
     faucetUrl: 'https://faucet.testnet.sui.io',
@@ -48,7 +48,7 @@ export const SUI_TOKENS = {
 
 /**
  * SUI Service Class
- * 
+ *
  * Wraps @mysten/sui SDK functionality for ZkVanguard
  */
 export class SuiService {
@@ -88,7 +88,7 @@ export class SuiService {
         lastError = error;
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
-          await new Promise(r => setTimeout(r, delay));
+          await new Promise((r) => setTimeout(r, delay));
           logger.warn(`[SuiService] RPC attempt ${attempt + 1} failed, retrying in ${delay}ms`, {
             error: error instanceof Error ? error.message : String(error),
           });
@@ -115,7 +115,7 @@ export class SuiService {
 
   /**
    * Get SUI balance for an address
-   * 
+   *
    * @param address - SUI address (0x...)
    * @returns Balance in SUI
    */
@@ -131,7 +131,7 @@ export class SuiService {
       const totalBalance = (data.result as Record<string, string>)?.totalBalance || '0';
       // SUI has 9 decimals
       const balanceInSui = (BigInt(totalBalance) / BigInt(10 ** 9)).toString();
-      
+
       return {
         balance: balanceInSui,
         balanceRaw: totalBalance,
@@ -208,7 +208,7 @@ export class SuiService {
    */
   async requestFaucetTokens(address: string): Promise<{ success: boolean; message: string }> {
     const faucetUrl = this.getFaucetUrl();
-    
+
     if (!faucetUrl) {
       return { success: false, message: 'Faucet not available on mainnet' };
     }
@@ -236,7 +236,7 @@ export class SuiService {
 
 // Singleton instance with race-condition-safe initialization
 let suiServiceInstance: SuiService | null = null;
-let _suiServiceInitLock: Promise<SuiService> | null = null;
+const _suiServiceInitLock: Promise<SuiService> | null = null;
 
 export function getSuiService(network?: SuiNetworkType): SuiService {
   if (suiServiceInstance) {

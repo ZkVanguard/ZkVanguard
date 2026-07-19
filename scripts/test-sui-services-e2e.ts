@@ -19,7 +19,7 @@ const logShim = {
   info: (msg: string, ctx?: Record<string, unknown>) => console.log(`  ℹ️  ${msg}`, ctx ? JSON.stringify(ctx, bigintReplacer, 0) : ''),
   warn: (msg: string, ctx?: Record<string, unknown>) => console.log(`  ⚠️  ${msg}`, ctx ? JSON.stringify(ctx, bigintReplacer, 0) : ''),
   error: (msg: string, err?: unknown, ctx?: Record<string, unknown>) => console.error(`  ❌ ${msg}`, err, ctx || ''),
-  debug: (msg: string, ctx?: Record<string, unknown>) => {}, // silence debug
+  debug: (_msg: string, ctx?: Record<string, unknown>) => {}, // silence debug
 };
 
 // BigInt serializer for JSON.stringify

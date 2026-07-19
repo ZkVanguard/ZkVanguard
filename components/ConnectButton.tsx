@@ -2,12 +2,20 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
-import { Wallet, ChevronDown, ExternalLink, Copy, Check, LogOut, AlertTriangle } from 'lucide-react';
-import { 
-  useWallets, 
-  useCurrentAccount, 
-  useConnectWallet, 
-  useDisconnectWallet, 
+import {
+  Wallet,
+  ChevronDown,
+  ExternalLink,
+  Copy,
+  Check,
+  LogOut,
+  AlertTriangle,
+} from 'lucide-react';
+import {
+  useWallets,
+  useCurrentAccount,
+  useConnectWallet,
+  useDisconnectWallet,
   useCurrentWallet,
 } from '@mysten/dapp-kit';
 import type { WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
@@ -20,9 +28,7 @@ import {
   isMobileBrowser,
   buildMobileWalletLink,
   type MobileWalletOption,
-} from '@/lib/utils/mobile-wallet';
-
-// Safe hook wrapper for Sui wallet functionality
+} from '@/lib/utils/mobile-wallet'; // Safe hook wrapper for Sui wallet functionality
 function useSuiWalletSafe() {
   let wallets: WalletWithRequiredFeatures[] = [];
   let suiAccount: WalletAccount | null = null;
@@ -64,7 +70,7 @@ export function ConnectButton() {
   const [showNetworkHelp, setShowNetworkHelp] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  
+
   useEffect(() => {
     setMounted(true);
     setIsMobile(isMobileBrowser());
@@ -85,15 +91,15 @@ export function ConnectButton() {
       setSlushDeepLink(buildMobileWalletLink(SUI_MOBILE_WALLETS[0]) || '#');
     }
   }, [mounted, showMobileWallets]);
-  
+
   // WDK modal context — modal renders outside Navbar's DOM tree
   const { openWdkModal } = useWdkModal();
-  
+
   // WDK wallet hooks
   const { disconnect: wdkDisconnect } = useWdk();
   const { address: wdkAddress, isConnected: wdkIsConnected, chainKey } = useWdkAccount();
   const currentChain = chainKey ? WDK_CHAINS[chainKey] : null;
-  
+
   // Sui wallet hooks
   const {
     wallets,
@@ -104,20 +110,18 @@ export function ConnectButton() {
     disconnectSui,
     isConnectingSui,
   } = useSuiWalletSafe();
-  
+
   // SUI network status
   const suiContext = useSuiSafe();
   const suiIsWrongNetwork = suiContext?.isWrongNetwork ?? false;
   const suiWalletNetwork = suiContext?.walletNetwork ?? null;
   const suiExpectedNetwork = suiContext?.network ?? 'mainnet';
-  
+
   const suiAddress = suiAccount?.address ?? null;
   const isSuiConnected = connectionStatus === 'connected' && !!suiAddress;
   const walletName = currentWallet?.name ?? 'SUI';
-  
-  const suiWallets = wallets.filter((w) => 
-    w.chains?.some?.((c: string) => c.includes('sui'))
-  );
+
+  const suiWallets = wallets.filter((w) => w.chains?.some?.((c: string) => c.includes('sui')));
 
   const copyAddress = useCallback((addr: string) => {
     navigator.clipboard.writeText(addr);
@@ -126,7 +130,7 @@ export function ConnectButton() {
   }, []);
 
   const truncate = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  
+
   const handleConnectSui = useCallback(() => {
     if (suiWallets.length > 0) {
       connectSui({ wallet: suiWallets[0] });
@@ -212,9 +216,7 @@ export function ConnectButton() {
                   <h3 className="text-white font-bold text-lg sm:text-xl tracking-tight truncate">
                     Connect to Vault
                   </h3>
-                  <p className="text-white/85 text-xs sm:text-sm">
-                    SUI mainnet · Slush wallet
-                  </p>
+                  <p className="text-white/85 text-xs sm:text-sm">SUI mainnet · Slush wallet</p>
                 </div>
               </div>
             </div>
@@ -222,9 +224,8 @@ export function ConnectButton() {
             {/* Body */}
             <div className="p-5 sm:p-6">
               <p className="text-[13px] sm:text-sm text-[#424245] dark:text-[#EBEBF0] leading-relaxed mb-5">
-                Slush opens this page in its in-app browser where the
-                vault can request signatures. Your route, network and
-                deposit form all stay put.
+                Slush opens this page in its in-app browser where the vault can request signatures.
+                Your route, network and deposit form all stay put.
               </p>
 
               {/*
@@ -305,7 +306,10 @@ export function ConnectButton() {
               {/* Footer actions */}
               <div className="mt-5 pt-5 border-t border-[#E5E5EA] dark:border-[#38383a] flex flex-col-reverse sm:flex-row gap-2">
                 <button
-                  onClick={() => { setShowMobileWallets(false); setPendingMobileWallet(null); }}
+                  onClick={() => {
+                    setShowMobileWallets(false);
+                    setPendingMobileWallet(null);
+                  }}
                   className="h-11 sm:h-auto px-4 py-2 text-sm font-medium
                              text-[#1D1D1F] dark:text-white
                              bg-[#F5F5F7] dark:bg-[#2c2c2e]
@@ -378,7 +382,9 @@ export function ConnectButton() {
                       <div className="font-medium text-[#1D1D1F] dark:text-white text-[14px]">
                         {currentChain?.name || 'WDK Wallet'}
                       </div>
-                      <div className="text-[12px] text-[#86868B] font-mono">{truncate(wdkAddress)}</div>
+                      <div className="text-[12px] text-[#86868B] font-mono">
+                        {truncate(wdkAddress)}
+                      </div>
                     </div>
                   </div>
 
@@ -387,7 +393,11 @@ export function ConnectButton() {
                       onClick={() => copyAddress(wdkAddress)}
                       className="flex-1 py-1.5 bg-[#F5F5F7] dark:bg-[#2c2c2e] hover:bg-[#E5E5EA] dark:hover:bg-[#3c3c3e] rounded-lg text-[12px] font-medium text-[#1D1D1F] dark:text-white flex items-center justify-center gap-1 transition-colors"
                     >
-                      {copied ? <Check className="w-3.5 h-3.5 text-[#34C759]" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied ? (
+                        <Check className="w-3.5 h-3.5 text-[#34C759]" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                     <a
@@ -402,7 +412,10 @@ export function ConnectButton() {
                   </div>
 
                   <button
-                    onClick={() => { wdkDisconnect(); setShowSelector(false); }}
+                    onClick={() => {
+                      wdkDisconnect();
+                      setShowSelector(false);
+                    }}
                     className="w-full py-2 text-[#FF3B30] hover:bg-[#FF3B30]/5 rounded-lg text-[13px] font-medium flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -427,24 +440,33 @@ export function ConnectButton() {
                 <AlertTriangle className="w-4 h-4" />
                 Wrong Network
               </button>
-              
+
               {showNetworkHelp && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowNetworkHelp(false)} />
                   <div className="absolute top-full mt-2 right-0 w-72 bg-white dark:bg-[#1c1c1e] border border-[#E5E5EA] dark:border-[#38383a] rounded-xl shadow-lg overflow-hidden z-50 p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <AlertTriangle className="w-5 h-5 text-[#FF9500]" />
-                      <h4 className="font-semibold text-[#1D1D1F] dark:text-white">Switch to {suiExpectedNetwork}</h4>
+                      <h4 className="font-semibold text-[#1D1D1F] dark:text-white">
+                        Switch to {suiExpectedNetwork}
+                      </h4>
                     </div>
-                    
+
                     <p className="text-[13px] text-[#86868B] mb-3">
-                      Your wallet is on <span className="font-medium text-[#1D1D1F] dark:text-white">{suiWalletNetwork || 'unknown'}</span>, 
-                      but this app requires <span className="font-medium text-[#4DA2FF]">{suiExpectedNetwork}</span>.
+                      Your wallet is on{' '}
+                      <span className="font-medium text-[#1D1D1F] dark:text-white">
+                        {suiWalletNetwork || 'unknown'}
+                      </span>
+                      , but this app requires{' '}
+                      <span className="font-medium text-[#4DA2FF]">{suiExpectedNetwork}</span>.
                     </p>
-                    
+
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { disconnectSui(); setShowNetworkHelp(false); }}
+                        onClick={() => {
+                          disconnectSui();
+                          setShowNetworkHelp(false);
+                        }}
                         className="flex-1 py-2 bg-[#F5F5F7] dark:bg-[#2c2c2e] rounded-lg text-[12px] font-medium"
                       >
                         Disconnect
@@ -485,8 +507,12 @@ export function ConnectButton() {
                           <span className="text-white font-bold text-[10px]">SUI</span>
                         </div>
                         <div>
-                          <div className="font-medium text-[#1D1D1F] dark:text-white text-[14px]">{walletName}</div>
-                          <div className="text-[12px] text-[#86868B] font-mono">{truncate(suiAddress)}</div>
+                          <div className="font-medium text-[#1D1D1F] dark:text-white text-[14px]">
+                            {walletName}
+                          </div>
+                          <div className="text-[12px] text-[#86868B] font-mono">
+                            {truncate(suiAddress)}
+                          </div>
                         </div>
                       </div>
 
@@ -495,7 +521,11 @@ export function ConnectButton() {
                           onClick={() => copyAddress(suiAddress)}
                           className="flex-1 py-1.5 bg-[#F5F5F7] dark:bg-[#2c2c2e] rounded-lg text-[12px] font-medium flex items-center justify-center gap-1"
                         >
-                          {copied ? <Check className="w-3.5 h-3.5 text-[#34C759]" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copied ? (
+                            <Check className="w-3.5 h-3.5 text-[#34C759]" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
                           {copied ? 'Copied' : 'Copy'}
                         </button>
                         <a
@@ -510,7 +540,10 @@ export function ConnectButton() {
                       </div>
 
                       <button
-                        onClick={() => { disconnectSui(); setShowSelector(false); }}
+                        onClick={() => {
+                          disconnectSui();
+                          setShowSelector(false);
+                        }}
                         className="w-full py-2 text-[#FF3B30] hover:bg-[#FF3B30]/5 rounded-lg text-[13px] font-medium flex items-center justify-center gap-1.5"
                       >
                         <LogOut className="w-3.5 h-3.5" />

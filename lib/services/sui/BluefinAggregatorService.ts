@@ -1,17 +1,17 @@
 /**
  * BlueFin 7k Aggregator Service — Multi-DEX Swap Routing for SUI
- * 
+ *
  * Uses @bluefin-exchange/bluefin7k-aggregator-sdk to route USDC swaps across
  * multiple DEXs (BlueFin, Cetus, DeepBook, Turbos, FlowX, Aftermath, etc.)
  * for optimal pricing when rebalancing the 4-asset SUI community pool.
- * 
+ *
  * Pool Assets: BTC (wBTC), ETH (wETH), SUI, CRO
  * Deposit Token: USDC on SUI
- * 
+ *
  * This service is used by:
  * - QStash cron (/api/cron/sui-community-pool) for AI-driven rebalancing
  * - API routes for swap quotes
- * 
+ *
  * @see https://www.npmjs.com/package/@bluefin-exchange/bluefin7k-aggregator-sdk
  */
 
@@ -22,10 +22,7 @@ import {
   getQuote as bluefinGetQuote,
   buildTx as bluefinBuildTx,
   isSuiTransaction,
-  type QuoteResponse,
-} from '@bluefin-exchange/bluefin7k-aggregator-sdk';
-
-// Dynamic imports for SUI SDK (avoids type conflicts at module level)
+} from '@bluefin-exchange/bluefin7k-aggregator-sdk'; // Dynamic imports for SUI SDK (avoids type conflicts at module level)
 async function getSuiSdk() {
   const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
   const { Transaction } = await import('@mysten/sui/transactions');
@@ -64,9 +61,7 @@ import {
   type SwapQuoteResult,
   type RebalanceSwapPlan,
   type SwapExecutionResult,
-} from '@/lib/types/bluefin-types';
-
-// ============================================
+} from '@/lib/types/bluefin-types'; // ============================================
 // QUOTE CACHE (prevents duplicate API calls)
 // ============================================
 
@@ -103,7 +98,12 @@ export function stopQuoteCacheCleanup(): void {
   quoteCache.clear();
 }
 
-function getQuoteCacheKey(network: string, asset: string, amount: number, direction: 'forward' | 'reverse'): string {
+function getQuoteCacheKey(
+  network: string,
+  asset: string,
+  amount: number,
+  direction: 'forward' | 'reverse'
+): string {
   // Use fixed-point precision (6 decimals) to avoid cache collisions on small amounts
   return `${network}:${asset}:${amount.toFixed(6)}:${direction}`;
 }
@@ -136,20 +136,27 @@ export class BluefinAggregatorService {
     }
 
     const { SuiClient, getFullnodeUrl } = await getSuiSdk();
-    const rpcUrl = this.network === 'mainnet'
-      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
-      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
+    const rpcUrl =
+      this.network === 'mainnet'
+        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
+        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
     this.suiClient = new SuiClient({ url: rpcUrl });
 
     // H3: Verify RPC is reachable before using it for swaps (with timeout)
     try {
       const healthCheck = this.suiClient.getChainIdentifier();
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC health check timed out after 8s')), 8000));
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('RPC health check timed out after 8s')), 8000)
+      );
       await Promise.race([healthCheck, timeout]);
-      logger.info('[BluefinAggregator] RPC health check passed', { rpcUrl: rpcUrl.replace(/\/\/.*@/, '//***@') });
+      logger.info('[BluefinAggregator] RPC health check passed', {
+        rpcUrl: rpcUrl.replace(/\/\/.*@/, '//***@'),
+      });
     } catch (rpcErr) {
       this.suiClient = null;
-      throw new Error(`SUI RPC health check failed (${rpcUrl}): ${rpcErr instanceof Error ? rpcErr.message : String(rpcErr)}`);
+      throw new Error(
+        `SUI RPC health check failed (${rpcUrl}): ${rpcErr instanceof Error ? rpcErr.message : String(rpcErr)}`
+      );
     }
 
     BluefinConfig.setSuiClient(this.suiClient);
@@ -160,7 +167,7 @@ export class BluefinAggregatorService {
       const pythClient = new SuiPythClient(
         this.suiClient,
         '0x1f9310238ee9298fb703c3419030b35b22bb1cc37113e3bb5007c99aec79e5b8',
-        '0xaeab97b96cf236ad2c9be2cff9aafea9783ee88e93e46f246ed3fa2bae0a8e17',
+        '0xaeab97b96cf236ad2c9be2cff9aafea9783ee88e93e46f246ed3fa2bae0a8e17'
       );
       const pythConnection = new SuiPriceServiceConnection('https://hermes.pyth.network');
       BluefinConfig.setPythClient(pythClient);
@@ -178,11 +185,12 @@ export class BluefinAggregatorService {
    */
   private async estimateOutputFromPrice(
     asset: PoolAsset,
-    usdcAmount: number,
+    usdcAmount: number
   ): Promise<{ estimatedOut: string; price: number } | null> {
     try {
       // Dynamic import to avoid circular dependency
-      const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+      const { getMarketDataService } =
+        await import('@/lib/services/market-data/RealMarketDataService');
       const mds = getMarketDataService();
       const data = await mds.getTokenPrice(asset);
       if (!data.price || data.price <= 0) return null;
@@ -191,7 +199,7 @@ export class BluefinAggregatorService {
       const decimals = ASSET_DECIMALS[coinKey] || ASSET_DECIMALS[asset] || 8;
       const assetAmount = usdcAmount / data.price;
       const rawAmount = Math.floor(assetAmount * Math.pow(10, decimals));
-      
+
       return { estimatedOut: rawAmount.toString(), price: data.price };
     } catch {
       return null;
@@ -205,7 +213,7 @@ export class BluefinAggregatorService {
    */
   private async getMainnetPriceQuote(
     asset: PoolAsset,
-    usdcAmount: number,
+    usdcAmount: number
   ): Promise<{ estimatedOut: string; price: number; route: string } | null> {
     const coinKey = ASSET_TO_COIN_KEY[asset];
     const toCoinType = MAINNET_COIN_TYPES[coinKey] || '';
@@ -225,9 +233,10 @@ export class BluefinAggregatorService {
 
       const expectedOut = quoteResponse.returnAmount;
       const routes = quoteResponse.routes || [];
-      const routeDesc = routes.length > 0
-        ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
-        : 'BlueFin7k';
+      const routeDesc =
+        routes.length > 0
+          ? routes.map((r) => r.hops.map((h) => h.pool.type).join('→')).join(', ')
+          : 'BlueFin7k';
 
       // Derive price from DEX output
       const decimals = ASSET_DECIMALS[coinKey] || ASSET_DECIMALS[asset] || 8;
@@ -256,16 +265,13 @@ export class BluefinAggregatorService {
 
   /**
    * Get a swap quote for USDC → target asset via BlueFin 7k aggregator.
-   * 
+   *
    * On MAINNET: Routes across multiple DEXs for optimal pricing + on-chain execution.
    * On TESTNET: Uses mainnet aggregator for real DEX price discovery,
    *   then routes positions via BlueFin perps hedging (testnet has no DEX liquidity).
    *   This is NOT simulated — prices come from real mainnet DEX pools.
    */
-  async getSwapQuote(
-    asset: PoolAsset,
-    usdcAmount: number,
-  ): Promise<SwapQuoteResult> {
+  async getSwapQuote(asset: PoolAsset, usdcAmount: number): Promise<SwapQuoteResult> {
     // Check quote cache first
     const cacheKey = getQuoteCacheKey(this.network, asset, usdcAmount, 'forward');
     const cached = quoteCache.get(cacheKey);
@@ -282,7 +288,7 @@ export class BluefinAggregatorService {
 
   private async _getSwapQuoteUncached(
     asset: PoolAsset,
-    usdcAmount: number,
+    usdcAmount: number
   ): Promise<SwapQuoteResult> {
     const coinKey = ASSET_TO_COIN_KEY[asset];
     const toCoinType = this.coinTypes[coinKey] || '';
@@ -344,9 +350,10 @@ export class BluefinAggregatorService {
 
       const expectedOut = quoteResponse.returnAmount;
       const routes = quoteResponse.routes || [];
-      const routeDesc = routes.length > 0
-        ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
-        : 'direct';
+      const routeDesc =
+        routes.length > 0
+          ? routes.map((r) => r.hops.map((h) => h.pool.type).join('→')).join(', ')
+          : 'direct';
 
       // BlueFin SDK returns priceImpact as "price ratio remaining" (0.9999 = <0.01% slippage)
       // OR a direct impact fraction — normalize (see lib/services/sui/bluefin-order-size.ts).
@@ -356,7 +363,9 @@ export class BluefinAggregatorService {
       if (expectedOut === '0' || expectedOut === '') {
         const estimate = await this.estimateOutputFromPrice(asset, usdcAmount);
         if (estimate) {
-          logger.info(`[BluefinAggregator] Quote returned 0 for ${asset}, hedging via BlueFin`, { price: estimate.price });
+          logger.info(`[BluefinAggregator] Quote returned 0 for ${asset}, hedging via BlueFin`, {
+            price: estimate.price,
+          });
           return {
             asset,
             fromCoinType,
@@ -402,9 +411,7 @@ export class BluefinAggregatorService {
         amountIn: amountInRaw,
         expectedAmountOut: estimate?.estimatedOut || '0',
         priceImpact: 0,
-        route: estimate
-          ? `USDC → ${asset} (hedged via BlueFin perps)`
-          : `Quote failed: ${message}`,
+        route: estimate ? `USDC → ${asset} (hedged via BlueFin perps)` : `Quote failed: ${message}`,
         routerData: null,
         canSwapOnChain: false,
         isSimulated: false,
@@ -416,7 +423,7 @@ export class BluefinAggregatorService {
   /**
    * Testnet quote: Uses mainnet BlueFin 7k aggregator for real DEX price discovery,
    * then marks positions for BlueFin perps hedging.
-   * 
+   *
    * The aggregator API only indexes mainnet pools.
    * We query mainnet DEX routing for accurate pricing, then execute via BlueFin testnet.
    */
@@ -424,7 +431,7 @@ export class BluefinAggregatorService {
     asset: PoolAsset,
     usdcAmount: number,
     fromCoinType: string,
-    toCoinType: string,
+    toCoinType: string
   ): Promise<SwapQuoteResult> {
     // Try mainnet BlueFin 7k aggregator for real DEX pricing first
     const bluefinQuote = await this.getMainnetPriceQuote(asset, usdcAmount);
@@ -439,7 +446,7 @@ export class BluefinAggregatorService {
         route: `USDC → ${asset} via BlueFin DEX (${bluefinQuote.route}) → BlueFin hedge`,
         routerData: null,
         canSwapOnChain: false, // Testnet: execute via BlueFin, not on-chain swap
-        isSimulated: false,    // NOT simulated — real DEX prices from mainnet
+        isSimulated: false, // NOT simulated — real DEX prices from mainnet
         hedgeVia: 'bluefin',
       };
     }
@@ -485,7 +492,7 @@ export class BluefinAggregatorService {
    */
   async planRebalanceSwaps(
     totalUsdcAvailable: number,
-    allocations: Record<PoolAsset, number>,
+    allocations: Record<PoolAsset, number>
   ): Promise<RebalanceSwapPlan> {
     const swaps: SwapQuoteResult[] = [];
 
@@ -496,11 +503,14 @@ export class BluefinAggregatorService {
       if (pct <= 0) return null;
 
       const usdcForAsset = totalUsdcAvailable * (pct / 100);
-      if (usdcForAsset < 0.10) return null; // Skip if less than $0.10
+      if (usdcForAsset < 0.1) return null; // Skip if less than $0.10
 
       const quotePromise = this.getSwapQuote(asset, usdcForAsset);
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Quote timeout for ${asset} after ${QUOTE_TIMEOUT_MS}ms`)), QUOTE_TIMEOUT_MS)
+        setTimeout(
+          () => reject(new Error(`Quote timeout for ${asset} after ${QUOTE_TIMEOUT_MS}ms`)),
+          QUOTE_TIMEOUT_MS
+        )
       );
       return Promise.race([quotePromise, timeoutPromise]);
     });
@@ -530,7 +540,7 @@ export class BluefinAggregatorService {
   async buildSwapTransaction(
     quote: SwapQuoteResult,
     senderAddress: string,
-    slippage: number = 0.01, // 1% default
+    slippage: number = 0.01 // 1% default
   ): Promise<unknown | null> {
     if (!quote.routerData || !quote.canSwapOnChain) {
       logger.warn(`[BluefinAggregator] Cannot build swap tx for ${quote.asset} — no route`);
@@ -555,7 +565,9 @@ export class BluefinAggregatorService {
       return tx;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[BluefinAggregator] Failed to build swap tx for ${quote.asset}`, { error: message });
+      logger.error(`[BluefinAggregator] Failed to build swap tx for ${quote.asset}`, {
+        error: message,
+      });
       return null;
     }
   }
@@ -567,9 +579,9 @@ export class BluefinAggregatorService {
   async buildRebalanceTransaction(
     plan: RebalanceSwapPlan,
     senderAddress: string,
-    slippage: number = 0.01,
+    slippage: number = 0.01
   ): Promise<unknown | null> {
-    const swappableQuotes = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
+    const swappableQuotes = plan.swaps.filter((s) => s.canSwapOnChain && s.routerData);
     if (swappableQuotes.length === 0) {
       logger.warn('[BluefinAggregator] No on-chain swaps to execute in rebalance plan');
       return null;
@@ -593,7 +605,7 @@ export class BluefinAggregatorService {
 
       logger.info('[BluefinAggregator] Built rebalance tx', {
         swapCount: swappableQuotes.length,
-        assets: swappableQuotes.map(s => s.asset),
+        assets: swappableQuotes.map((s) => s.asset),
         totalUsdc: plan.totalUsdcToSwap,
       });
 
@@ -612,7 +624,7 @@ export class BluefinAggregatorService {
   /**
    * Execute a single swap: sign + submit using admin keypair.
    * Requires SUI_POOL_ADMIN_KEY env var (base64 or hex encoded private key).
-   * 
+   *
    * Safety checks (mainnet):
    * - Max swap size per transaction
    * - Slippage bounds enforcement
@@ -644,8 +656,19 @@ export class BluefinAggregatorService {
   async executeSplitSwap(
     asset: PoolAsset,
     totalUsdcAmount: number,
-    slippage: number = 0.01,
-  ): Promise<SwapExecutionResult & { subSwaps: number; chunks: Array<{ usdc: number; amountOut?: string; success: boolean; error?: string; txDigest?: string }> }> {
+    slippage: number = 0.01
+  ): Promise<
+    SwapExecutionResult & {
+      subSwaps: number;
+      chunks: Array<{
+        usdc: number;
+        amountOut?: string;
+        success: boolean;
+        error?: string;
+        txDigest?: string;
+      }>;
+    }
+  > {
     const maxImpactBps = Math.max(5, Number(process.env.MAX_SWAP_PRICE_IMPACT_BPS) || 50);
     const minChunkUsd = Math.max(1, Number(process.env.MIN_SWAP_CHUNK_USD) || 25);
     const maxChunkCount = Math.max(2, Number(process.env.MAX_SWAP_CHUNK_COUNT) || 16);
@@ -653,7 +676,13 @@ export class BluefinAggregatorService {
 
     // Greedy chunking: try full size, halve until impact within budget or
     // chunk too small. Repeat sized chunks until totalUsdcAmount consumed.
-    const chunks: Array<{ usdc: number; amountOut?: string; success: boolean; error?: string; txDigest?: string }> = [];
+    const chunks: Array<{
+      usdc: number;
+      amountOut?: string;
+      success: boolean;
+      error?: string;
+      txDigest?: string;
+    }> = [];
     let remaining = totalUsdcAmount;
     let totalOut = 0;
     let firstDigest: string | undefined;
@@ -672,22 +701,29 @@ export class BluefinAggregatorService {
       }
       if (impactBps > maxImpactBps) {
         // Even minimum chunk would exceed impact — bail
-        chunks.push({ usdc: chunk, success: false, error: `min chunk $${chunk.toFixed(2)} still ${impactBps.toFixed(1)}bps over ${maxImpactBps}bps cap` });
+        chunks.push({
+          usdc: chunk,
+          success: false,
+          error: `min chunk $${chunk.toFixed(2)} still ${impactBps.toFixed(1)}bps over ${maxImpactBps}bps cap`,
+        });
         break;
       }
       const res = await this.executeSwap(quote, slippage);
       const usdcChunk = Number(quote.amountIn) / 1e6;
       const outChunk = Number(res.amountOut || '0');
       chunks.push({
-        usdc: usdcChunk, success: !!res.success,
-        amountOut: res.amountOut, error: res.error, txDigest: res.txDigest,
+        usdc: usdcChunk,
+        success: !!res.success,
+        amountOut: res.amountOut,
+        error: res.error,
+        txDigest: res.txDigest,
       });
       if (res.success) {
         anySuccess = true;
         totalOut += outChunk;
         remaining -= usdcChunk;
         if (!firstDigest) firstDigest = res.txDigest;
-        if (remaining > 0 && intervalMs > 0) await new Promise(r => setTimeout(r, intervalMs));
+        if (remaining > 0 && intervalMs > 0) await new Promise((r) => setTimeout(r, intervalMs));
       } else {
         if (!firstError) firstError = res.error;
         break; // Don't retry endlessly — let operator triage
@@ -706,10 +742,7 @@ export class BluefinAggregatorService {
     };
   }
 
-  async executeSwap(
-    quote: SwapQuoteResult,
-    slippage: number = 0.01,
-  ): Promise<SwapExecutionResult> {
+  async executeSwap(quote: SwapQuoteResult, slippage: number = 0.01): Promise<SwapExecutionResult> {
     if (!quote.routerData || !quote.canSwapOnChain) {
       return {
         asset: quote.asset,
@@ -719,7 +752,11 @@ export class BluefinAggregatorService {
       };
     }
 
-    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+    const adminKey = (
+      process.env.SUI_POOL_ADMIN_KEY ||
+      process.env.BLUEFIN_PRIVATE_KEY ||
+      ''
+    ).trim();
     if (!adminKey) {
       return {
         asset: quote.asset,
@@ -752,9 +789,10 @@ export class BluefinAggregatorService {
     //   Reverse (asset → USDC): quote.amountIn is asset, expectedAmountOut is USDC
     if (this.network === 'mainnet' && quote.expectedAmountOut && quote.expectedAmountOut !== '0') {
       // Tightened from 3% → 1.5%. Override via BLUEFIN_MAX_ORACLE_DEVIATION (decimal).
-      const MAX_ORACLE_DEVIATION = Number(process.env.BLUEFIN_MAX_ORACLE_DEVIATION) > 0
-        ? Number(process.env.BLUEFIN_MAX_ORACLE_DEVIATION)
-        : 0.015;
+      const MAX_ORACLE_DEVIATION =
+        Number(process.env.BLUEFIN_MAX_ORACLE_DEVIATION) > 0
+          ? Number(process.env.BLUEFIN_MAX_ORACLE_DEVIATION)
+          : 0.015;
       try {
         const usdcType = this.coinTypes.USDC || MAINNET_COIN_TYPES.USDC;
         const isReverseSwap = quote.toCoinType === usdcType;
@@ -764,19 +802,27 @@ export class BluefinAggregatorService {
         if (isReverseSwap) {
           // Reverse swap: asset → USDC
           // quote.amountIn = asset raw amount, quote.expectedAmountOut = USDC amount (decimal string from Bluefin SDK)
-          const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+          const { getMarketDataService } =
+            await import('@/lib/services/market-data/RealMarketDataService');
           const mds = getMarketDataService();
           const priceData = await mds.getTokenPrice(quote.asset);
           if (priceData.price > 0) {
             const assetAmount = Number(quote.amountIn) / Math.pow(10, decimals);
-            const oracleUsdcOut = assetAmount * priceData.price;  // expected USDC in decimal
-            const dexUsdcOut = Number(quote.expectedAmountOut);   // Bluefin returns decimal
+            const oracleUsdcOut = assetAmount * priceData.price; // expected USDC in decimal
+            const dexUsdcOut = Number(quote.expectedAmountOut); // Bluefin returns decimal
             if (oracleUsdcOut > 0 && dexUsdcOut > 0) {
               const deviation = Math.abs(dexUsdcOut - oracleUsdcOut) / oracleUsdcOut;
               if (deviation > MAX_ORACLE_DEVIATION) {
-                logger.error(`[BluefinAggregator] Oracle deviation too high for reverse ${quote.asset} → USDC`, {
-                  dexUsdcOut, oracleUsdcOut, assetAmount, price: priceData.price, deviation: (deviation * 100).toFixed(2) + '%',
-                });
+                logger.error(
+                  `[BluefinAggregator] Oracle deviation too high for reverse ${quote.asset} → USDC`,
+                  {
+                    dexUsdcOut,
+                    oracleUsdcOut,
+                    assetAmount,
+                    price: priceData.price,
+                    deviation: (deviation * 100).toFixed(2) + '%',
+                  }
+                );
                 return {
                   asset: quote.asset,
                   success: false,
@@ -794,14 +840,19 @@ export class BluefinAggregatorService {
             const dexOut = Number(quote.expectedAmountOut);
             const oracleOutDecimal = oracleOutRaw / Math.pow(10, decimals);
             // Use whichever oracle form is closest in magnitude to dexOut
-            const oracleOut = Math.abs(dexOut - oracleOutDecimal) < Math.abs(dexOut - oracleOutRaw) 
-              ? oracleOutDecimal 
-              : oracleOutRaw;
+            const oracleOut =
+              Math.abs(dexOut - oracleOutDecimal) < Math.abs(dexOut - oracleOutRaw)
+                ? oracleOutDecimal
+                : oracleOutRaw;
             if (oracleOut > 0 && dexOut > 0) {
               const deviation = Math.abs(dexOut - oracleOut) / oracleOut;
               if (deviation > MAX_ORACLE_DEVIATION) {
                 logger.error(`[BluefinAggregator] Oracle deviation too high for ${quote.asset}`, {
-                  dexOut, oracleOut, oracleOutRaw, oracleOutDecimal, deviation: (deviation * 100).toFixed(2) + '%',
+                  dexOut,
+                  oracleOut,
+                  oracleOutRaw,
+                  oracleOutDecimal,
+                  deviation: (deviation * 100).toFixed(2) + '%',
                 });
                 return {
                   asset: quote.asset,
@@ -827,9 +878,7 @@ export class BluefinAggregatorService {
       try {
         keypair = adminKey.startsWith('suiprivkey')
           ? Ed25519Keypair.fromSecretKey(adminKey)
-          : Ed25519Keypair.fromSecretKey(
-              Buffer.from(adminKey.replace(/^0x/, ''), 'hex')
-            );
+          : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
       } catch (keyErr) {
         const msg = keyErr instanceof Error ? keyErr.message : String(keyErr);
         logger.error('[BluefinAggregator] Invalid admin key format', { error: msg });
@@ -843,9 +892,10 @@ export class BluefinAggregatorService {
       const senderAddress = keypair.getPublicKey().toSuiAddress();
 
       // Safety: check gas reserve before executing
-      const rpcUrl = this.network === 'mainnet'
-        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+      const rpcUrl =
+        this.network === 'mainnet'
+          ? process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')
+          : process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet');
       const suiClient = new SuiClient({ url: rpcUrl });
 
       const balance = await suiClient.getBalance({ owner: senderAddress });
@@ -890,14 +940,19 @@ export class BluefinAggregatorService {
         });
         const gasUsed = dryRun.effects?.gasUsed;
         if (gasUsed) {
-          const totalGas = Number(gasUsed.computationCost) + Number(gasUsed.storageCost) - Number(gasUsed.storageRebate);
+          const totalGas =
+            Number(gasUsed.computationCost) +
+            Number(gasUsed.storageCost) -
+            Number(gasUsed.storageRebate);
           // Add 20% buffer on top of dry-run estimate
           finalGasBudget = Math.max(Math.ceil(totalGas * 1.2), gasBudget);
         }
       } catch {
         // Dry run failed — use static budget with 50% safety buffer
         finalGasBudget = Math.ceil(gasBudget * 1.5);
-        logger.debug(`[BluefinAggregator] Gas dry-run failed for ${quote.asset}, using buffered static budget: ${finalGasBudget}`);
+        logger.debug(
+          `[BluefinAggregator] Gas dry-run failed for ${quote.asset}, using buffered static budget: ${finalGasBudget}`
+        );
       }
       tx.setGasBudget(finalGasBudget);
 
@@ -909,7 +964,7 @@ export class BluefinAggregatorService {
       });
 
       const success = result.effects?.status?.status === 'success';
-      
+
       logger.info(`[BluefinAggregator] Swap executed: USDC → ${quote.asset}`, {
         txDigest: result.digest,
         success,
@@ -927,7 +982,9 @@ export class BluefinAggregatorService {
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[BluefinAggregator] Swap execution failed for ${quote.asset}`, { error: message });
+      logger.error(`[BluefinAggregator] Swap execution failed for ${quote.asset}`, {
+        error: message,
+      });
       return {
         asset: quote.asset,
         success: false,
@@ -940,7 +997,7 @@ export class BluefinAggregatorService {
   /**
    * Execute a full rebalance: swap USDC → each asset according to plan.
    * Executes each swap as a separate transaction (atomic per-swap, not all-or-nothing).
-   * 
+   *
    * Why separate txs instead of one PTB:
    * - If BTC swap fails, ETH/SUI swaps can still succeed
    * - Each swap can have different slippage
@@ -949,30 +1006,36 @@ export class BluefinAggregatorService {
   async executeRebalance(
     plan: RebalanceSwapPlan,
     slippage: number = 0.01,
-    options?: { dryRun?: boolean },
+    options?: { dryRun?: boolean }
   ): Promise<{
     success: boolean;
     results: SwapExecutionResult[];
     totalExecuted: number;
     totalFailed: number;
-    dryRunDetails?: Array<{ asset: string; steps: Array<{ step: string; passed: boolean; detail: string }>; order?: Record<string, unknown> }>;
+    dryRunDetails?: Array<{
+      asset: string;
+      steps: Array<{ step: string; passed: boolean; detail: string }>;
+      order?: Record<string, unknown>;
+    }>;
   }> {
     if (!process.env.SUI_POOL_ADMIN_KEY && !process.env.BLUEFIN_PRIVATE_KEY) {
       return {
         success: false,
-        results: [{
-          asset: 'BTC' as PoolAsset,
-          success: false,
-          amountIn: '0',
-          error: 'SUI_POOL_ADMIN_KEY not configured — swaps disabled',
-        }],
+        results: [
+          {
+            asset: 'BTC' as PoolAsset,
+            success: false,
+            amountIn: '0',
+            error: 'SUI_POOL_ADMIN_KEY not configured — swaps disabled',
+          },
+        ],
         totalExecuted: 0,
         totalFailed: 1,
       };
     }
 
-    const swappable = plan.swaps.filter(s => s.canSwapOnChain && s.routerData);
-    const hedgeable = plan.swaps.filter(s => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
+    const swappable = plan.swaps.filter((s) => s.canSwapOnChain && s.routerData);
+    const hedgeable = plan.swaps.filter((s) => !s.canSwapOnChain && s.hedgeVia === 'bluefin');
 
     if (swappable.length === 0 && hedgeable.length === 0) {
       logger.info('[BluefinAggregator] No on-chain swaps or hedges to execute');
@@ -982,7 +1045,7 @@ export class BluefinAggregatorService {
     logger.info('[BluefinAggregator] Executing rebalance', {
       onChainSwaps: swappable.length,
       hedgedSwaps: hedgeable.length,
-      assets: plan.swaps.map(s => s.asset),
+      assets: plan.swaps.map((s) => s.asset),
       totalUsdc: plan.totalUsdcToSwap,
     });
 
@@ -995,15 +1058,23 @@ export class BluefinAggregatorService {
 
       // Delay between ALL swaps (not just successful) to let object versions propagate
       if (swappable.indexOf(quote) < swappable.length - 1) {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
 
     // Also include non-swappable (hedged via BlueFin perps) — execute real hedges or dry-run
-    const dryRunDetails: Array<{ asset: string; steps: Array<{ step: string; passed: boolean; detail: string }>; order?: Record<string, unknown> }> = [];
+    const dryRunDetails: Array<{
+      asset: string;
+      steps: Array<{ step: string; passed: boolean; detail: string }>;
+      order?: Record<string, unknown>;
+    }> = [];
     if (hedgeable.length > 0) {
       const { bluefinService, BluefinService } = await import('./BluefinService');
-      const privateKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+      const privateKey = (
+        process.env.SUI_POOL_ADMIN_KEY ||
+        process.env.BLUEFIN_PRIVATE_KEY ||
+        ''
+      ).trim();
       const network = this.network;
 
       if (!privateKey) {
@@ -1059,7 +1130,10 @@ export class BluefinAggregatorService {
               amountOut: s.expectedAmountOut || '0',
               error: dryResult.success
                 ? `DRY-RUN OK: ${symbol} LONG ${assetSize.toFixed(6)} — all steps passed`
-                : `DRY-RUN: ${dryResult.steps.filter(st => !st.passed).map(st => `${st.step}: ${st.detail}`).join('; ')}`,
+                : `DRY-RUN: ${dryResult.steps
+                    .filter((st) => !st.passed)
+                    .map((st) => `${st.step}: ${st.detail}`)
+                    .join('; ')}`,
             });
           } else {
             const hedgeResult = await bluefinService.openHedge({
@@ -1082,7 +1156,7 @@ export class BluefinAggregatorService {
             });
 
             if (hedgeResult.success) {
-              await new Promise(r => setTimeout(r, 1500));
+              await new Promise((r) => setTimeout(r, 1500));
             }
           }
         }
@@ -1102,13 +1176,13 @@ export class BluefinAggregatorService {
       }
     }
 
-    const totalExecuted = results.filter(r => r.success).length;
-    const totalFailed = results.filter(r => !r.success).length;
+    const totalExecuted = results.filter((r) => r.success).length;
+    const totalFailed = results.filter((r) => !r.success).length;
 
     logger.info('[BluefinAggregator] Rebalance complete', {
       totalExecuted,
       totalFailed,
-      digests: results.filter(r => r.txDigest).map(r => `${r.asset}:${r.txDigest}`),
+      digests: results.filter((r) => r.txDigest).map((r) => `${r.asset}:${r.txDigest}`),
     });
 
     return {
@@ -1125,10 +1199,7 @@ export class BluefinAggregatorService {
    * Used for withdrawals (converting assets back to USDC).
    * On testnet: uses mainnet aggregator for price discovery.
    */
-  async getReverseSwapQuote(
-    asset: PoolAsset,
-    assetAmount: number,
-  ): Promise<SwapQuoteResult> {
+  async getReverseSwapQuote(asset: PoolAsset, assetAmount: number): Promise<SwapQuoteResult> {
     // Check quote cache first
     const cacheKey = getQuoteCacheKey(this.network, asset, assetAmount, 'reverse');
     const cached = quoteCache.get(cacheKey);
@@ -1143,7 +1214,7 @@ export class BluefinAggregatorService {
 
   private async _getReverseSwapQuoteUncached(
     asset: PoolAsset,
-    assetAmount: number,
+    assetAmount: number
   ): Promise<SwapQuoteResult> {
     const coinKey = ASSET_TO_COIN_KEY[asset];
     const fromCoinType = this.coinTypes[coinKey] || '';
@@ -1166,16 +1237,20 @@ export class BluefinAggregatorService {
 
           if (quoteResponse && quoteResponse.returnAmount !== '0') {
             const routes = quoteResponse.routes || [];
-            const routeDesc = routes.length > 0
-              ? routes.map(r => r.hops.map(h => h.pool.type).join('→')).join(', ')
-              : 'BlueFin7k';
+            const routeDesc =
+              routes.length > 0
+                ? routes.map((r) => r.hops.map((h) => h.pool.type).join('→')).join(', ')
+                : 'BlueFin7k';
             return {
               asset,
               fromCoinType: fromCoinType || mainnetFrom,
               toCoinType: toCoinType || mainnetTo,
               amountIn: amountInStr,
               expectedAmountOut: quoteResponse.returnAmount,
-              priceImpact: (() => { const r = Math.abs(quoteResponse.priceImpact || 0); return r > 0.5 ? (1 - r) : r; })(),
+              priceImpact: (() => {
+                const r = Math.abs(quoteResponse.priceImpact || 0);
+                return r > 0.5 ? 1 - r : r;
+              })(),
               route: `${asset} → USDC via BlueFin DEX (${routeDesc}) → close BlueFin hedge`,
               routerData: null, // Don't pass mainnet routerData for testnet execution
               canSwapOnChain: false,
@@ -1192,7 +1267,8 @@ export class BluefinAggregatorService {
 
       // Fallback: estimate from market price using the actual asset
       try {
-        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+        const { getMarketDataService } =
+          await import('@/lib/services/market-data/RealMarketDataService');
         const mds = getMarketDataService();
         const data = await mds.getTokenPrice(asset);
         if (data.price > 0) {
@@ -1212,7 +1288,9 @@ export class BluefinAggregatorService {
             hedgeVia: 'bluefin',
           };
         }
-      } catch { /* continue to fallback */ }
+      } catch {
+        /* continue to fallback */
+      }
 
       return {
         asset,
@@ -1231,7 +1309,8 @@ export class BluefinAggregatorService {
     if (!fromCoinType || asset === 'CRO') {
       // Get market price for accurate expectedAmountOut
       try {
-        const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+        const { getMarketDataService } =
+          await import('@/lib/services/market-data/RealMarketDataService');
         const mds = getMarketDataService();
         const data = await mds.getTokenPrice(asset);
         if (data.price > 0) {
@@ -1249,7 +1328,9 @@ export class BluefinAggregatorService {
             hedgeVia: 'bluefin',
           };
         }
-      } catch { /* fall through */ }
+      } catch {
+        /* fall through */
+      }
 
       return {
         asset,
@@ -1276,36 +1357,50 @@ export class BluefinAggregatorService {
 
       if (!quoteResponse) {
         return {
-          asset, fromCoinType, toCoinType,
+          asset,
+          fromCoinType,
+          toCoinType,
           amountIn: amountInRaw,
-          expectedAmountOut: '0', priceImpact: 0,
+          expectedAmountOut: '0',
+          priceImpact: 0,
           route: `No route found for ${asset} → USDC`,
-          routerData: null, canSwapOnChain: false,
+          routerData: null,
+          canSwapOnChain: false,
         };
       }
 
       const routes = quoteResponse.routes || [];
-      const routeDesc = routes.length > 0
-        ? routes.map((r: any) => r.hops.map((h: any) => h.pool.type).join('→')).join(', ')
-        : 'direct';
+      const routeDesc =
+        routes.length > 0
+          ? routes.map((r: any) => r.hops.map((h: any) => h.pool.type).join('→')).join(', ')
+          : 'direct';
 
       return {
-        asset, fromCoinType, toCoinType,
+        asset,
+        fromCoinType,
+        toCoinType,
         amountIn: amountInRaw,
         expectedAmountOut: quoteResponse.returnAmount,
         priceImpact: Math.abs(quoteResponse.priceImpact || 0),
         route: `${asset} → USDC via ${routeDesc}`,
-        routerData: quoteResponse, canSwapOnChain: true,
+        routerData: quoteResponse,
+        canSwapOnChain: true,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error(`[BluefinAggregator] Reverse quote failed for ${asset} → USDC`, { error: message });
+      logger.error(`[BluefinAggregator] Reverse quote failed for ${asset} → USDC`, {
+        error: message,
+      });
       return {
-        asset, fromCoinType, toCoinType,
+        asset,
+        fromCoinType,
+        toCoinType,
         amountIn: amountInRaw,
-        expectedAmountOut: '0', priceImpact: 0,
+        expectedAmountOut: '0',
+        priceImpact: 0,
         route: `Reverse quote failed: ${message}`,
-        routerData: null, canSwapOnChain: false,
+        routerData: null,
+        canSwapOnChain: false,
       };
     }
   }
@@ -1326,7 +1421,11 @@ export class BluefinAggregatorService {
     /** Floor used for the hasGas decision (in SUI) */
     gasFloorSui?: number;
   }> {
-    const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
+    const adminKey = (
+      process.env.SUI_POOL_ADMIN_KEY ||
+      process.env.BLUEFIN_PRIVATE_KEY ||
+      ''
+    ).trim();
     if (!adminKey) {
       return { configured: false, hasGas: false };
     }
@@ -1336,14 +1435,13 @@ export class BluefinAggregatorService {
 
       const keypair = adminKey.startsWith('suiprivkey')
         ? Ed25519Keypair.fromSecretKey(adminKey)
-        : Ed25519Keypair.fromSecretKey(
-            Buffer.from(adminKey.replace(/^0x/, ''), 'hex')
-          );
+        : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
       const address = keypair.getPublicKey().toSuiAddress();
 
-      const rpcUrl = this.network === 'mainnet'
-        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
+      const rpcUrl =
+        this.network === 'mainnet'
+          ? process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')
+          : process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet');
       const suiClient = new SuiClient({ url: rpcUrl });
 
       const balance = await suiClient.getBalance({ owner: address });

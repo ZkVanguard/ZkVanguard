@@ -2,11 +2,11 @@
 
 /**
  * CommunityPool - Refactored & Optimized
- * 
+ *
  * Main orchestration component. All UI sections are extracted into
  * memoized sub-components under ./community-pool/. State management
  * uses useReducer via the useCommunityPool hook for minimal re-renders.
- * 
+ *
  * OPTIMIZATIONS:
  * - memo() on all child components
  * - useMemo for derived values in hook
@@ -14,7 +14,7 @@
  * - Intersection observer for lazy loading heavy panels
  * - Skeleton loading states for better perceived performance
  * - startTransition for non-urgent state updates
- * 
+ *
  * ~300 lines vs previous ~1,632 lines
  */
 
@@ -36,14 +36,13 @@ import {
   useCommunityPool,
 } from './community-pool';
 import { PieChart, Shield, Users } from 'lucide-react';
-import {
-  CommunityPoolSkeleton,
-  PoolStatsSkeleton,
-} from './community-pool/Skeletons';
-
-// Lazy load heavy panels (only load when in viewport)
-const RiskMetricsPanel = lazy(() => import('./RiskMetricsPanel').then(mod => ({ default: mod.RiskMetricsPanel })));
-const AutoHedgePanel = lazy(() => import('./AutoHedgePanel').then(mod => ({ default: mod.AutoHedgePanel })));
+import { CommunityPoolSkeleton } from './community-pool/Skeletons'; // Lazy load heavy panels (only load when in viewport)
+const RiskMetricsPanel = lazy(() =>
+  import('./RiskMetricsPanel').then((mod) => ({ default: mod.RiskMetricsPanel }))
+);
+const AutoHedgePanel = lazy(() =>
+  import('./AutoHedgePanel').then((mod) => ({ default: mod.AutoHedgePanel }))
+);
 
 // Skeleton fallbacks
 const PanelSkeleton = () => (
@@ -55,7 +54,10 @@ interface CommunityPoolProps {
   compact?: boolean;
 }
 
-export const CommunityPool = memo(function CommunityPool({ address: propAddress, compact = false }: CommunityPoolProps) {
+export const CommunityPool = memo(function CommunityPool({
+  address: propAddress,
+  compact = false,
+}: CommunityPoolProps) {
   const [showAI, setShowAI] = useState(false);
 
   const pool = useCommunityPool(propAddress);
@@ -63,68 +65,78 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // ============================================================================
   // TRANSACTION CONFIRMATION EFFECTS (tightly coupled to WDK lifecycle)
   // ============================================================================
-  
+
   // Guard against duplicate isConfirmed fires (React Strict Mode / rapid tx)
   const txProcessedRef = useRef<string | null>(null);
 
   // Shared helper for recording deposit/withdraw in backend after on-chain confirmation
-  const recordTransaction = useCallback(async (
-    action: 'deposit' | 'withdraw',
-    value: string,
-    successMsg: string,
-    resetField: () => void,
-    hidePanel: () => void,
-  ) => {
-    try {
-      pool.setError(`Please sign to confirm your ${action}...`);
-      const authData = await pool.signForApi(action, value);
-      if (!authData) {
-        pool.setError(`Signature required to confirm ${action}`);
+  const recordTransaction = useCallback(
+    async (
+      action: 'deposit' | 'withdraw',
+      value: string,
+      successMsg: string,
+      resetField: () => void,
+      hidePanel: () => void
+    ) => {
+      try {
+        pool.setError(`Please sign to confirm your ${action}...`);
+        const authData = await pool.signForApi(action, value);
+        if (!authData) {
+          pool.setError(`Signature required to confirm ${action}`);
+          pool.setTxStatus('idle');
+          pool.setActionLoading(false);
+          return;
+        }
+        pool.setError(null);
+
+        const body =
+          action === 'deposit'
+            ? { walletAddress: pool.address, amount: parseFloat(value), txHash: pool.lastTxHash }
+            : { walletAddress: pool.address, shares: parseFloat(value), txHash: pool.lastTxHash };
+
+        const res = await fetch(
+          `/api/community-pool?action=${action}&chain=${pool.selectedChain}&network=${pool.network}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-wallet-address': pool.address || '',
+              'x-wallet-signature': authData.signature,
+              'x-wallet-message': btoa(authData.message),
+            },
+            body: JSON.stringify(body),
+          }
+        );
+
+        const json = await res.json();
+
+        if (json.success) {
+          pool.setSuccess(successMsg);
+          resetField();
+          hidePanel();
+          pool.setTxStatus('idle');
+          pool.resetWrite();
+
+          await fetch(`/api/community-pool?action=sync&user=${pool.address}`);
+          pool.fetchPoolData();
+
+          setTimeout(() => {
+            pool.setSuccess(null);
+            pool.setLastTxHash(null);
+          }, 10000);
+        } else {
+          pool.setError(json.error);
+          pool.setTxStatus('idle');
+        }
+      } catch (err: any) {
+        pool.setError(err.message);
         pool.setTxStatus('idle');
+      } finally {
         pool.setActionLoading(false);
-        return;
       }
-      pool.setError(null);
-
-      const body = action === 'deposit'
-        ? { walletAddress: pool.address, amount: parseFloat(value), txHash: pool.lastTxHash }
-        : { walletAddress: pool.address, shares: parseFloat(value), txHash: pool.lastTxHash };
-
-      const res = await fetch(`/api/community-pool?action=${action}&chain=${pool.selectedChain}&network=${pool.network}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-wallet-address': pool.address || '',
-          'x-wallet-signature': authData.signature,
-          'x-wallet-message': btoa(authData.message),
-        },
-        body: JSON.stringify(body),
-      });
-
-      const json = await res.json();
-
-      if (json.success) {
-        pool.setSuccess(successMsg);
-        resetField();
-        hidePanel();
-        pool.setTxStatus('idle');
-        pool.resetWrite();
-
-        await fetch(`/api/community-pool?action=sync&user=${pool.address}`);
-        pool.fetchPoolData();
-
-        setTimeout(() => { pool.setSuccess(null); pool.setLastTxHash(null); }, 10000);
-      } else {
-        pool.setError(json.error);
-        pool.setTxStatus('idle');
-      }
-    } catch (err: any) {
-      pool.setError(err.message);
-      pool.setTxStatus('idle');
-    } finally {
-      pool.setActionLoading(false);
-    }
-  }, [pool]);
+    },
+    [pool]
+  );
 
   // Handle transaction confirmation based on current status
   useEffect(() => {
@@ -134,14 +146,14 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
     const txKey = `${pool.txStatus}`;
     if (txProcessedRef.current === txKey) return;
     txProcessedRef.current = txKey;
-    
+
     // Approval confirmed -> trigger deposit
     if (pool.txStatus === 'approving' && pool.depositAmount) {
       pool.setTxStatus('depositing');
       pool.resetWrite();
       return;
     }
-    
+
     // Deposit confirmed - record in backend
     if (pool.txStatus === 'depositing') {
       const amount = parseFloat(pool.depositAmount);
@@ -150,11 +162,11 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         pool.depositAmount,
         `Deposited $${amount.toFixed(2)} successfully!`,
         () => pool.setDepositAmount(''),
-        () => pool.setShowDeposit(false),
+        () => pool.setShowDeposit(false)
       );
       return;
     }
-    
+
     // Withdrawal confirmed - record in backend
     if (pool.txStatus === 'withdrawing') {
       const shares = parseFloat(pool.withdrawShares);
@@ -163,7 +175,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         pool.withdrawShares,
         `Withdrew ${shares.toFixed(2)} shares successfully!`,
         () => pool.setWithdrawShares(''),
-        () => pool.setShowWithdraw(false),
+        () => pool.setShowWithdraw(false)
       );
     }
   }, [pool.isConfirmed]);
@@ -179,7 +191,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   useEffect(() => {
     if (pool.writeError) {
       const errorMsg = pool.writeError.message || '';
-      
+
       if (errorMsg.includes('User rejected') || errorMsg.includes('user rejected')) {
         pool.setError('Transaction rejected by user');
       } else if (errorMsg.includes('Invalid value') || errorMsg.includes('fetch')) {
@@ -200,7 +212,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // ============================================================================
   // AI MODAL HANDLER
   // ============================================================================
-  
+
   const handleAIClick = useCallback(() => {
     setShowAI(true);
     pool.fetchAIRecommendation();
@@ -211,12 +223,12 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // ============================================================================
   // INTERSECTION OBSERVER FOR LAZY LOADING HEAVY PANELS
   // ============================================================================
-  
+
   const [riskMetricsRef, riskMetricsVisible] = useIntersectionObserver<HTMLDivElement>({
     rootMargin: '200px', // Start loading 200px before entering viewport
     freezeOnceVisible: true,
   });
-  
+
   const [autoHedgeRef, autoHedgeVisible] = useIntersectionObserver<HTMLDivElement>({
     rootMargin: '200px',
     freezeOnceVisible: true,
@@ -225,7 +237,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // ============================================================================
   // LOADING STATE (with optimized skeleton)
   // ============================================================================
-  
+
   if (pool.loading) {
     return <CommunityPoolSkeleton />;
   }
@@ -233,7 +245,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   // ============================================================================
   // NO DATA STATE
   // ============================================================================
-  
+
   if (!pool.poolData) {
     return (
       <motion.div
@@ -248,7 +260,8 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         />
         <div className="p-4 sm:p-6">
           <p className="text-gray-500 dark:text-gray-400 text-center text-sm">
-            {pool.error || `Unable to load ${chainName} pool data. Try refreshing or selecting a different chain.`}
+            {pool.error ||
+              `Unable to load ${chainName} pool data. Try refreshing or selecting a different chain.`}
           </p>
         </div>
       </motion.div>
@@ -256,9 +269,9 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
   }
 
   // ============================================================================
-  // MAIN RENDER 
+  // MAIN RENDER
   // ============================================================================
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -287,7 +300,7 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
       {/* Show user position if wallet is connected — kept above allocation
           on mobile so members see their stake before the pool-wide charts. */}
-      {(pool.activeAddress && pool.userPosition) && (
+      {pool.activeAddress && pool.userPosition && (
         <UserPositionCard
           userPosition={pool.userPosition}
           selectedChain={pool.selectedChain}
@@ -358,7 +371,6 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
         onWithdraw={pool.handleWithdraw}
         onSuiDeposit={pool.handleSuiDeposit}
         onSuiWithdraw={pool.handleSuiWithdraw}
-
       />
 
       <StatusMessages
@@ -371,7 +383,10 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
       {/* Risk Metrics — panel has its own collapse header; defaults closed on mobile */}
       {!compact && (
-        <div ref={riskMetricsRef} className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+        <div
+          ref={riskMetricsRef}
+          className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]"
+        >
           {riskMetricsVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
               <RiskMetricsPanel compact={false} chain={pool.selectedChain} />
@@ -384,7 +399,10 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
 
       {/* Auto Hedge Panel — panel has its own collapse header; defaults closed on mobile */}
       {!compact && (
-        <div ref={autoHedgeRef} className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]">
+        <div
+          ref={autoHedgeRef}
+          className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-h-[200px]"
+        >
           {autoHedgeVisible ? (
             <Suspense fallback={<PanelSkeleton />}>
               <AutoHedgePanel chain={pool.selectedChain} />
@@ -408,7 +426,9 @@ export const CommunityPool = memo(function CommunityPool({ address: propAddress,
             entries={pool.leaderboard}
             totalMembers={pool.poolData?.memberCount}
             poolTVL={pool.poolData?.totalValueUSD}
-            chainId={typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111}
+            chainId={
+              typeof pool.chainConfig?.chainId === 'number' ? pool.chainConfig.chainId : 11155111
+            }
             selectedChain={pool.selectedChain}
             chainConfig={pool.chainConfig}
           />
