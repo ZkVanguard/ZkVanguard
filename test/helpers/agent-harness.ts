@@ -5,7 +5,7 @@
  * the singleton `llmProvider` in lib/ai/llm-provider.ts, pulled in via dynamic
  * `import()` at call time. That single seam lets us run the whole orchestration
  * layer deterministically offline — no API keys, no network — by replacing the
- * module with a controllable fake via bun's `mock.module`.
+ * module with a controllable fake via `jest.doMock`.
  *
  * Usage:
  *   const llm = installMockLLM(() => JSON.stringify({ action: 'hedge' }));
@@ -14,7 +14,7 @@
  *
  * Call installMockLLM() in beforeEach so every test gets a clean responder.
  */
-import { mock } from 'bun:test';
+import { jest } from '@jest/globals';
 import type { LLMResponse } from '@/lib/ai/llm-types';
 
 type LLMMethod = 'generateResponse' | 'generateDirectResponse';
@@ -52,7 +52,10 @@ export function installMockLLM(initial?: Responder): MockLLMHandle {
       return { content: '', model: 'mock-llm', confidence: 0.9, ...part } as LLMResponse;
     };
 
-  mock.module('@/lib/ai/llm-provider', () => ({
+  // Reset the module cache so the next `await import(...)` picks up this
+  // factory, even if a prior test in the file already imported the real one.
+  jest.resetModules();
+  jest.doMock('@/lib/ai/llm-provider', () => ({
     llmProvider: {
       generateResponse: make('generateResponse'),
       generateDirectResponse: make('generateDirectResponse'),
@@ -66,8 +69,9 @@ export function installMockLLM(initial?: Responder): MockLLMHandle {
 
 /**
  * Restore all module/function mocks. Call in afterAll so the LLM mock cannot
- * leak into other test files during a full `bun test` run.
+ * leak into other test files during a full `bun jest` run.
  */
 export function restoreAgentMocks(): void {
-  mock.restore();
+  jest.dontMock('@/lib/ai/llm-provider');
+  jest.resetModules();
 }
