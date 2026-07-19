@@ -21,6 +21,7 @@ import {
   type PoolAsset as BluefinPoolAsset,
 } from '@/lib/services/sui/BluefinAggregatorService';
 import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
+import { canonicalizeCoinType } from '@/lib/services/sui/coin-type';
 
 /**
  * Minimum USDC value for a meaningful on-chain hedge.
@@ -359,14 +360,15 @@ export async function replenishAdminUsdc(
     const allBalances = await suiClient.getAllBalances({ owner: address });
     const candidates: Array<{ asset: BluefinPoolAsset; amount: number; valueUsd: number }> = [];
 
-    // Normalize SUI coin type strings for comparison (RPC may return different
-    // address case/padding than our static config).
-    const normalizeCoinType = (t: string): string => {
-      const parts = t.split('::');
-      if (parts.length !== 3) return t.toLowerCase();
-      const addr = parts[0].toLowerCase().replace(/^0x/, '').replace(/^0+/, '') || '0';
-      return `0x${addr}::${parts[1]}::${parts[2]}`;
-    };
+    // Build canonical lookup so `0x27792d9…` from getAllBalances matches
+    // `0x027792d9…` from MAINNET_COIN_TYPES. See canonicalizeCoinType() —
+    // same bug that broke getAdminAssetValuesUsd; the local (route) copy of
+    // this function had the fix but the shared copy did not until 2026-07-18.
+    const canonMap = new Map<string, BluefinPoolAsset>();
+    for (const a of POOL_ASSETS) {
+      const t = aggregator.getAssetCoinType(a as BluefinPoolAsset);
+      if (t) canonMap.set(canonicalizeCoinType(t), a as BluefinPoolAsset);
+    }
 
     const balanceDebug: Array<{ coinType: string; raw: string; matched?: string }> = [];
 
@@ -376,18 +378,8 @@ export async function replenishAdminUsdc(
       if (raw <= 0) continue;
 
       // Match coin type to known assets (skip USDC and SUI gas reserve)
-      let asset: BluefinPoolAsset | null = null;
-      let decimals = 8;
-
-      const normBal = normalizeCoinType(coinType);
-      for (const a of POOL_ASSETS) {
-        const assetType = aggregator.getAssetCoinType(a as BluefinPoolAsset);
-        if (assetType && normalizeCoinType(assetType) === normBal) {
-          asset = a as BluefinPoolAsset;
-          decimals = a === 'SUI' ? 9 : 8;
-          break;
-        }
-      }
+      const asset: BluefinPoolAsset | undefined = canonMap.get(canonicalizeCoinType(coinType));
+      const decimals = asset === 'SUI' ? 9 : 8;
 
       balanceDebug.push({ coinType, raw: bal.totalBalance, matched: asset || undefined });
 
