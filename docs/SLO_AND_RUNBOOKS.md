@@ -307,7 +307,12 @@ psql -c "SELECT * FROM cron_state WHERE key='cron:lastRun:alert-response-loop' O
 - Set `ALERT_RESPONSE_EXECUTE=` (empty) — loop returns to log-only immediately
 - If HALT_TRADER / HALT_AUTOHEDGE fired incorrectly, clear the halt state:
   ```sql
-  DELETE FROM cron_state WHERE key IN ('polymarket-edge-trader:halt', 'sui-community-pool:autohedge:halt');
+  DELETE FROM cron_state
+   WHERE key IN (
+    'polymarket-edge:halted-until',            -- HALT_TRADER destination
+    'cron:haltUntil:sui-community-pool:autohedge',  -- HALT_AUTOHEDGE (via setCronHalt)
+    'cron:haltReason:sui-community-pool:autohedge'
+  );
   ```
 
 **Fix**

@@ -62,7 +62,7 @@ import {
   PredictionAggregatorService,
   type AggregatedPrediction,
 } from '@/lib/services/market-data/PredictionAggregatorService';
-import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+import { getCronStateOr, setCronState, CronKeys } from '@/lib/db/cron-state';
 // Static so Graphify sees the trader's quality-gate + regret-tracker dispatch.
 // Previously loaded via 8 await import() sites; tree-sitter drops those.
 import { query } from '@/lib/db/postgres';
@@ -150,7 +150,7 @@ const SIGNAL_FLIP_SCORE_COLLAPSE = Number(
 // ── Cron state keys ────────────────────────────────────────────────────────
 const KEY_ACTIVE = 'polymarket-edge:active-trade';
 const KEY_STATS = 'polymarket-edge:stats';
-const KEY_HALTED_UNTIL = 'polymarket-edge:halted-until';
+const KEY_HALTED_UNTIL = CronKeys.polymarketEdgeHaltedUntil;
 const KEY_DAILY = 'polymarket-edge:daily';
 // Records why the last tick did not open a trade. Small helper: gives
 // operators a single lookup ("why is the trader idle?") without grepping

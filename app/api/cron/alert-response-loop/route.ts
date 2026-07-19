@@ -22,7 +22,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronRequest } from '@/lib/qstash';
-import { tryClaimCronRun, setCronState } from '@/lib/db/cron-state';
+import { tryClaimCronRun, setCronState, setCronHalt, CronKeys } from '@/lib/db/cron-state';
 import { logger } from '@/lib/utils/logger';
 import { notifyDiscord, readAlertLog } from '@/lib/utils/discord-notify';
 import { evaluateAutoResponse } from '@/lib/services/alerting/alert-response-loop';
@@ -131,9 +131,18 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       // logs + alerts on failure so operator sees when a halt didn't
       // persist.
       try {
+        // 24h halt window matches the trader's own kill-switch HALT_DURATION_MS
+        // and is long enough to bridge one full day of manual triage.
+        const HALT_WINDOW_MS = 24 * 60 * 60 * 1000;
+        const haltUntilMs = now + HALT_WINDOW_MS;
         if (r.type === 'HALT_TRADER' && (process.env.ALERT_RESPONSE_EXECUTE_HALT ?? '') === '1') {
           try {
-            await setCronState('polymarket-edge-trader:halt', now);
+            // Trader reads this exact key via KEY_HALTED_UNTIL and halts while
+            // untilMs > now (app/api/cron/polymarket-edge-trader/route.ts:705).
+            // Prior wire wrote `polymarket-edge-trader:halt = now` — wrong key
+            // AND wrong value shape (current time = 0 ms halt). Silent for the
+            // entire v0.3.0 rollout window.
+            await setCronState(CronKeys.polymarketEdgeHaltedUntil, haltUntilMs);
           } catch (haltErr) {
             logger.error('[AlertResponseLoop] HALT_TRADER cron_state write FAILED', {
               error: haltErr instanceof Error ? haltErr.message : String(haltErr),
@@ -146,10 +155,11 @@ async function handle(request: NextRequest): Promise<NextResponse> {
         }
         if (r.type === 'HALT_AUTOHEDGE' && (process.env.ALERT_RESPONSE_EXECUTE_HALT ?? '') === '1') {
           try {
-            await setCronState('sui-community-pool:autohedge:halt', {
-              untilMs: now + 24 * 60 * 60 * 1000,
-              reason: 'alert-response-loop halt',
-            });
+            // sui-community-pool reads via getCronHalt('sui-community-pool:autohedge')
+            // which pulls cron:haltUntil:<id> + cron:haltReason:<id>. Prior wire
+            // used raw setCronState on 'sui-community-pool:autohedge:halt' with
+            // an object payload — different keyspace, never read.
+            await setCronHalt('sui-community-pool:autohedge', haltUntilMs, r.reason);
           } catch (haltErr) {
             logger.error('[AlertResponseLoop] HALT_AUTOHEDGE cron_state write FAILED', {
               error: haltErr instanceof Error ? haltErr.message : String(haltErr),

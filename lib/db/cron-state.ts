@@ -163,6 +163,12 @@ export const CronKeys = {
   // Cluster-wide circuit breaker (replaces per-instance `globalThis.__suiDailyLossHalted`)
   cronHaltUntil: (cronId: string) => `cron:haltUntil:${cronId}`,
   cronHaltReason: (cronId: string) => `cron:haltReason:${cronId}`,
+
+  // polymarket-edge-trader has its own kill-switch primitive predating the
+  // setCronHalt helper. Exported here so alert-response-loop and the trader
+  // reference the same string — the prior wire drift shipped for months
+  // because the two files hard-coded different key names.
+  polymarketEdgeHaltedUntil: 'polymarket-edge:halted-until' as const,
 } as const;
 
 // ─── CAS-based singleton + halt helpers ─────────────────────────────────────

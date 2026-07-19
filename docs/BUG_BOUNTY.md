@@ -28,7 +28,7 @@ Package: `0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726`
 - **v0.3.0 8-gate autonomy defense stack** — `PortfolioDriver`, `HedgeFillVerifier`, `StaleHedgeDetector`, `applyHedgeabilityClamp`, `regret-tracker`, `alert-response-loop`, phantom-rate detection at `/api/health/production`. Bypass or corruption of any gate is in scope.
 - Off-chain ZK-STARK prover (`zkp/` Python backend)
 - Web frontend authentication + signature flows
-- Halt-flag write path (`polymarket-edge-trader:halt`, `sui-community-pool:autohedge:halt`) and alert-log ring buffer (`alert-log:ring-buffer`) — griefing via halt-flag manipulation is in scope at Medium tier
+- Halt-flag write path (`polymarket-edge:halted-until` for HALT_TRADER; `cron:haltUntil:sui-community-pool:autohedge` + `cron:haltReason:sui-community-pool:autohedge` for HALT_AUTOHEDGE via `setCronHalt`) and alert-log ring buffer (`alert-log:ring-buffer`) — griefing via halt-flag manipulation is in scope at Medium tier
 
 ## Out of scope
 
