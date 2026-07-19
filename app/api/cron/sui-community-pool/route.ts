@@ -23,9 +23,7 @@ import { query } from '@/lib/db/postgres';
 import { setCronState, tryClaimCronRun } from '@/lib/db/cron-state';
 import { getMultiSourceValidatedPrice } from '@/lib/services/market-data/unified-price-provider';
 import { getSuiPoolAgent, type AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
-import { BluefinService } from '@/lib/services/sui/BluefinService';
-import { recordPoolNavSnapshot, syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
-import { resolveLeverage, hedgeRatioForNav, computeTargetMargin, hedgeValueUsd, scaledReserves } from '@/lib/services/sui/cron/hedge-sizing';
+import { syncMembersToDb, savePoolState } from '@/lib/services/sui/cron/persistence';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 // v0.3.0 defense dispatch — statically imported so the graph sees the
 // call chain. Previously loaded via `await import()` inside try-blocks
@@ -71,12 +69,8 @@ const CRON_LOCK_KEY = 'sui-community-pool';
 // multi-venue router + OTC path must be active or the pool blocks writes.
 const NAV_SAFETY_CEILING_USDC = Number(process.env.NAV_SAFETY_CEILING_USDC) || 10_000_000_000;
 
-// Step 6.6 drift-rebalance tunables. Together they bound the per-tick
-// blast radius — at most MAX_REBALANCE_SELL_USD of any one overweight
-// asset can be reverse-swapped per tick, and only when its drift from
-// AI target exceeds REBALANCE_DRIFT_THRESHOLD_PCT.
-const REBALANCE_DRIFT_THRESHOLD_PCT = Number(process.env.REBALANCE_DRIFT_THRESHOLD_PCT) || 10;
-const MAX_REBALANCE_SELL_USD = Number(process.env.MAX_REBALANCE_SELL_USD) || 20;
+// Step 6.6 drift-rebalance tunables (REBALANCE_DRIFT_THRESHOLD_PCT +
+// MAX_REBALANCE_SELL_USD) now live in step-6-6-drift-rebalance.ts.
 
 // 3 pool assets (SUI community pool — BTC, ETH, SUI only)
 const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
@@ -462,7 +456,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     // Step 7.9: Position-Drift Auto-Close (AG10)
     // ═══════════════════════════════════════════════════════════════
     // Extracted to lib/services/sui/cron/step-7-9-drift-close.ts.
-    const driftResult = await runStep7_9DriftClose();
+    // Fire-and-forget: the module logs its own summary + swallows errors
+    // so Step 8 continues even if the drift check throws.
+    await runStep7_9DriftClose();
 
     // Step 8: Auto-Hedge via BlueFin perpetuals — BTC, ETH, SUI
     // ═══════════════════════════════════════════════════════════════
