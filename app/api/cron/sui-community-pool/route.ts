@@ -43,11 +43,9 @@ import { checkAndCloseDrifts } from '@/lib/services/agents/position-drift-monito
 import { runStep8AutoHedge } from '@/lib/services/sui/cron/step-8-auto-hedge';
 import { runStep4NavDefense } from '@/lib/services/sui/cron/step-4-nav-defense';
 import { runStep7Rebalance } from '@/lib/services/sui/cron/step-7-rebalance';
-import {
-  replenishAdminUsdc, getAdminUsdcBalance,
-  getActiveHedges, settleActiveHedges,
-  getAdminAssetValuesUsd, sellAssetForUsdc, getAdminNonUsdcUsdValue,
-} from '@/lib/services/sui/cron/hedge-treasury';
+import { runStep65HedgeSettle } from '@/lib/services/sui/cron/step-6-5-hedge-settle';
+import { runStep66DriftRebalance } from '@/lib/services/sui/cron/step-6-6-drift-rebalance';
+import { runStep9LogDecision } from '@/lib/services/sui/cron/step-9-log-decision';
 import { runPolyDiscoverTick } from '@/lib/services/market-data/poly-discover-tick';
 import { getAgentOrchestrator } from '@/lib/services/agent-orchestrator';
 
@@ -435,278 +433,24 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
       pricesUSD,
     });
 
-    // Step 6.5: Settle PREVIOUS cycle's hedges — return USDC from admin back to pool
-    // This runs BEFORE new swaps so the pool gets its money back first.
-    // Flow: reverse-swap ALL admin-held assets → USDC, then close_hedge for each.
-    // Profits/losses from asset price changes are captured proportionally.
-    let hedgeSettlement: { settled: number; failed: number; details: any[]; replenishment?: any; debug?: any } | undefined;
-    if (aboveSafetyCeiling) {
-      logger.warn('[SUI Cron] Step 6.5 skipped — NAV above safety ceiling', { navUsd: navUsd.toFixed(2) });
-      hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { skippedReason: 'safety-ceiling' } };
-    } else if (process.env.SUI_POOL_ADMIN_KEY && process.env.SUI_AGENT_CAP_ID) {
-      try {
-        const activeHedges = await getActiveHedges(network);
-        logger.info('[SUI Cron] Step 6.5 getActiveHedges result', { count: activeHedges.length, hedges: activeHedges });
-        if (activeHedges.length > 0) {
-          const totalCollateralNeeded = activeHedges.reduce((sum, h) => sum + h.collateralUsdc, 0);
+    // Step 6.5: Settle PREVIOUS cycle's hedges
+    // ═══════════════════════════════════════════════════════════════
+    // Extracted to lib/services/sui/cron/step-6-5-hedge-settle.ts —
+    // shortfall-only replenish (598484a7 fix) + Audit-15 residual guard.
+    const { hedgeSettlement } = await runStep65HedgeSettle({
+      navUsd, aboveSafetyCeiling, pricesUSD, network,
+    });
 
-          logger.info('[SUI Cron] Settling previous hedges before new allocation', {
-            activeHedges: activeHedges.length,
-            totalCollateral: totalCollateralNeeded.toFixed(6),
-          });
 
-          // Replenish only the actual shortfall, not blanket-convert everything.
-          // The old design (replenish target = $1M) churned the wallet on every
-          // tick: wBTC/wETH/SUI got swapped to USDC, then Step 7 tried to buy
-          // them back, but small-notional buys often failed on slippage/route,
-          // so wETH/SUI never re-accumulated even though the AI kept allocating
-          // 25-40% to them. Net effect: every $1 of wETH was lost to round-trip
-          // friction (~1-2% slippage each direction, plus DEX fees).
-          //
-          // New behaviour:
-          //  - Compute the USDC shortfall = collateral_needed − admin_usdc_now.
-          //  - If shortfall ≤ 0, admin already has enough USDC for settlement
-          //    → skip replenish entirely. Step 7 will buy any allocation drift
-          //    from the spare USDC.
-          //  - Else replenish exactly shortfall × 1.2 (20% buffer for slippage),
-          //    which only converts the minimum non-USDC needed.
-          const adminUsdcPreReplenish = await getAdminUsdcBalance(network);
-          const usdcShortfall = Math.max(0, totalCollateralNeeded - adminUsdcPreReplenish);
-          let replenishment: Awaited<ReturnType<typeof replenishAdminUsdc>> = { swapped: 0, details: [] };
-          if (usdcShortfall > 0) {
-            const replenishTarget = usdcShortfall * 1.2; // 20% buffer for slippage
-            logger.info('[SUI Cron] Step 6.5 replenish needed', {
-              adminUsdc: adminUsdcPreReplenish.toFixed(6),
-              collateralNeeded: totalCollateralNeeded.toFixed(6),
-              shortfall: usdcShortfall.toFixed(6),
-              replenishTarget: replenishTarget.toFixed(6),
-            });
-            replenishment = await replenishAdminUsdc(network, replenishTarget, pricesUSD);
-            logger.info('[SUI Cron] Step 6.5 replenishment result', { swapped: replenishment.swapped, details: replenishment.details });
-            if (replenishment.swapped > 0) {
-              await new Promise(r => setTimeout(r, 2000));
-            }
-          } else {
-            logger.info('[SUI Cron] Step 6.5 replenish skipped — admin has enough USDC', {
-              adminUsdc: adminUsdcPreReplenish.toFixed(6),
-              collateralNeeded: totalCollateralNeeded.toFixed(6),
-              excess: (adminUsdcPreReplenish - totalCollateralNeeded).toFixed(6),
-            });
-          }
+    // Step 6.6: Drift-based pre-rebalance
+    // ═══════════════════════════════════════════════════════════════
+    // Extracted to lib/services/sui/cron/step-6-6-drift-rebalance.ts —
+    // sells overweight asset(s) to USDC so Step 7 has budget to buy
+    // underweight assets. Emits executionAllocations for Step 7.
+    const { driftRebalance, executionAllocations } = await runStep66DriftRebalance({
+      navUsd, aboveSafetyCeiling, pricesUSD, aiResult, network,
+    });
 
-          // Check total admin USDC after replenishment (or after skipping)
-          const adminUsdcForSettlement = await getAdminUsdcBalance(network);
-          logger.info('[SUI Cron] Admin USDC for settlement', {
-            adminUsdc: adminUsdcForSettlement.toFixed(6),
-            totalCollateral: totalCollateralNeeded.toFixed(6),
-            pnl: (adminUsdcForSettlement - totalCollateralNeeded).toFixed(6),
-          });
-
-          // Audit-15 guard: if the replenish step failed to fully convert
-          // non-USDC holdings (aggregator route missing, slippage tripped,
-          // RPC hiccup) and we settle anyway, the proportional-distribution
-          // loop calls close_hedge with the deficit framed as `is_profit=false,
-          // pnl_usdc=collateral_minus_returned`. The Move funds-verify guard
-          // accepts that (the math is internally consistent), so the row is
-          // closed at a fake realized loss while the real value sits in
-          // unsold wBTC/wETH/SUI in the admin wallet. Skip the settle when
-          // residual non-USDC value > $1 — let the next tick try replenish
-          // again. Real losses (asset depreciation) still settle correctly
-          // because in that case the admin wallet IS empty of non-USDC after
-          // a clean swap.
-          const residualUsd = await getAdminNonUsdcUsdValue(network, pricesUSD);
-          const REPLENISH_RESIDUAL_GUARD_USD = Number(process.env.HEDGE_SETTLE_RESIDUAL_GUARD_USD) || 1;
-          if (residualUsd > REPLENISH_RESIDUAL_GUARD_USD && adminUsdcForSettlement < totalCollateralNeeded * 0.95) {
-            logger.warn('[SUI Cron] Skipping hedge settlement — replenish incomplete; would write fake losses', {
-              residualUsd: residualUsd.toFixed(2),
-              adminUsdc: adminUsdcForSettlement.toFixed(2),
-              totalCollateralNeeded: totalCollateralNeeded.toFixed(2),
-              guard: REPLENISH_RESIDUAL_GUARD_USD,
-            });
-            await notifyDiscord(
-              `Hedge settlement SKIPPED: admin still holds $${residualUsd.toFixed(2)} of non-USDC after replenish (USDC $${adminUsdcForSettlement.toFixed(2)} vs needed $${totalCollateralNeeded.toFixed(2)}). Likely aggregator route failure — would write fake losses if settled. Retry next tick.`,
-              'WARN',
-              { residualUsd: residualUsd.toFixed(2), adminUsdcForSettlement: adminUsdcForSettlement.toFixed(2), totalCollateralNeeded: totalCollateralNeeded.toFixed(2) },
-            );
-            hedgeSettlement = {
-              settled: 0, failed: 0, details: [],
-              replenishment,
-              debug: { skippedReason: 'replenish-incomplete', residualUsd, adminUsdcForSettlement, totalCollateralNeeded },
-            };
-          } else if (adminUsdcForSettlement > 0.001) {
-            const settlement = await settleActiveHedges(network);
-            hedgeSettlement = {
-              settled: settlement.settled,
-              failed: settlement.failed,
-              details: settlement.details,
-              replenishment,
-            };
-            logger.info('[SUI Cron] Previous hedges settled — USDC returned to pool', {
-              settled: settlement.settled,
-              failed: settlement.failed,
-              adminUsdcReturned: adminUsdcForSettlement.toFixed(6),
-              pnl: (adminUsdcForSettlement - totalCollateralNeeded).toFixed(6),
-            });
-            // Wait for on-chain state to propagate before opening new hedges
-            if (settlement.settled > 0) {
-              await new Promise(r => setTimeout(r, 2000));
-            }
-          } else {
-            logger.warn('[SUI Cron] No USDC available to settle hedges', {
-              adminUsdc: adminUsdcForSettlement.toFixed(6),
-            });
-            hedgeSettlement = {
-              settled: 0, failed: 0, details: [],
-              replenishment,
-              debug: { adminUsdcForSettlement, totalCollateralNeeded, activeHedgesCount: activeHedges.length },
-            };
-          }
-        } else {
-          logger.info('[SUI Cron] No previous hedges to settle');
-          hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { activeHedgesFound: 0 } };
-        }
-      } catch (settleErr) {
-        const errMsg = settleErr instanceof Error ? settleErr.message : String(settleErr);
-        logger.warn('[SUI Cron] Pre-swap hedge settlement failed (non-critical)', { error: settleErr });
-        hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { error: errMsg } };
-      }
-    } else {
-      hedgeSettlement = { settled: 0, failed: 0, details: [], debug: { envMissing: { adminKey: !process.env.SUI_POOL_ADMIN_KEY, agentCap: !process.env.SUI_AGENT_CAP_ID } } };
-    }
-
-    // Step 6.6: Drift-based pre-rebalance — sell overweight asset(s) to USDC
-    // so Step 7 has actual budget to buy underweight assets.
-    //
-    // Why this step exists: after the Step 6.5 shortfall-only fix (commit
-    // 598484a7), admin USDC sat near zero because nothing was sold. Step 7's
-    // planRebalanceSwaps then had no budget and the wallet got stuck at
-    // whatever composition existed — e.g. all wBTC, no wETH, no SUI — even
-    // though the AI kept targeting BTC=45/ETH=37/SUI=18.
-    //
-    // The fix: explicitly identify overweight assets (drift > threshold) and
-    // sell exactly the excess. Step 7 then uses the recovered USDC to buy
-    // underweight assets per the AI target. Pure addition — does NOT
-    // change the original aiResult.allocations (which still drives the
-    // hedge step and DB snapshots).
-    let driftRebalance: SuiCronResult['driftRebalance'];
-    let executionAllocations: Record<string, number> | undefined;
-    if (process.env.SUI_POOL_ADMIN_KEY && !aboveSafetyCeiling && navUsd >= 15) {
-      try {
-        const preHoldings = await getAdminAssetValuesUsd(network, pricesUSD);
-        const targets: Record<string, number> = {};
-        const deltas: Record<string, number> = {};
-        for (const a of POOL_ASSETS) {
-          const targetPct = Number(aiResult.allocations[a as PoolAsset] || 0);
-          targets[a] = (navUsd * targetPct) / 100;
-          deltas[a] = targets[a] - (preHoldings[a as PoolAsset] || 0);
-        }
-        logger.info('[SUI Cron] Step 6.6 drift analysis', {
-          navUsd: navUsd.toFixed(2),
-          preHoldings: Object.entries(preHoldings).map(([k, v]) => `${k}=$${(v as number).toFixed(2)}`).join(' '),
-          targets: Object.entries(targets).map(([k, v]) => `${k}=$${v.toFixed(2)}`).join(' '),
-          deltas: Object.entries(deltas).map(([k, v]) => `${k}=${v > 0 ? '+' : ''}$${v.toFixed(2)}`).join(' '),
-          driftThreshold: REBALANCE_DRIFT_THRESHOLD_PCT,
-          maxSellPerTick: MAX_REBALANCE_SELL_USD,
-        });
-
-        const sold: NonNullable<SuiCronResult['driftRebalance']>['sold'] = [];
-        let totalSoldUsdc = 0;
-
-        // Sell overweight assets, smallest excess first to spread DEX impact
-        const overweightAssets = POOL_ASSETS
-          .map(a => ({ asset: a as string, excess: -(deltas[a] || 0), driftPct: targets[a] > 0 ? (-(deltas[a] || 0) / targets[a]) * 100 : 0 }))
-          .filter(x => x.excess > 0 && x.driftPct >= REBALANCE_DRIFT_THRESHOLD_PCT)
-          .sort((a, b) => a.excess - b.excess);
-
-        for (const { asset, excess, driftPct } of overweightAssets) {
-          const sellUsd = Math.min(excess, MAX_REBALANCE_SELL_USD);
-          logger.info(`[SUI Cron] Step 6.6 SELL ${asset}`, {
-            currentUsd: (preHoldings[asset as PoolAsset] || 0).toFixed(2),
-            targetUsd: targets[asset].toFixed(2),
-            excessUsd: excess.toFixed(2),
-            driftPct: driftPct.toFixed(1),
-            sellUsd: sellUsd.toFixed(2),
-          });
-          const result = await sellAssetForUsdc(network, asset as BluefinPoolAsset, sellUsd, pricesUSD);
-          sold.push({
-            asset,
-            usdcReceived: result.swapped,
-            driftPct,
-            txDigest: result.txDigest,
-            error: result.error,
-          });
-          if (result.swapped > 0) {
-            totalSoldUsdc += result.swapped;
-            // Wait for on-chain state propagation before next swap
-            await new Promise(r => setTimeout(r, 2000));
-          }
-        }
-
-        // Build buy-only execution allocations from positive deltas. Step 7
-        // uses this instead of the raw aiResult.allocations so it doesn't
-        // accidentally buy MORE of an overweight asset we just sold from.
-        const positiveDeltas: Record<string, number> = {};
-        let totalPositive = 0;
-        for (const a of POOL_ASSETS) {
-          const d = deltas[a] || 0;
-          if (d > 0) {
-            positiveDeltas[a] = d;
-            totalPositive += d;
-          }
-        }
-        if (totalPositive > 0) {
-          executionAllocations = {};
-          let allocated = 0;
-          const positiveAssets = Object.keys(positiveDeltas);
-          for (let i = 0; i < positiveAssets.length; i++) {
-            const a = positiveAssets[i];
-            const isLast = i === positiveAssets.length - 1;
-            const pct = isLast
-              ? Math.max(0, 100 - allocated)
-              : Math.round((positiveDeltas[a] / totalPositive) * 100);
-            executionAllocations[a] = pct;
-            allocated += pct;
-          }
-          // Ensure overweight assets are 0% in the buy plan (Step 7 won't buy them)
-          for (const a of POOL_ASSETS) {
-            if (!(a in executionAllocations)) executionAllocations[a] = 0;
-          }
-        }
-
-        driftRebalance = { preHoldings, targets, deltas, sold, totalSoldUsdc, executionAllocations };
-
-        if (totalSoldUsdc > 0 || sold.length > 0) {
-          const okSold = sold.filter(s => s.usdcReceived > 0);
-          await notifyDiscord(
-            `Drift rebalance: sold $${totalSoldUsdc.toFixed(2)} of overweight asset(s) → USDC for Step 7 buys. ${okSold.map(s => `${s.asset} $${s.usdcReceived.toFixed(2)} (drift ${s.driftPct.toFixed(0)}%)`).join(', ') || '(no swap succeeded)'}.`,
-            okSold.length > 0 ? 'INFO' : 'WARN',
-            { sold, deltas, targets, navUsd: navUsd.toFixed(2), executionAllocations },
-          );
-        }
-      } catch (driftErr) {
-        const msg = driftErr instanceof Error ? driftErr.message : String(driftErr);
-        logger.warn('[SUI Cron] Step 6.6 drift rebalance failed (non-critical)', { error: msg });
-        driftRebalance = {
-          preHoldings: { BTC: 0, ETH: 0, SUI: 0 },
-          targets: { BTC: 0, ETH: 0, SUI: 0 },
-          deltas: { BTC: 0, ETH: 0, SUI: 0 },
-          sold: [], totalSoldUsdc: 0,
-          skippedReason: `error: ${msg}`,
-        };
-      }
-    } else {
-      driftRebalance = {
-        preHoldings: { BTC: 0, ETH: 0, SUI: 0 },
-        targets: { BTC: 0, ETH: 0, SUI: 0 },
-        deltas: { BTC: 0, ETH: 0, SUI: 0 },
-        sold: [], totalSoldUsdc: 0,
-        skippedReason: !process.env.SUI_POOL_ADMIN_KEY
-          ? 'no admin key'
-          : aboveSafetyCeiling
-            ? 'above NAV safety ceiling'
-            : `NAV $${navUsd.toFixed(2)} < $15 minimum`,
-      };
-    }
 
     // Step 7: Plan + Execute rebalance via SuiPoolAgent
     // ═══════════════════════════════════════════════════════════════
@@ -757,43 +501,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
 
 
     // Step 9: Log AI decision to transaction history
-    try {
-      const decisionId = `sui_ai_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-      await addPoolTransactionToDb({
-        id: decisionId,
-        type: 'AI_DECISION',
-        chain: 'sui',
-        details: {
-          chain: 'sui',
-          agent: 'SuiPoolAgent',
-          enhanced: Object.keys(enhancedContext).length > 0,
-          action: aiResult.shouldRebalance ? 'REBALANCE' : 'HOLD',
-          allocations: aiResult.allocations,
-          confidence: aiResult.confidence,
-          reasoning: aiResult.reasoning,
-          swappableAssets: aiResult.swappableAssets,
-          hedgedAssets: aiResult.hedgedAssets,
-          riskScore: aiResult.riskScore,
-          prices: pricesUSD,
-          rebalanceQuotes: rebalanceSwaps,
-          poolNAV_USDC: navUsd,
-          poolSharePrice: sharePriceUsd,
-          memberCount: poolStats.memberCount,
-          ...(enhancedContext.marketSentiment && { marketSentiment: enhancedContext.marketSentiment }),
-          ...(enhancedContext.urgency && { urgency: enhancedContext.urgency }),
-          ...(enhancedContext.predictionSignals && { predictionSignals: enhancedContext.predictionSignals }),
-          ...(enhancedContext.riskAlerts?.length && { riskAlerts: enhancedContext.riskAlerts }),
-          ...(enhancedContext.correlationInsight && { correlationInsight: enhancedContext.correlationInsight }),
-          // Persist the recommendations list so /api/debug/sui-pool-status
-          // can surface tilt explanations like "Synthetic STRONG UP on BTC"
-          // and "Drift-fusion alignment UP 100% across 4 assets" — without
-          // this, the audit trail loses the *why* behind each allocation.
-          ...(enhancedContext.recommendations?.length && { recommendations: enhancedContext.recommendations }),
-        },
-      });
-    } catch (txErr) {
-      logger.warn('[SUI Cron] Transaction log failed (non-critical)', { error: txErr });
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // Extracted to lib/services/sui/cron/step-9-log-decision.ts.
+    await runStep9LogDecision({
+      navUsd, sharePriceUsd, poolStats, pricesUSD, aiResult,
+      enhancedContext, rebalanceSwaps,
+    });
+
 
     // Build response
     const result: SuiCronResult = {
