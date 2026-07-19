@@ -402,7 +402,11 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
             // across venues, picked Hyperliquid for lower funding).
             // Zero execution change — purely diagnostic so we can
             // validate the router in production before flipping live.
-            if ((process.env.PERP_ROUTER_SHADOW || '').toLowerCase() === 'true') {
+            // Accept both '1' (rest-of-repo convention) and 'true' (docs
+            // convention) so operator intent reaches this diagnostic path
+            // regardless of which value shape they set.
+            const perpRouterShadowRaw = (process.env.PERP_ROUTER_SHADOW || '').trim().toLowerCase();
+            if (perpRouterShadowRaw === '1' || perpRouterShadowRaw === 'true') {
               try {
                 const hl = HyperliquidService.getInstance();
                 const [bfMd, hlSnap] = await Promise.all([

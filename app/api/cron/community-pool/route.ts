@@ -484,8 +484,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
               executed: false,
             };
             
-            // Execute rebalancing if auto-approval is enabled
-            const autoApprovalEnabled = process.env.COMMUNITY_POOL_AUTO_REBALANCE === 'true';
+            // Execute rebalancing if auto-approval is enabled.
+            // Accept both '1' (rest-of-repo convention) and 'true' (this route's
+            // legacy convention) so an operator following either doesn't get
+            // a silent no-op — same failure mode class as the HALT wire drift
+            // fixed in 0ca16f95.
+            const autoApprovalRaw = (process.env.COMMUNITY_POOL_AUTO_REBALANCE || '').trim().toLowerCase();
+            const autoApprovalEnabled = autoApprovalRaw === '1' || autoApprovalRaw === 'true';
             const navThresholdRaw = parseFloat(process.env.COMMUNITY_POOL_NAV_THRESHOLD || '0');
             const navThreshold = Number.isFinite(navThresholdRaw) && navThresholdRaw > 0 ? navThresholdRaw : 100000;
             const currentNAV = Number(poolStats.totalNAV) || 0;
@@ -580,7 +585,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
             } else if (!secureSigner) {
               aiDecision.reasoning += ' (SecureAgentSigner unavailable - check AGENT_SIGNER_KEY)';
             } else if (!autoApprovalEnabled) {
-              aiDecision.reasoning += ' (Auto-execution disabled - COMMUNITY_POOL_AUTO_REBALANCE=false)';
+              aiDecision.reasoning += ` (Auto-execution disabled - COMMUNITY_POOL_AUTO_REBALANCE="${process.env.COMMUNITY_POOL_AUTO_REBALANCE ?? ''}"; expected '1' or 'true')`;
             } else if (currentNAV > navThreshold) {
               aiDecision.reasoning += ` (NAV $${currentNAV.toFixed(2)} exceeds threshold $${navThreshold} - manual approval required)`;
             }
