@@ -38,9 +38,9 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { errMsg } from '@/lib/utils/error-handler';
 import { SUI_USDC_POOL_CONFIG, SUI_USDC_COIN_TYPE } from '@/lib/types/sui-pool-types';
-import { BluefinService, type BluefinPosition, BLUEFIN_PAIRS } from '@/lib/services/sui/BluefinService';
+import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
-import { setCronState } from '@/lib/db/cron-state';
+import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 // Static so Graphify sees the stale-hedge dispatch. Left the 3 @mysten/sui
 // SDK dynamic imports alone (cold-start defers, low graph value).
 import { detectStaleHedges } from '@/lib/services/sui/StaleHedgeDetector';
@@ -191,76 +191,39 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
             { stale, autoClose },
           ).catch(() => {});
           if (autoClose) {
-            const dustAutoResolve = (process.env.DUST_LOCK_AUTO_RESOLVE ?? '') === '1';
             for (const s of stale) {
               const symbol = `${s.asset}-PERP`;
+              // Dust below minQty is UNCLEARABLE on-venue (dust-manager
+              // classifyPosition). openHedge snap-floors any topup, so
+              // add-then-close always leaves the same-shape residue;
+              // BlueFin support is the only clearing path. Once flagged,
+              // suppress retries so we don't spam Discord every hour.
+              const dustFlagKey = `stale-dust-flag:${s.id}`;
+              if (await getCronStateOr<boolean>(dustFlagKey, false)) continue;
               try {
                 // Omit size → full-position close (per BluefinService signature).
                 // Previous call passed { size: 0, leverage: 3 } which was
-                // silently a no-op: size=0 requested closing zero units,
-                // leverage isn't a valid parameter, and .catch(() => {})
-                // swallowed the failure. Observed 2026-07-17: #190 ETH SHORT
+                // silently a no-op. Observed 2026-07-17: #190 ETH SHORT
                 // flagged for 3+ days with no actual close.
-                let result = await bf.closeHedge({ symbol });
-
-                // Dust-lock auto-resolve (2026-07-17): when close fails
-                // because size < minQty, top up the position to clear
-                // minQty, then retry close. Costs a small amount of
-                // extra collateral (~1-2 USDC at current sizes) but
-                // frees the trapped position. Env-gated because it
-                // spends capital.
-                if (!result.success
-                  && dustAutoResolve
-                  && /dust-locked at venue|<\s*minQty/i.test(result.error || '')) {
-                  try {
-                    const positions = await bf.getPositions();
-                    const pos = positions.find((p) => p.symbol === symbol);
-                    const pair = BLUEFIN_PAIRS[symbol as keyof typeof BLUEFIN_PAIRS];
-                    if (pos && pair) {
-                      const currentSize = Math.abs(Number(pos.size ?? 0));
-                      const minQty = pair.minQuantity;
-                      const topupNeeded = Math.max(minQty - currentSize, pair.stepSize);
-                      // Round up to nearest stepSize
-                      const topupSnapped = Math.ceil(topupNeeded / pair.stepSize) * pair.stepSize;
-                      logger.warn('[SuiHedgeReconcile] dust-lock detected, attempting auto-resolve', {
-                        symbol, currentSize, minQty, topupSnapped, side: pos.side,
-                      });
-                      // Top up the SAME side to clear minQty
-                      const topupResult = await bf.openHedge({
-                        symbol, side: pos.side as 'LONG' | 'SHORT',
-                        size: topupSnapped, leverage: 3,
-                        reason: `dust-lock auto-resolve top-up (was ${currentSize} < ${minQty})`,
-                      });
-                      if (topupResult.success) {
-                        await notifyDiscord(
-                          `🔧 Dust-lock top-up: #${s.id} ${symbol} +${topupSnapped} to clear minQty`,
-                          'TRADE', { hedgeId: s.id, symbol, topupSnapped, topupResult },
-                        ).catch(() => {});
-                        // Wait 3s for fill, then retry close of full position
-                        await new Promise((r) => setTimeout(r, 3000));
-                        result = await bf.closeHedge({ symbol });
-                      } else {
-                        logger.warn('[SuiHedgeReconcile] dust top-up FAILED', {
-                          symbol, error: topupResult.error,
-                        });
-                      }
-                    }
-                  } catch (dustErr) {
-                    logger.warn('[SuiHedgeReconcile] dust auto-resolve threw', {
-                      symbol,
-                      error: dustErr instanceof Error ? dustErr.message : String(dustErr),
-                    });
-                  }
-                }
-
+                const result = await bf.closeHedge({ symbol });
                 if (!result.success) {
+                  const isDust = result.code === 'DUST_LOCKED';
                   logger.warn('[SuiHedgeReconcile] stale-close FAILED', {
-                    hedgeId: s.id, symbol, error: result.error,
+                    hedgeId: s.id, symbol, error: result.error, isDust,
                   });
-                  await notifyDiscord(
-                    `⚠️ Stale-close FAILED: #${s.id} ${symbol} — ${result.error}`,
-                    'WARN', { hedge: s, result },
-                  ).catch(() => {});
+                  if (isDust) {
+                    // Page operator ONCE; further retries would be identical.
+                    await setCronState(dustFlagKey, true);
+                    await notifyDiscord(
+                      `🔒 Hedge #${s.id} ${symbol} DUST-LOCKED (size < minQty). Venue math makes this unclearable on-order-book (step-floor + minQty ⇒ any topup leaves same residue). Escalate via BlueFin Discord #ticket-desk under Support, or leave for liquidation-driven decay. Retries suppressed.`,
+                      'KILL', { hedge: s, result },
+                    ).catch(() => {});
+                  } else {
+                    await notifyDiscord(
+                      `⚠️ Stale-close FAILED: #${s.id} ${symbol} — ${result.error}`,
+                      'WARN', { hedge: s, result },
+                    ).catch(() => {});
+                  }
                 } else {
                   logger.info('[SuiHedgeReconcile] stale-close succeeded', {
                     hedgeId: s.id, symbol, filledSize: result.filledSize,
