@@ -318,6 +318,13 @@ export async function GET(req: NextRequest) {
       hedgeMinNavUsd: HEDGE_MIN_NAV_USD,
       network: (process.env.SUI_NETWORK || 'mainnet').trim(),
     },
+    // Deployed commit — surfaces "wait, prod is on old sha" for silent
+    // Vercel deploy failures. Fell into this on 2026-07-20 when the
+    // tsconfig types drift bailed two prod deploys unnoticed for 2 days.
+    build: {
+      commit: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 8) || 'local',
+      branch: process.env.VERCEL_GIT_COMMIT_REF || 'unknown',
+    },
   };
 
   if (overall !== 'ok') {
