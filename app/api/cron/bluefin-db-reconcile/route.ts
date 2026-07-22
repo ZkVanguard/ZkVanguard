@@ -35,6 +35,7 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { BluefinService, BLUEFIN_PAIRS } from '@/lib/services/sui/BluefinService';
+import { classifyPosition } from '@/lib/services/sui/dust-manager';
 import { getActiveHedges, closeHedge, createHedge, type Hedge } from '@/lib/db/hedges';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 import { SUI_COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
@@ -445,11 +446,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
     // guard) and any orphan adopted at sub-minQty. Cross-checks against
     // live positions so a stale DB row doesn't falsely flag a healthy
     // hedge. Skips operational micro-hedges (notional < $1 + leverage=1).
+    // Uses dust-manager.classifyPosition — single source of truth.
     try {
       for (const h of dbHedges) {
         const symbol = String(h.market || '');
-        const pair = BLUEFIN_PAIRS[symbol as keyof typeof BLUEFIN_PAIRS];
-        if (!pair) continue;
+        if (!(symbol in BLUEFIN_PAIRS)) continue;
         const notional = Number(h.notional_value ?? 0);
         const leverage = Number(h.leverage ?? 1);
         if (notional < 1 && leverage <= 1) continue;
@@ -458,13 +459,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
             && String((p as { side?: string }).side || '').toUpperCase() === String(h.side || '').toUpperCase(),
         );
         const liveSize = Math.abs(Number((livePos as { size?: number })?.size ?? 0));
-        if (liveSize <= 0 || liveSize >= pair.minQuantity) continue;
+        if (liveSize <= 0) continue;
+        const cls = classifyPosition(symbol, liveSize);
+        if (cls.exitPath !== 'UNCLEARABLE') continue;
         const dustFlagKey = `stale-dust-flag:${h.id}`;
         if (await getCronStateOr<boolean>(dustFlagKey, false)) continue;
         await setCronState(dustFlagKey, true);
         await notifyDiscord(
-          `🔒 Hedge #${h.id} ${symbol} ${h.side} DUST-LOCKED (venue size ${liveSize} < minQty ${pair.minQuantity}). Unclearable on-order-book — escalate via BlueFin Discord #ticket-desk. Auto-close will skip this hedge.`,
-          'KILL', { hedgeId: h.id, symbol, side: h.side, liveSize, minQty: pair.minQuantity },
+          `🔒 Hedge #${h.id} ${symbol} ${h.side} DUST-LOCKED (venue size ${liveSize} < minQty ${cls.minQty}). Unclearable on-order-book — escalate via BlueFin Discord #ticket-desk. Auto-close will skip this hedge.`,
+          'KILL', { hedgeId: h.id, symbol, side: h.side, liveSize, minQty: cls.minQty },
         ).catch(() => {});
       }
     } catch { /* best-effort — dust scan is diagnostic, don't fail reconcile */ }
