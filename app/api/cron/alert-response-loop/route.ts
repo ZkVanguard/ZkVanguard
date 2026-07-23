@@ -26,6 +26,7 @@ import { tryClaimCronRun, setCronState, setCronHalt, CronKeys } from '@/lib/db/c
 import { logger } from '@/lib/utils/logger';
 import { notifyDiscord, readAlertLog } from '@/lib/utils/discord-notify';
 import { evaluateAutoResponse } from '@/lib/services/alerting/alert-response-loop';
+import { envFlag } from '@/lib/utils/env-flag';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -102,7 +103,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: true, responses: 0 });
     }
 
-    const execute = (process.env.ALERT_RESPONSE_EXECUTE ?? '') === '1';
+    const execute = envFlag('ALERT_RESPONSE_EXECUTE');
     logger.warn('[AlertResponseLoop] auto-response(s) fired', {
       execute, count: responses.length, responses,
     });
@@ -135,7 +136,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
         // and is long enough to bridge one full day of manual triage.
         const HALT_WINDOW_MS = 24 * 60 * 60 * 1000;
         const haltUntilMs = now + HALT_WINDOW_MS;
-        if (r.type === 'HALT_TRADER' && (process.env.ALERT_RESPONSE_EXECUTE_HALT ?? '') === '1') {
+        if (r.type === 'HALT_TRADER' && envFlag('ALERT_RESPONSE_EXECUTE_HALT')) {
           try {
             // Trader reads this exact key via KEY_HALTED_UNTIL and halts while
             // untilMs > now (app/api/cron/polymarket-edge-trader/route.ts:705).
@@ -153,7 +154,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
             ).catch(() => {});
           }
         }
-        if (r.type === 'HALT_AUTOHEDGE' && (process.env.ALERT_RESPONSE_EXECUTE_HALT ?? '') === '1') {
+        if (r.type === 'HALT_AUTOHEDGE' && envFlag('ALERT_RESPONSE_EXECUTE_HALT')) {
           try {
             // sui-community-pool reads via getCronHalt('sui-community-pool:autohedge')
             // which pulls cron:haltUntil:<id> + cron:haltReason:<id>. Prior wire

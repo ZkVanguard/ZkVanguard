@@ -35,6 +35,7 @@ import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5Min
 import { attestExternalNav } from '@/lib/services/sui/cron/nav-oracle';
 import { replenishAdminUsdc } from '@/lib/services/sui/cron/admin-swaps';
 import { recordPoolNavSnapshot } from '@/lib/services/sui/cron/persistence';
+import { envFlag } from '@/lib/utils/env-flag';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import type { SuiUsdcPoolStats } from '@/lib/types/sui-pool-types';
 
@@ -301,7 +302,7 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
             spotPrices: pricesUSD,
           });
           if (actions.length > 0) {
-            const execute = (process.env.PORTFOLIO_DRIVER_EXECUTE ?? '') === '1';
+            const execute = envFlag('PORTFOLIO_DRIVER_EXECUTE');
             logger.warn('[SUI Cron] PortfolioDriver suggests corrective actions', {
               execute, count: actions.length, actions,
             });

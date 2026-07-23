@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { logger } from '@/lib/utils/logger';
+import { envFlag } from '@/lib/utils/env-flag';
 import { safeErrorResponse } from '@/lib/security/safe-error';
 import { verifyCronRequest } from '@/lib/qstash';
 import { autoHedgingService } from '@/lib/services/hedging/AutoHedgingService';
@@ -484,13 +485,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
               executed: false,
             };
             
-            // Execute rebalancing if auto-approval is enabled.
-            // Accept both '1' (rest-of-repo convention) and 'true' (this route's
-            // legacy convention) so an operator following either doesn't get
-            // a silent no-op — same failure mode class as the HALT wire drift
-            // fixed in 0ca16f95.
-            const autoApprovalRaw = (process.env.COMMUNITY_POOL_AUTO_REBALANCE || '').trim().toLowerCase();
-            const autoApprovalEnabled = autoApprovalRaw === '1' || autoApprovalRaw === 'true';
+            // Execute rebalancing if auto-approval is enabled. envFlag accepts
+            // '1'|'true'|'yes'|'on' — canonical parser prevents the silent-fail
+            // class fixed in e6a80411 (this call site was one of the two).
+            const autoApprovalEnabled = envFlag('COMMUNITY_POOL_AUTO_REBALANCE');
             const navThresholdRaw = parseFloat(process.env.COMMUNITY_POOL_NAV_THRESHOLD || '0');
             const navThreshold = Number.isFinite(navThresholdRaw) && navThresholdRaw > 0 ? navThresholdRaw : 100000;
             const currentNAV = Number(poolStats.totalNAV) || 0;

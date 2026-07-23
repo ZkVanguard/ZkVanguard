@@ -21,6 +21,7 @@
  *  • PERP_ROUTER_SHADOW=true    — enable shadow-router diagnostic path
  */
 import { logger } from '@/lib/utils/logger';
+import { envFlag } from '@/lib/utils/env-flag';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { query } from '@/lib/db/postgres';
 import { getCronStateOr, getCronHalt, setCronHalt, endOfUtcDayMs, CronKeys } from '@/lib/db/cron-state';
@@ -402,11 +403,9 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
             // across venues, picked Hyperliquid for lower funding).
             // Zero execution change — purely diagnostic so we can
             // validate the router in production before flipping live.
-            // Accept both '1' (rest-of-repo convention) and 'true' (docs
-            // convention) so operator intent reaches this diagnostic path
-            // regardless of which value shape they set.
-            const perpRouterShadowRaw = (process.env.PERP_ROUTER_SHADOW || '').trim().toLowerCase();
-            if (perpRouterShadowRaw === '1' || perpRouterShadowRaw === 'true') {
+            // envFlag canonical parser — one of the two sites e6a80411
+            // fixed by hand; now delegated.
+            if (envFlag('PERP_ROUTER_SHADOW')) {
               try {
                 const hl = HyperliquidService.getInstance();
                 const [bfMd, hlSnap] = await Promise.all([

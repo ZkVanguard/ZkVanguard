@@ -56,6 +56,7 @@ import { verifyCronRequest } from '@/lib/qstash';
 import { errMsg } from '@/lib/utils/error-handler';
 import { computeEdgeStake } from '@/lib/services/trading/edge-sizing';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { envFlag } from '@/lib/utils/env-flag';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import { safeBluefinSnapshot, refreshBluefinCache } from '@/lib/services/sui/bluefin-read-safe';
 import {
@@ -776,7 +777,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
             realizedPnl: Number(r.realized_pnl),
             openedAt: new Date(r.created_at),
           }));
-          regretMultiplierEarly = (process.env.REGRET_CONVICTION_GATE_DISABLE ?? '') === '1'
+          regretMultiplierEarly = envFlag('REGRET_CONVICTION_GATE_DISABLE')
             ? 1
             : await computeSizeMultiplier({ recentDecisions: decisions });
           regretScoreForHalt = computeRegretScore(decisions);

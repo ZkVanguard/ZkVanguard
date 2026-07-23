@@ -32,6 +32,7 @@ import { checkAndCloseDrifts } from '@/lib/services/agents/position-drift-monito
 import { getSuiCommunityPoolService } from '@/lib/services/sui/SuiCommunityPoolService';
 import { runPortfolioDriverTick } from '@/lib/services/sui/PortfolioDriver';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { envFlag } from '@/lib/utils/env-flag';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -170,7 +171,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
           });
           spotDriverActions = actions.length;
           if (spotDriverActions > 0) {
-            const execute = (process.env.PORTFOLIO_DRIVER_EXECUTE ?? '') === '1';
+            const execute = envFlag('PORTFOLIO_DRIVER_EXECUTE');
             // Log-only by design — sui-community-pool cron owns execution
             // (runs every 30 min; catches up on flip-triggered actions
             // within the next tick). Duplicating swap execution here would

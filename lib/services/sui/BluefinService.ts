@@ -31,6 +31,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { envFlag } from '@/lib/utils/env-flag';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
 import { parseTickerOpenInterest } from '@/lib/services/sui/bluefin-ticker-parsers';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
@@ -1107,7 +1108,7 @@ export class BluefinService {
       // Set BLUEFIN_ALLOW_DUST_RISK_OPEN=1 to bypass (for one-off orders
       // where the operator knowingly accepts the dust exposure).
       const OPEN_MIN_QTY_BUFFER = 1.5;
-      const bypass = (process.env.BLUEFIN_ALLOW_DUST_RISK_OPEN ?? '') === '1';
+      const bypass = envFlag('BLUEFIN_ALLOW_DUST_RISK_OPEN');
       if (!bypass && params.size < pair.minQuantity * OPEN_MIN_QTY_BUFFER) {
         logger.warn('[BlueFin] openHedge: DUST_RISK — size below 1.5x minQty buffer', {
           symbol: params.symbol,

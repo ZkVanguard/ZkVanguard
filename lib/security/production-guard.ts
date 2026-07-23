@@ -10,6 +10,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { envFlag } from '@/lib/utils/env-flag';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ENVIRONMENT DETECTION
@@ -20,7 +21,7 @@ export const IS_TEST = process.env.NODE_ENV === 'test' || !!process.env.JEST_WOR
 export const IS_DEVELOPMENT = !IS_PRODUCTION && !IS_TEST;
 
 // Explicit production override - set FORCE_PRODUCTION_SAFETY=true in staging to enforce production checks
-export const ENFORCE_PRODUCTION_SAFETY = IS_PRODUCTION || process.env.FORCE_PRODUCTION_SAFETY === 'true';
+export const ENFORCE_PRODUCTION_SAFETY = IS_PRODUCTION || envFlag('FORCE_PRODUCTION_SAFETY');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PRICE VALIDATION
@@ -488,7 +489,7 @@ export function requireProductionNetwork(chainId: number | string, serviceName: 
     
     // Only enforce in explicit production mode (not just ENFORCE_PRODUCTION_SAFETY)
     // since staging might legitimately use testnet
-    if (IS_PRODUCTION && process.env.REQUIRE_MAINNET === 'true') {
+    if (IS_PRODUCTION && envFlag('REQUIRE_MAINNET')) {
       throw new Error(`${serviceName} must use mainnet in production. Current chainId: ${chainId}`);
     }
   }

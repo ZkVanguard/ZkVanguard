@@ -50,6 +50,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
+import { envFlag } from '@/lib/utils/env-flag';
 
 export interface ProfitLockDecision {
   active: boolean;
@@ -99,7 +100,7 @@ export function applyProfitLock(
 ): ProfitLockDecision {
   const orig = { ...allocations };
 
-  if ((process.env.PROFIT_LOCK_DISABLE ?? '') === '1') {
+  if (envFlag('PROFIT_LOCK_DISABLE')) {
     return {
       active: false, drawdownPct: 0, peakNav, currentNav,
       originalAllocations: orig, cappedAllocations: orig,
