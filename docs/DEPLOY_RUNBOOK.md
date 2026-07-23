@@ -516,11 +516,11 @@ Checklist:
 
 The 8-gate autonomy defense system ships with every destructive action behind an env flag (default OFF) so operators can log-observe before flipping to live execution. Flip one at a time in Vercel env; watch Discord for 24h per gate before enabling the next.
 
-| Env var | Default | Effect when `=1` | Owning module |
+| Env var | Prod state | Effect when `=1` | Owning module |
 |---|---|---|---|
-| `PORTFOLIO_DRIVER_EXECUTE` | OFF | PortfolioDriver actually executes SELL/BUY/OPEN/CLOSE (currently log-only) | `lib/services/sui/PortfolioDriver.ts` |
-| `STALE_HEDGE_AUTO_CLOSE` | OFF | `sui-hedge-reconcile` force-closes stale hedges (age > 7d + ≥ 2 flips + contradicted side) | `lib/services/sui/StaleHedgeDetector.ts` |
-| `ALERT_RESPONSE_EXECUTE` | OFF | Alert-response-loop cron acts on rules (3 KILL/hr, 24h profit-lock, phantom > 1%) | `lib/services/alerting/alert-response-loop.ts` |
+| `PORTFOLIO_DRIVER_EXECUTE` | **ON** (as of 2026-07-23) | PortfolioDriver actually executes SELL/BUY/OPEN/CLOSE | `lib/services/sui/PortfolioDriver.ts` |
+| `STALE_HEDGE_AUTO_CLOSE` | **ON** (as of 2026-07-23) | `sui-hedge-reconcile` force-closes stale hedges (age > 7d + ≥ 2 flips + contradicted side) | `lib/services/sui/StaleHedgeDetector.ts` |
+| `ALERT_RESPONSE_EXECUTE` | **ON** (as of 2026-07-23) | Alert-response-loop cron acts on rules (3 KILL/hr, 24h profit-lock, phantom > 1%) | `lib/services/alerting/alert-response-loop.ts` |
 | `ALERT_RESPONSE_EXECUTE_HALT` | OFF | Additionally allows HALT_TRADER and HALT_AUTOHEDGE responses | (same as above) |
 | `REGRET_TRACKER_DISABLE` | OFF (i.e. tracker is **ON** by default) | Disables the regret multiplier in `polymarket-edge-trader` stake calc | `lib/services/ai/regret-tracker.ts` |
 | `STALE_HEDGE_AGE_DAYS` | `7` | Age threshold (days) above which a hedge is candidate for stale-close | `lib/services/sui/StaleHedgeDetector.ts` |
@@ -529,14 +529,19 @@ The 8-gate autonomy defense system ships with every destructive action behind an
 | `PROFIT_LOCK_ZERO_RISK_AT` | `20` | Drawdown-% at which risk cap → 0 (100% USDC) | (same) |
 | `PROFIT_LOCK_DISABLE` | OFF | Emergency bypass — turns off profit-lock entirely | (same) |
 
-**Recommended rollout order:**
+**Recommended rollout order (steps 1–5 done as of 2026-07-23):**
 
-1. **Deploy v0.3.0 to Vercel** — all gates default OFF; watch Discord for 24h to confirm log-only messages appear at expected trigger points
-2. Add QStash schedule for `/api/cron/alert-response-loop` (see below)
-3. Flip **`PORTFOLIO_DRIVER_EXECUTE=1`** — the big one; unwinds existing spot when profit-lock fires
-4. Flip **`STALE_HEDGE_AUTO_CLOSE=1`** — kills lingering positions that survive drift-close
-5. Flip **`ALERT_RESPONSE_EXECUTE=1`** — closed-loop remediation active
-6. Flip **`ALERT_RESPONSE_EXECUTE_HALT=1`** — allows the auto-halt responses (the most destructive)
+1. ✅ **Deploy v0.3.0 to Vercel** — all gates default OFF; watch Discord for 24h to confirm log-only messages appear at expected trigger points
+2. ✅ Add QStash schedule for `/api/cron/alert-response-loop` (`scd_7Z4yqbBAJgT5Vuof5Ce9uJKNBy8Y`, every 15 min)
+3. ✅ Flip **`PORTFOLIO_DRIVER_EXECUTE=1`** — the big one; unwinds existing spot when profit-lock fires
+4. ✅ Flip **`STALE_HEDGE_AUTO_CLOSE=1`** — kills lingering positions that survive drift-close
+5. ✅ Flip **`ALERT_RESPONSE_EXECUTE=1`** — closed-loop remediation active
+6. 🔨 Flip **`ALERT_RESPONSE_EXECUTE_HALT=1`** — allows the auto-halt responses (the most destructive)
+
+**Verify current gate state before flipping the last one:**
+```bash
+curl -sS https://www.zkvanguard.xyz/api/health/production | jq .gates
+```
 
 ### New QStash schedule required
 

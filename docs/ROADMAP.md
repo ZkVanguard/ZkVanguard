@@ -41,7 +41,14 @@ Shipped after a real drawdown revealed passive-only defenses. Each gate defends 
 - **AI regret weighting** — confidence-weighted rolling outcome scales stake by [0.25, 1.0]
 - **Alert response loop** — 3 KILL/hr → shrink spot; 24h profit-lock → unwind; phantom rate > 1% → halt
 
-Ships behind env flags (`PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `ALERT_RESPONSE_EXECUTE`) so operator can log-observe before flipping to live execution.
+Ships behind env flags so operator can log-observe before flipping to live execution. **Rollout state (verified 2026-07-23 via `/api/health/production` gate footprint):**
+
+| Gate | State |
+|---|---|
+| `PORTFOLIO_DRIVER_EXECUTE` | ✅ ON |
+| `STALE_HEDGE_AUTO_CLOSE` | ✅ ON |
+| `ALERT_RESPONSE_EXECUTE` | ✅ ON |
+| `ALERT_RESPONSE_EXECUTE_HALT` | ⏸ OFF (last gate held per rollout runbook) |
 
 ---
 
@@ -52,8 +59,8 @@ Ships behind env flags (`PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `A
 - 🔨 External audit close (SUI Foundation grant Tranche 1 deliverable)
 - 🔨 TVL cap ratchet: **$10K → $100K**
 - 🔨 Founding-100 points program live (3× multiplier for retail cohort)
-- 🔨 `PORTFOLIO_DRIVER_EXECUTE=1` in production after log-observation window
-- 🔨 QStash schedule for `alert-response-loop` cron
+- ✅ QStash schedule for `alert-response-loop` cron (scheduled `scd_7Z4yqbBAJgT5Vuof5Ce9uJKNBy8Y`, verified 2026-07-19)
+- 🔨 Flip `ALERT_RESPONSE_EXECUTE_HALT=1` after log-observation window (most-destructive gate, deliberately last)
 - 🔨 Dashboard: risk overview page enhancements + PnL time-series
 
 **Success criteria for cap ratchet:** external audit findings resolved · 30-day incident-free window · > $50K deposited across ≥ 20 members.
@@ -101,4 +108,4 @@ See [`SCALABILITY_ANALYSIS.md`](./SCALABILITY_ANALYSIS.md) for the hard walls th
 
 ---
 
-**Last updated:** 2026-07-15 · Cross-referenced against [`../README.md`](../README.md) and shipped code.
+**Last updated:** 2026-07-23 · Cross-referenced against [`../README.md`](../README.md) and shipped code.
