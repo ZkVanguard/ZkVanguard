@@ -28,8 +28,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
-import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
+import { getCronStateOr, setCronState, getCronStateByPrefix } from '@/lib/db/cron-state';
 import { decideAlert, DRIFT_GRACE_MS } from '@/lib/services/deploy-watchdog/decide';
+import { findIntegrityViolations } from '@/lib/services/state-integrity/checks';
+import { getActiveHedges } from '@/lib/db/hedges';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,12 +100,51 @@ export async function GET(request: NextRequest) {
       setCronState(CRON_KEY_LAST_ALERT, decision.nextLastAlert).catch(() => {}),
     ]);
 
+    // State-integrity fsck — piggybacks on this schedule to save a QStash
+    // slot (we're at the 10-schedule quota). Same "silent-drift watchdog"
+    // theme: writers leave stale halts/directives/flags in place; here we
+    // notice and WARN. Best-effort; doesn't fail the deploy check.
+    let integrityViolationsCount = 0;
+    try {
+      const [halts, directives, peaks, dustFlags, activeHedges] = await Promise.all([
+        getCronStateByPrefix('cron:haltUntil:'),
+        getCronStateByPrefix('alert-response:'),
+        getCronStateByPrefix('poolNav:peak:'),
+        getCronStateByPrefix('stale-dust-flag:'),
+        getActiveHedges(undefined, 'sui').catch(() => []),
+      ]);
+      const activeIds = new Set<number | string>(activeHedges.map((h) => h.id));
+      const entries = [
+        ...[...halts.entries()].map(([key, value]) => ({ key, value })),
+        ...[...directives.entries()].map(([key, value]) => ({ key, value })),
+        ...[...peaks.entries()].map(([key, value]) => ({ key, value })),
+        ...[...dustFlags.entries()].map(([key, value]) => ({ key, value })),
+      ];
+      const violations = findIntegrityViolations(entries, activeIds, now);
+      integrityViolationsCount = violations.length;
+      if (violations.length > 0) {
+        const grouped: Record<string, number> = {};
+        for (const v of violations) grouped[v.category] = (grouped[v.category] || 0) + 1;
+        const groupSummary = Object.entries(grouped).map(([c, n]) => `${c}:${n}`).join(', ');
+        const first = violations.slice(0, 3).map((v) => `${v.key} — ${v.detail}`).join(' | ');
+        await notifyDiscord(
+          `⚠️ State-integrity drift: ${violations.length} violation(s) [${groupSummary}]. First 3: ${first}`,
+          'WARN', { violations },
+        ).catch(() => {});
+      }
+    } catch (integrityErr) {
+      logger.warn('[deploy-watchdog] state-integrity check failed (non-critical)', {
+        error: integrityErr instanceof Error ? integrityErr.message : String(integrityErr),
+      });
+    }
+
     logger.info('[deploy-watchdog] tick', {
       runningSha, originSha,
       drifted: runningSha !== originSha,
       isFreshPush: originAgeMs < DRIFT_GRACE_MS,
       originAgeMinutes: Math.round(originAgeMs / 60_000),
       alertLevel: decision.alertLevel,
+      integrityViolations: integrityViolationsCount,
     });
 
     return NextResponse.json({
