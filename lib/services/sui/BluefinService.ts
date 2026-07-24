@@ -34,8 +34,11 @@ import { logger } from '@/lib/utils/logger';
 import { envFlag } from '@/lib/utils/env-flag';
 import { signOrderRequest, type OrderSignedFields } from '@/lib/services/sui/bluefin/sign-request';
 import * as HedgeResult from '@/lib/services/sui/bluefin/hedge-result';
+import {
+  fetchMarketData, fetchOrderBook, fetchFundingRates,
+  type ExchangeApiCaller,
+} from '@/lib/services/sui/bluefin/market-data';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
-import { parseTickerOpenInterest } from '@/lib/services/sui/bluefin-ticker-parsers';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import crypto from 'crypto';
@@ -823,97 +826,18 @@ export class BluefinService {
     }
   }
 
-  /**
-   * Get market data for a symbol
-   * Uses Exchange API: /v1/exchange/ticker
-   * Note: Prices are in E9 format (multiply by 1e-9 to get decimal)
-   * Falls back to null if exchange API is unavailable
-   */
-  async getMarketData(
-    symbol: string
-  ): Promise<{
-    price: number;
-    fundingRate: number;
-    change24h?: number;
-    openInterestUsd?: number;
+  /** Bound reference to apiRequest with exchange-api signature — for
+   *  passing to the extracted market-data functions in bluefin/market-data.ts. */
+  private get exchangeApi(): ExchangeApiCaller {
+    return this.apiRequest.bind(this) as unknown as ExchangeApiCaller;
+  }
+
+  /** Get market data for a symbol. Delegates to bluefin/market-data.fetchMarketData. */
+  async getMarketData(symbol: string): Promise<{
+    price: number; fundingRate: number; change24h?: number; openInterestUsd?: number;
   } | null> {
     await this.ensureInitializedAsync();
-
-    try {
-      // Response uses E9 format: lastPriceE9, fundingRateE9, etc.
-      const marketData = await this.apiRequest<{
-        lastPriceE9?: string;
-        lastPrice?: string; // Some responses may use non-E9 format
-        lastFundingRateE9?: string;
-        fundingRate?: string;
-        priceChangePercent24hrE9?: string;
-        priceChange24h?: string;
-        openInterestE9?: string;
-        openInterest?: string;
-        // 24h quote volume in USD × 1e9 — used as sanity cross-check
-        // against openInterestE9, which has bitten us with stale/wrong
-        // values in the past (BTC OI reported $117B on 2026-06-01 prior
-        // to the parsing fix).
-        quoteVolume24hrE9?: string;
-      }>('GET', `/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`, undefined, 'exchange');
-
-      // Parse E9 format prices (divide by 1e9)
-      let price = 0;
-      if (marketData?.lastPriceE9) {
-        price = parseFloat(marketData.lastPriceE9) / 1e9;
-      } else if (marketData?.lastPrice) {
-        price = parseFloat(marketData.lastPrice);
-      }
-      if (isNaN(price)) {
-        logger.warn('[BlueFin] NaN price detected', { symbol, raw: marketData });
-        return null;
-      }
-
-      let fundingRate = 0;
-      if (marketData?.lastFundingRateE9) {
-        fundingRate = parseFloat(marketData.lastFundingRateE9) / 1e9;
-      } else if (marketData?.fundingRate) {
-        fundingRate = parseFloat(marketData.fundingRate);
-      }
-      if (isNaN(fundingRate)) fundingRate = 0;
-
-      let change24h: number | undefined;
-      if (marketData?.priceChangePercent24hrE9) {
-        change24h = (parseFloat(marketData.priceChangePercent24hrE9) / 1e9) * 100;
-      } else if (marketData?.priceChange24h) {
-        change24h = parseFloat(marketData.priceChange24h);
-      }
-      if (change24h !== undefined && isNaN(change24h)) change24h = undefined;
-
-      // Open interest extraction delegated to a pure helper for testability.
-      // See lib/services/sui/bluefin-ticker-parsers.ts for the encoding
-      // story (openInterestE9 is USD × 1e9, NOT base × 1e9 — earlier code
-      // was inflating BTC OI ~71,000×).
-      const oiSnap = parseTickerOpenInterest(
-        {
-          openInterestE9: marketData?.openInterestE9,
-          openInterest: marketData?.openInterest,
-          quoteVolume24hrE9: marketData?.quoteVolume24hrE9,
-        },
-        price
-      );
-      const openInterestUsd = oiSnap.openInterestUsd;
-      if (oiSnap.rejectedReason) {
-        logger.warn('[BlueFin] OI snapshot rejected by sanity check', {
-          symbol,
-          reason: oiSnap.rejectedReason,
-        });
-      }
-
-      return { price, fundingRate, change24h, openInterestUsd };
-    } catch (error) {
-      // Log at debug level - exchange API may be temporarily unavailable on testnet
-      logger.debug('Failed to get market data', {
-        symbol,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return fetchMarketData(this.exchangeApi, symbol);
   }
 
   /**
@@ -1804,81 +1728,19 @@ export class BluefinService {
     }
   }
 
-  /**
-   * Get order book for a symbol
-   */
-  async getOrderBook(
-    symbol: string,
-    depth: number = 10
-  ): Promise<{
+  /** Get order book for a symbol. Delegates to bluefin/market-data.fetchOrderBook. */
+  async getOrderBook(symbol: string, depth: number = 10): Promise<{
     bids: Array<{ price: number; size: number }>;
     asks: Array<{ price: number; size: number }>;
   }> {
     await this.ensureInitializedAsync();
-
-    try {
-      // BlueFin Pro uses /v1/exchange/depth with E9-format prices
-      const orderbook = await this.apiRequest<{
-        bidsE9?: [string, string][];
-        asksE9?: [string, string][];
-        bids?: [string, string][];
-        asks?: [string, string][];
-      }>(
-        'GET',
-        `/v1/exchange/depth?symbol=${encodeURIComponent(symbol)}&limit=${depth}`,
-        undefined,
-        'exchange'
-      );
-      // Parse E9 format (priceE9 / 1e9, quantityE9 / 1e9) or legacy format
-      const parseBids = orderbook?.bidsE9 || orderbook?.bids || [];
-      const parseAsks = orderbook?.asksE9 || orderbook?.asks || [];
-      return {
-        bids: parseBids.map((b: [string, string]) => ({
-          price: orderbook?.bidsE9 ? parseFloat(b[0]) / 1e9 : parseFloat(b[0]),
-          size: orderbook?.bidsE9 ? parseFloat(b[1]) / 1e9 : parseFloat(b[1]),
-        })),
-        asks: parseAsks.map((a: [string, string]) => ({
-          price: orderbook?.asksE9 ? parseFloat(a[0]) / 1e9 : parseFloat(a[0]),
-          size: orderbook?.asksE9 ? parseFloat(a[1]) / 1e9 : parseFloat(a[1]),
-        })),
-      };
-    } catch (error) {
-      logger.error('Failed to get orderbook', error instanceof Error ? error : undefined);
-      return { bids: [], asks: [] };
-    }
+    return fetchOrderBook(this.exchangeApi, symbol, depth);
   }
 
-  /**
-   * Get funding rate history
-   */
+  /** Get funding rate history. Delegates to bluefin/market-data.fetchFundingRates. */
   async getFundingRates(symbol: string): Promise<Array<{ time: number; rate: number }>> {
     await this.ensureInitializedAsync();
-
-    try {
-      // BlueFin Pro uses /v1/exchange/fundingRateHistory with E9 format
-      const fundingHistory = await this.apiRequest<
-        Array<{
-          fundingTimeAtMillis?: number;
-          time?: number;
-          fundingRateE9?: string;
-          fundingRate?: string;
-        }>
-      >(
-        'GET',
-        `/v1/exchange/fundingRateHistory?symbol=${encodeURIComponent(symbol)}`,
-        undefined,
-        'exchange'
-      );
-      return (fundingHistory || []).map((f) => ({
-        time: f.fundingTimeAtMillis || f.time || 0,
-        rate: f.fundingRateE9
-          ? parseFloat(f.fundingRateE9) / 1e9
-          : parseFloat(f.fundingRate || '0'),
-      }));
-    } catch (error) {
-      logger.error('Failed to get funding rates', error instanceof Error ? error : undefined);
-      return [];
-    }
+    return fetchFundingRates(this.exchangeApi, symbol);
   }
 
   /**
