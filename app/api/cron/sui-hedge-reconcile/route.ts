@@ -45,6 +45,7 @@ import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 // SDK dynamic imports alone (cold-start defers, low graph value).
 import { detectStaleHedges } from '@/lib/services/sui/StaleHedgeDetector';
 import { envFlag } from '@/lib/utils/env-flag';
+import { runWatchdogChecks } from '@/lib/services/deploy-watchdog/run';
 import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
 import { query } from '@/lib/db/postgres';
 
@@ -94,6 +95,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       { status: 401 },
     );
   }
+
+  // Piggyback silent-drift watchdog on this hourly cron — the pool is at
+  // its 10-slot QStash schedule cap and this pair (deploy-drift + state-
+  // integrity) is pure observability. Runs first so a slow BlueFin fetch
+  // downstream doesn't starve the checks; best-effort so a failure here
+  // never blocks capital work.
+  await runWatchdogChecks().catch((err) => {
+    logger.warn('[sui-hedge-reconcile] watchdog piggyback failed (non-critical)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 
   const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
   const adminCapId = (process.env.SUI_ADMIN_CAP_ID || '').trim();
