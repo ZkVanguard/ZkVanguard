@@ -6,6 +6,7 @@ import {
   CheckCircle2, Clock, Layers, Database, Zap, Eye,
 } from 'lucide-react';
 import { logger } from '@/lib/utils/logger';
+import { NavHistoryChart } from '@/components/dashboard/NavHistoryChart';
 
 interface HedgeRow {
   market: string;
@@ -274,6 +275,9 @@ export default function PlatformRiskPage() {
               />
             </div>
           </section>
+
+          {/* Share-price history — visual centerpiece */}
+          <NavHistoryChart />
 
           {/* Hedge engine */}
           <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden">
