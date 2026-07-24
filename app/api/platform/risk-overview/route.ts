@@ -139,6 +139,22 @@ interface RiskOverviewResponse {
     byAsset: Record<string, number>;
     unhedgeable: string[]; // assets at 0% due to minQty gap at current NAV
   };
+  /** Track record of settled hedges (non-zero PnL only — filters phantoms). */
+  hedgeHistory: {
+    settledCount: number;
+    winCount: number;
+    lossCount: number;
+    totalPnlUsd: number;
+    recent: Array<{
+      id: number;
+      market: string;
+      side: 'LONG' | 'SHORT';
+      notionalUsd: number;
+      pnlUsd: number;
+      closedAt: string;
+      durationHours: number;
+    }>;
+  };
 }
 
 const POOL_INCEPTION_SHARE_PRICE = 1.0;
@@ -510,6 +526,66 @@ async function getCompositionSection(): Promise<RiskOverviewResponse['compositio
   }
 }
 
+/**
+ * Track record of SETTLED hedges — those with non-zero PnL. The DB has
+ * 200+ closed rows total but ~190 are reconciler-adopted / phantom
+ * closes (current_pnl = realized_pnl = 0) that would drown the actual
+ * trading track record. Filtering to non-zero PnL shows the honest
+ * ~45% win rate at break-even on 22 real closes.
+ */
+async function getHedgeHistorySection(): Promise<RiskOverviewResponse['hedgeHistory']> {
+  const empty: RiskOverviewResponse['hedgeHistory'] = {
+    settledCount: 0, winCount: 0, lossCount: 0, totalPnlUsd: 0, recent: [],
+  };
+  try {
+    const [aggRows, recentRows] = await Promise.all([
+      query<{ total: number; wins: number; losses: number; pnl_sum: number }>(
+        `SELECT
+           COUNT(*)::int as total,
+           COUNT(*) FILTER (WHERE current_pnl::float > 0)::int as wins,
+           COUNT(*) FILTER (WHERE current_pnl::float < 0)::int as losses,
+           COALESCE(SUM(current_pnl::float), 0)::float as pnl_sum
+         FROM hedges
+         WHERE chain='sui' AND status='closed'
+           AND notional_value::float >= 1
+           AND current_pnl::float != 0`,
+      ),
+      query<{ id: number; market: string; side: string; notional: number; pnl: number; closed_at: Date; duration_hours: number }>(
+        `SELECT id, market, side,
+           notional_value::float as notional,
+           current_pnl::float as pnl,
+           closed_at,
+           EXTRACT(EPOCH FROM (closed_at - created_at))/3600 as duration_hours
+         FROM hedges
+         WHERE chain='sui' AND status='closed'
+           AND notional_value::float >= 1
+           AND current_pnl::float != 0
+           AND closed_at IS NOT NULL
+         ORDER BY closed_at DESC LIMIT 10`,
+      ),
+    ]);
+    const agg = aggRows[0] ?? { total: 0, wins: 0, losses: 0, pnl_sum: 0 };
+    return {
+      settledCount: agg.total,
+      winCount: agg.wins,
+      lossCount: agg.losses,
+      totalPnlUsd: Math.round((agg.pnl_sum || 0) * 100) / 100,
+      recent: recentRows.map((r) => ({
+        id: r.id,
+        market: r.market,
+        side: (r.side || '').toUpperCase() as 'LONG' | 'SHORT',
+        notionalUsd: Math.round(r.notional * 100) / 100,
+        pnlUsd: Math.round(r.pnl * 100) / 100,
+        closedAt: r.closed_at.toISOString(),
+        durationHours: Math.round((r.duration_hours || 0) * 10) / 10,
+      })),
+    };
+  } catch (e) {
+    logger.warn('[Risk Overview] hedge history failed', { error: String(e).slice(0, 200) });
+    return empty;
+  }
+}
+
 async function getLatestSignals(): Promise<RiskOverviewResponse['signals']> {
   try {
     // The aggregator returns one fused cross-asset prediction; BTC and ETH
@@ -536,7 +612,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
   if (limited) return limited as NextResponse<RiskOverviewResponse | { error: string }>;
 
   try {
-    const [pool, hedges, cronHealth, zkAttestations, signals, defense, incidents, composition] = await Promise.all([
+    const [pool, hedges, cronHealth, zkAttestations, signals, defense, incidents, composition, hedgeHistory] = await Promise.all([
       getPoolMetrics(),
       getActiveHedges(),
       getCronHealth(),
@@ -545,6 +621,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       getDefenseSection(),
       getIncidentsSection(),
       getCompositionSection(),
+      getHedgeHistorySection(),
     ]);
     const netCapital = pool.netCapital;
 
@@ -585,6 +662,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       defense,
       incidents,
       composition,
+      hedgeHistory,
     };
 
     return NextResponse.json(response);

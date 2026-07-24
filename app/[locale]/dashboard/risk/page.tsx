@@ -57,6 +57,22 @@ interface CompositionState {
   unhedgeable: string[];
 }
 
+interface HedgeHistoryState {
+  settledCount: number;
+  winCount: number;
+  lossCount: number;
+  totalPnlUsd: number;
+  recent: Array<{
+    id: number;
+    market: string;
+    side: 'LONG' | 'SHORT';
+    notionalUsd: number;
+    pnlUsd: number;
+    closedAt: string;
+    durationHours: number;
+  }>;
+}
+
 interface RiskOverview {
   asOf: string;
   platform: {
@@ -93,6 +109,7 @@ interface RiskOverview {
   defense?: DefenseState;
   incidents?: IncidentsState;
   composition?: CompositionState;
+  hedgeHistory?: HedgeHistoryState;
 }
 
 function fmtUsd(n: number, decimals = 2): string {
@@ -287,6 +304,68 @@ function PoolCompositionPanel({ c }: { c: CompositionState }) {
   );
 }
 
+function HedgeHistoryPanel({ h }: { h: HedgeHistoryState }) {
+  const winRate = h.settledCount > 0 ? (h.winCount / h.settledCount) * 100 : 0;
+  const pnlPositive = h.totalPnlUsd >= 0;
+  return (
+    <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-[#1d1d1f] flex-shrink-0" />
+          <h2 className="text-base sm:text-[17px] font-semibold text-[#1d1d1f]">Settled hedge track record</h2>
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] sm:text-[12px] text-[#86868b] tabular-nums">
+          <span>Settled: <strong className="text-[#1d1d1f]">{h.settledCount}</strong></span>
+          <span>Win rate: <strong className="text-[#1d1d1f]">{winRate.toFixed(1)}%</strong></span>
+          <span>Realised: <strong className={pnlPositive ? 'text-green-700' : 'text-red-700'}>{fmtUsd(h.totalPnlUsd)}</strong></span>
+        </div>
+      </div>
+      {h.recent.length === 0 ? (
+        <div className="text-[#86868b] text-xs sm:text-[13px] py-4 text-center">No settled hedges yet.</div>
+      ) : (
+        <div className="-mx-3 sm:mx-0 overflow-x-auto">
+          <div className="min-w-[520px] sm:min-w-0 px-3 sm:px-0">
+            <div className="grid grid-cols-12 gap-2 pb-2 mb-1 border-b border-black/5 text-[10px] sm:text-[11px] text-[#86868b] uppercase tracking-wide font-medium">
+              <div className="col-span-3">Market</div>
+              <div className="col-span-2 text-right">Notional</div>
+              <div className="col-span-2 text-right">Realised</div>
+              <div className="col-span-2 text-right">Duration</div>
+              <div className="col-span-3 text-right">Closed</div>
+            </div>
+            <div>
+              {h.recent.map((r) => {
+                const pnlPos = r.pnlUsd >= 0;
+                return (
+                  <div key={r.id} className="grid grid-cols-12 gap-2 py-2.5 border-b border-black/5 last:border-b-0 items-center text-[13px]">
+                    <div className="col-span-3 font-semibold text-[#1d1d1f] flex items-center gap-2">
+                      <span className="truncate">{r.market}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 ${r.side === 'LONG' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                        {r.side}
+                      </span>
+                    </div>
+                    <div className="col-span-2 text-right font-mono text-[#86868b]">{fmtUsd(r.notionalUsd)}</div>
+                    <div className={`col-span-2 text-right font-mono font-medium ${pnlPos ? 'text-green-700' : 'text-red-700'}`}>
+                      {fmtUsd(r.pnlUsd)}
+                    </div>
+                    <div className="col-span-2 text-right text-[12px] text-[#86868b]">{r.durationHours.toFixed(1)}h</div>
+                    <div className="col-span-3 text-right text-[12px] text-[#86868b]">
+                      {new Date(r.closedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+      <p className="text-[11px] text-[#86868b] mt-3 leading-relaxed">
+        Settled = closed hedges with non-zero realised PnL. Rows with $0 PnL (reconciler-adopted
+        orphans and phantom closes) are excluded — they're bookkeeping entries, not real trades.
+      </p>
+    </section>
+  );
+}
+
 function HedgePositionRow({ h }: { h: HedgeRow }) {
   const pnlPositive = h.unrealizedPnlUsd >= 0;
   return (
@@ -436,6 +515,9 @@ export default function PlatformRiskPage() {
               </div>
             )}
           </section>
+
+          {/* Settled hedge track record — actual trading PnL */}
+          {data.hedgeHistory && <HedgeHistoryPanel h={data.hedgeHistory} />}
 
           {/* v0.3.0 defense stack — gate footprint + drift counters + incident summary */}
           {data.defense && <DefenseStatusPanel d={data.defense} i={data.incidents} />}
