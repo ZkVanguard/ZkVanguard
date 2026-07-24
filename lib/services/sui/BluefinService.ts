@@ -33,6 +33,7 @@
 import { logger } from '@/lib/utils/logger';
 import { envFlag } from '@/lib/utils/env-flag';
 import { signOrderRequest, type OrderSignedFields } from '@/lib/services/sui/bluefin/sign-request';
+import * as HedgeResult from '@/lib/services/sui/bluefin/hedge-result';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
 import { parseTickerOpenInterest } from '@/lib/services/sui/bluefin-ticker-parsers';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
@@ -1062,58 +1063,23 @@ export class BluefinService {
         );
       }
 
-      // DUST3: prevent creating positions that will immediately become dust.
-      // Opening at exactly minQty leaves no margin — a single partial fill,
-      // funding accrual, or PnL normalization can drop the position size
-      // below minQty and trap it as DUST_LOCKED. Reject sizes below 1.5x
-      // minQty so fresh positions have a buffer.
-      //
-      // Set BLUEFIN_ALLOW_DUST_RISK_OPEN=1 to bypass (for one-off orders
-      // where the operator knowingly accepts the dust exposure).
+      // Size validation: dust-risk guard → below-minQty → step-snap → snapped-below-minQty.
+      // Extracted to validateOpenSize; failures return typed HedgeResult error shapes.
       const OPEN_MIN_QTY_BUFFER = 1.5;
       const bypass = envFlag('BLUEFIN_ALLOW_DUST_RISK_OPEN');
       if (!bypass && params.size < pair.minQuantity * OPEN_MIN_QTY_BUFFER) {
         logger.warn('[BlueFin] openHedge: DUST_RISK — size below 1.5x minQty buffer', {
-          symbol: params.symbol,
-          size: params.size,
-          minQty: pair.minQuantity,
+          symbol: params.symbol, size: params.size, minQty: pair.minQuantity,
           threshold: pair.minQuantity * OPEN_MIN_QTY_BUFFER,
         });
-        return {
-          success: false,
-          hedgeId,
-          error: `Size ${params.size} < 1.5× minQty ${pair.minQuantity} for ${params.symbol} — would risk creating dust-locked position. Set BLUEFIN_ALLOW_DUST_RISK_OPEN=1 to bypass.`,
-          code: 'DUST_RISK',
-          dust: {
-            positionSize: params.size,
-            minQty: pair.minQuantity,
-            stepSize: pair.stepSize,
-            stepMultiples: params.size / pair.stepSize,
-          },
-          timestamp: Date.now(),
-        };
+        return HedgeResult.dustRisk(hedgeId, params.symbol, params.size, pair.minQuantity, pair.stepSize);
       }
-
-      // Validate minimum order size and snap to step size
       if (params.size < pair.minQuantity) {
-        return {
-          success: false,
-          hedgeId,
-          error: `Order size ${params.size} below minimum ${pair.minQuantity} for ${params.symbol}`,
-          code: 'BELOW_MIN_QTY',
-          timestamp: Date.now(),
-        };
+        return HedgeResult.belowMinQty(hedgeId, params.symbol, params.size, pair.minQuantity);
       }
-      // Round down to nearest step size to avoid rejection
       const steppedSize = snapToStepSize(params.size, pair.stepSize);
       if (steppedSize < pair.minQuantity) {
-        return {
-          success: false,
-          hedgeId,
-          error: `Order size ${params.size} rounds to ${steppedSize} which is below minimum ${pair.minQuantity} for ${params.symbol}`,
-          code: 'BELOW_MIN_QTY_SNAPPED',
-          timestamp: Date.now(),
-        };
+        return HedgeResult.belowMinQtySnapped(hedgeId, params.symbol, params.size, steppedSize, pair.minQuantity);
       }
       if (steppedSize !== params.size) {
         logger.info(
@@ -1605,19 +1571,9 @@ export class BluefinService {
           stepMultiples: pair?.stepSize ? rawCloseSize / pair.stepSize : 0,
         };
         logger.warn('[BlueFin] closeHedge: DUST_LOCKED — position below minQty', {
-          symbol: params.symbol,
-          ...dustInfo,
-          snappedTo: closeSize,
+          symbol: params.symbol, ...dustInfo, snappedTo: closeSize,
         });
-        return {
-          success: false,
-          hedgeId,
-          error: `Position size ${rawCloseSize} < minQty ${pair?.minQuantity} for ${params.symbol} — cannot close via reduce order (dust-locked at venue level)`,
-          code: 'DUST_LOCKED',
-          dust: dustInfo,
-          preCloseSize: rawCloseSize,
-          timestamp: Date.now(),
-        };
+        return HedgeResult.dustLocked(hedgeId, params.symbol, rawCloseSize, dustInfo.minQty, dustInfo);
       }
       const closeSide = position.side === 'LONG' ? 'SHORT' : 'LONG';
       // Snapshot the pre-close size so we can verify the position actually
