@@ -29,6 +29,20 @@ interface ZkAttestationRow {
   createdAt: string;
 }
 
+interface DefenseState {
+  gates: {
+    portfolioDriverExecute: boolean;
+    staleHedgeAutoClose: boolean;
+    alertResponseExecute: boolean;
+    alertResponseExecuteHalt: boolean;
+    profitLockDisable: boolean;
+    suiAutoHedgeDisable: boolean;
+  };
+  dustFlagsCount: number;
+  activeHaltsCount: number;
+  integrityDriftCount: number;
+}
+
 interface RiskOverview {
   asOf: string;
   platform: {
@@ -62,6 +76,7 @@ interface RiskOverview {
     BTC?: { direction: string; confidence: number };
     ETH?: { direction: string; confidence: number };
   };
+  defense?: DefenseState;
 }
 
 function fmtUsd(n: number, decimals = 2): string {
@@ -102,6 +117,52 @@ function StatCard({ label, value, sub, icon: Icon, tone = 'neutral' }: {
       <div className={`text-lg sm:text-2xl md:text-[28px] font-semibold tracking-[-0.02em] tabular-nums break-all ${toneClass}`}>{value}</div>
       {sub && <div className="text-[11px] sm:text-[13px] text-[#86868b] mt-1 truncate">{sub}</div>}
     </div>
+  );
+}
+
+function DefenseGateBadge({ label, on, danger }: { label: string; on: boolean; danger?: boolean }) {
+  // `danger` inverts the color meaning — e.g. PROFIT_LOCK_DISABLE=on is BAD (safety off).
+  const isGood = danger ? !on : on;
+  const bg = isGood ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700';
+  const dot = isGood ? 'bg-green-500' : 'bg-amber-500';
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium ${bg}`}>
+      <span className={`inline-block w-1.5 h-1.5 rounded-full ${dot}`} />
+      <span className="font-mono">{label}</span>
+      <span className="opacity-60">{on ? 'ON' : 'OFF'}</span>
+    </div>
+  );
+}
+
+function DefenseStatusPanel({ d }: { d: DefenseState }) {
+  const drift = d.dustFlagsCount + d.activeHaltsCount + d.integrityDriftCount;
+  return (
+    <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-[#1d1d1f] flex-shrink-0" />
+          <h2 className="text-base sm:text-[17px] font-semibold text-[#1d1d1f]">v0.3.0 defense stack</h2>
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] sm:text-[12px] text-[#86868b] tabular-nums">
+          <span>Dust flags: <strong className="text-[#1d1d1f]">{d.dustFlagsCount}</strong></span>
+          <span>Active halts: <strong className="text-[#1d1d1f]">{d.activeHaltsCount}</strong></span>
+          <span>Integrity drift: <strong className={drift > 0 ? 'text-amber-700' : 'text-[#1d1d1f]'}>{d.integrityDriftCount}</strong></span>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <DefenseGateBadge label="PortfolioDriver" on={d.gates.portfolioDriverExecute} />
+        <DefenseGateBadge label="StaleHedgeClose" on={d.gates.staleHedgeAutoClose} />
+        <DefenseGateBadge label="AlertResponse" on={d.gates.alertResponseExecute} />
+        <DefenseGateBadge label="AlertHalt" on={d.gates.alertResponseExecuteHalt} />
+        <DefenseGateBadge label="ProfitLockDISABLE" on={d.gates.profitLockDisable} danger />
+        <DefenseGateBadge label="AutoHedgeDISABLE" on={d.gates.suiAutoHedgeDisable} danger />
+      </div>
+      <p className="text-[11px] text-[#86868b] mt-3 leading-relaxed">
+        Live gate footprint from the deployed build. Green = safety is engaged; amber = OFF (either
+        pending rollout or an emergency kill-switch is active). Drift counters read the same cron_state
+        keys the state-integrity fsck watches.
+      </p>
+    </section>
   );
 }
 
@@ -248,6 +309,9 @@ export default function PlatformRiskPage() {
               </div>
             )}
           </section>
+
+          {/* v0.3.0 defense stack — gate footprint + drift counters */}
+          {data.defense && <DefenseStatusPanel d={data.defense} />}
 
           {/* Two-column: reconciliation + ZK attestations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -111,6 +111,20 @@ interface RiskOverviewResponse {
       winRate: number | null;
     };
   };
+  /** v0.3.0 defense stack surface — which gates are ON in prod + drift state. */
+  defense: {
+    gates: {
+      portfolioDriverExecute: boolean;
+      staleHedgeAutoClose: boolean;
+      alertResponseExecute: boolean;
+      alertResponseExecuteHalt: boolean;
+      profitLockDisable: boolean;
+      suiAutoHedgeDisable: boolean;
+    };
+    dustFlagsCount: number;
+    activeHaltsCount: number;
+    integrityDriftCount: number;
+  };
 }
 
 const POOL_INCEPTION_SHARE_PRICE = 1.0;
@@ -338,6 +352,63 @@ async function getZkAttestations(): Promise<{ last24hCount: number; recentFeed: 
   }
 }
 
+/**
+ * v0.3.0 defense stack surface — currently-active gate footprint + any
+ * detected drift. Reads envFlag() (same source of truth as the safety
+ * modules themselves) and the cron_state prefixes that the state-
+ * integrity fsck uses. Zero side-effects.
+ */
+async function getDefenseSection(): Promise<RiskOverviewResponse['defense']> {
+  const empty: RiskOverviewResponse['defense'] = {
+    gates: {
+      portfolioDriverExecute: false, staleHedgeAutoClose: false,
+      alertResponseExecute: false, alertResponseExecuteHalt: false,
+      profitLockDisable: false, suiAutoHedgeDisable: false,
+    },
+    dustFlagsCount: 0, activeHaltsCount: 0, integrityDriftCount: 0,
+  };
+  try {
+    const [{ envFlag }, { getCronStateByPrefix }, { getActiveHedges }, { findIntegrityViolations }] = await Promise.all([
+      import('@/lib/utils/env-flag'),
+      import('@/lib/db/cron-state'),
+      import('@/lib/db/hedges'),
+      import('@/lib/services/state-integrity/checks'),
+    ]);
+    const [halts, directives, peaks, dustFlags, activeHedges] = await Promise.all([
+      getCronStateByPrefix('cron:haltUntil:'),
+      getCronStateByPrefix('alert-response:'),
+      getCronStateByPrefix('poolNav:peak:'),
+      getCronStateByPrefix('stale-dust-flag:'),
+      getActiveHedges(undefined, 'sui').catch(() => []),
+    ]);
+    const now = Date.now();
+    const activeHalts = [...halts.entries()].filter(([, v]) => Number(v) > now).length;
+    const activeIds = new Set<number | string>(activeHedges.map((h) => h.id));
+    const entries = [
+      ...[...halts.entries()].map(([key, value]) => ({ key, value })),
+      ...[...directives.entries()].map(([key, value]) => ({ key, value })),
+      ...[...peaks.entries()].map(([key, value]) => ({ key, value })),
+      ...[...dustFlags.entries()].map(([key, value]) => ({ key, value })),
+    ];
+    return {
+      gates: {
+        portfolioDriverExecute: envFlag('PORTFOLIO_DRIVER_EXECUTE'),
+        staleHedgeAutoClose: envFlag('STALE_HEDGE_AUTO_CLOSE'),
+        alertResponseExecute: envFlag('ALERT_RESPONSE_EXECUTE'),
+        alertResponseExecuteHalt: envFlag('ALERT_RESPONSE_EXECUTE_HALT'),
+        profitLockDisable: envFlag('PROFIT_LOCK_DISABLE'),
+        suiAutoHedgeDisable: envFlag('SUI_AUTO_HEDGE_DISABLE'),
+      },
+      dustFlagsCount: dustFlags.size,
+      activeHaltsCount: activeHalts,
+      integrityDriftCount: findIntegrityViolations(entries, activeIds, now).length,
+    };
+  } catch (e) {
+    logger.warn('[Risk Overview] defense section failed', { error: String(e).slice(0, 200) });
+    return empty;
+  }
+}
+
 async function getLatestSignals(): Promise<RiskOverviewResponse['signals']> {
   try {
     // The aggregator returns one fused cross-asset prediction; BTC and ETH
@@ -364,12 +435,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
   if (limited) return limited as NextResponse<RiskOverviewResponse | { error: string }>;
 
   try {
-    const [pool, hedges, cronHealth, zkAttestations, signals] = await Promise.all([
+    const [pool, hedges, cronHealth, zkAttestations, signals, defense] = await Promise.all([
       getPoolMetrics(),
       getActiveHedges(),
       getCronHealth(),
       getZkAttestations(),
       getLatestSignals(),
+      getDefenseSection(),
     ]);
     const netCapital = pool.netCapital;
 
@@ -407,6 +479,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       zkAttestations,
       signals,
       agents: await getAgentSection(),
+      defense,
     };
 
     return NextResponse.json(response);
