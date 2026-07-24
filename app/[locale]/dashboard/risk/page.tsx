@@ -44,6 +44,13 @@ interface DefenseState {
   integrityDriftCount: number;
 }
 
+interface IncidentsState {
+  last24h: { KILL: number; ERROR: number; WARN: number };
+  last7d: { KILL: number; ERROR: number; WARN: number };
+  lastKillMinutesAgo: number | null;
+  lastKillCategory: 'dust' | 'halt' | 'phantom' | 'deploy-drift' | 'other' | null;
+}
+
 interface RiskOverview {
   asOf: string;
   platform: {
@@ -78,6 +85,7 @@ interface RiskOverview {
     ETH?: { direction: string; confidence: number };
   };
   defense?: DefenseState;
+  incidents?: IncidentsState;
 }
 
 function fmtUsd(n: number, decimals = 2): string {
@@ -135,7 +143,7 @@ function DefenseGateBadge({ label, on, danger }: { label: string; on: boolean; d
   );
 }
 
-function DefenseStatusPanel({ d }: { d: DefenseState }) {
+function DefenseStatusPanel({ d, i }: { d: DefenseState; i?: IncidentsState }) {
   const drift = d.dustFlagsCount + d.activeHaltsCount + d.integrityDriftCount;
   return (
     <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0">
@@ -158,6 +166,44 @@ function DefenseStatusPanel({ d }: { d: DefenseState }) {
         <DefenseGateBadge label="ProfitLockDISABLE" on={d.gates.profitLockDisable} danger />
         <DefenseGateBadge label="AutoHedgeDISABLE" on={d.gates.suiAutoHedgeDisable} danger />
       </div>
+
+      {i && (
+        <div className="mt-4 pt-4 border-t border-black/5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[11px] sm:text-[12px] font-medium text-[#86868b] uppercase tracking-wide">
+              Operational incidents
+            </div>
+            <div className="text-[11px] text-[#86868b]">
+              {i.lastKillMinutesAgo == null
+                ? 'no KILL in ring'
+                : `last KILL ${fmtAge(i.lastKillMinutesAgo)} ago${i.lastKillCategory ? ` (${i.lastKillCategory})` : ''}`}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-[12px]">
+            <div className="bg-[#f5f5f7] rounded-lg px-2.5 py-2">
+              <div className="text-[10px] text-[#86868b] uppercase">24h</div>
+              <div className="flex gap-2 tabular-nums">
+                <span className={i.last24h.KILL > 0 ? 'text-red-700 font-semibold' : 'text-[#1d1d1f]'}>{i.last24h.KILL}K</span>
+                <span className={i.last24h.ERROR > 0 ? 'text-red-700' : 'text-[#86868b]'}>{i.last24h.ERROR}E</span>
+                <span className={i.last24h.WARN > 0 ? 'text-amber-700' : 'text-[#86868b]'}>{i.last24h.WARN}W</span>
+              </div>
+            </div>
+            <div className="bg-[#f5f5f7] rounded-lg px-2.5 py-2">
+              <div className="text-[10px] text-[#86868b] uppercase">7d</div>
+              <div className="flex gap-2 tabular-nums">
+                <span className={i.last7d.KILL > 0 ? 'text-red-700 font-semibold' : 'text-[#1d1d1f]'}>{i.last7d.KILL}K</span>
+                <span className={i.last7d.ERROR > 0 ? 'text-red-700' : 'text-[#86868b]'}>{i.last7d.ERROR}E</span>
+                <span className={i.last7d.WARN > 0 ? 'text-amber-700' : 'text-[#86868b]'}>{i.last7d.WARN}W</span>
+              </div>
+            </div>
+            <div className="bg-[#f5f5f7] rounded-lg px-2.5 py-2">
+              <div className="text-[10px] text-[#86868b] uppercase">Ring buffer</div>
+              <div className="tabular-nums text-[#86868b]">200 entries max</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <p className="text-[11px] text-[#86868b] mt-3 leading-relaxed">
         Live gate footprint from the deployed build. Green = safety is engaged; amber = OFF (either
         pending rollout or an emergency kill-switch is active). Drift counters read the same cron_state
@@ -314,8 +360,8 @@ export default function PlatformRiskPage() {
             )}
           </section>
 
-          {/* v0.3.0 defense stack — gate footprint + drift counters */}
-          {data.defense && <DefenseStatusPanel d={data.defense} />}
+          {/* v0.3.0 defense stack — gate footprint + drift counters + incident summary */}
+          {data.defense && <DefenseStatusPanel d={data.defense} i={data.incidents} />}
 
           {/* Two-column: reconciliation + ZK attestations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

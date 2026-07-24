@@ -125,6 +125,14 @@ interface RiskOverviewResponse {
     activeHaltsCount: number;
     integrityDriftCount: number;
   };
+  /** Aggregate incident counts from the alert-log ring buffer — investor-safe
+   *  (no raw messages leaked; message text lives at /api/admin/state-snapshot). */
+  incidents: {
+    last24h: { KILL: number; ERROR: number; WARN: number };
+    last7d: { KILL: number; ERROR: number; WARN: number };
+    lastKillMinutesAgo: number | null;
+    lastKillCategory: 'dust' | 'halt' | 'phantom' | 'deploy-drift' | 'other' | null;
+  };
 }
 
 const POOL_INCEPTION_SHARE_PRICE = 1.0;
@@ -409,6 +417,58 @@ async function getDefenseSection(): Promise<RiskOverviewResponse['defense']> {
   }
 }
 
+/**
+ * Aggregate incident counts — reads the alert-log ring buffer and rolls
+ * up KILL/ERROR/WARN counts by window. Never leaks raw messages here
+ * (they can contain wallet addresses, error text, internal state). Full
+ * detail lives at /api/admin/state-snapshot (CRON_SECRET gated).
+ */
+async function getIncidentsSection(): Promise<RiskOverviewResponse['incidents']> {
+  const empty: RiskOverviewResponse['incidents'] = {
+    last24h: { KILL: 0, ERROR: 0, WARN: 0 },
+    last7d: { KILL: 0, ERROR: 0, WARN: 0 },
+    lastKillMinutesAgo: null,
+    lastKillCategory: null,
+  };
+  try {
+    const { getCronState } = await import('@/lib/db/cron-state');
+    const buffer = await getCronState<Array<{ at: number; level: string; message?: string }>>('alert-log:ring-buffer');
+    if (!Array.isArray(buffer)) return empty;
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    const last24h = { KILL: 0, ERROR: 0, WARN: 0 };
+    const last7d = { KILL: 0, ERROR: 0, WARN: 0 };
+    let lastKill: { at: number; msg: string } | null = null;
+    for (const e of buffer) {
+      const age = now - e.at;
+      const bucket = ['KILL', 'ERROR', 'WARN'].includes(e.level) ? (e.level as keyof typeof last24h) : null;
+      if (!bucket) continue;
+      if (age < 7 * day) last7d[bucket]++;
+      if (age < day) last24h[bucket]++;
+      if (bucket === 'KILL' && (!lastKill || e.at > lastKill.at)) {
+        lastKill = { at: e.at, msg: e.message || '' };
+      }
+    }
+    let lastKillCategory: RiskOverviewResponse['incidents']['lastKillCategory'] = null;
+    if (lastKill) {
+      const m = lastKill.msg.toLowerCase();
+      if (m.includes('dust-locked') || m.includes('dust_locked')) lastKillCategory = 'dust';
+      else if (m.includes('halt')) lastKillCategory = 'halt';
+      else if (m.includes('phantom')) lastKillCategory = 'phantom';
+      else if (m.includes('deploy') || m.includes('drift')) lastKillCategory = 'deploy-drift';
+      else lastKillCategory = 'other';
+    }
+    return {
+      last24h, last7d,
+      lastKillMinutesAgo: lastKill ? Math.round((now - lastKill.at) / 60_000) : null,
+      lastKillCategory,
+    };
+  } catch (e) {
+    logger.warn('[Risk Overview] incidents section failed', { error: String(e).slice(0, 200) });
+    return empty;
+  }
+}
+
 async function getLatestSignals(): Promise<RiskOverviewResponse['signals']> {
   try {
     // The aggregator returns one fused cross-asset prediction; BTC and ETH
@@ -435,13 +495,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
   if (limited) return limited as NextResponse<RiskOverviewResponse | { error: string }>;
 
   try {
-    const [pool, hedges, cronHealth, zkAttestations, signals, defense] = await Promise.all([
+    const [pool, hedges, cronHealth, zkAttestations, signals, defense, incidents] = await Promise.all([
       getPoolMetrics(),
       getActiveHedges(),
       getCronHealth(),
       getZkAttestations(),
       getLatestSignals(),
       getDefenseSection(),
+      getIncidentsSection(),
     ]);
     const netCapital = pool.netCapital;
 
@@ -480,6 +541,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       signals,
       agents: await getAgentSection(),
       defense,
+      incidents,
     };
 
     return NextResponse.json(response);
