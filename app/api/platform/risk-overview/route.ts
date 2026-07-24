@@ -133,6 +133,12 @@ interface RiskOverviewResponse {
     lastKillMinutesAgo: number | null;
     lastKillCategory: 'dust' | 'halt' | 'phantom' | 'deploy-drift' | 'other' | null;
   };
+  /** Current allocation percentages per asset from the latest cron snapshot. */
+  composition: {
+    asOf: string | null;
+    byAsset: Record<string, number>;
+    unhedgeable: string[]; // assets at 0% due to minQty gap at current NAV
+  };
 }
 
 const POOL_INCEPTION_SHARE_PRICE = 1.0;
@@ -469,6 +475,41 @@ async function getIncidentsSection(): Promise<RiskOverviewResponse['incidents']>
   }
 }
 
+/**
+ * Latest pool composition — reads the `allocations` JSONB from the most
+ * recent nav_history snapshot. Also flags any asset at 0% (dropped by
+ * the hedgeability spot-cap because current NAV can't afford the
+ * asset's minQty perp hedge). Tells the "why is BTC 0%" story without
+ * making the operator explain it.
+ */
+async function getCompositionSection(): Promise<RiskOverviewResponse['composition']> {
+  const empty: RiskOverviewResponse['composition'] = { asOf: null, byAsset: {}, unhedgeable: [] };
+  try {
+    const rows = await query<{ timestamp: Date; allocations: Record<string, number> | null }>(
+      `SELECT timestamp, allocations FROM community_pool_nav_history
+        WHERE chain='sui' AND source='sui-usdc-pool' AND allocations IS NOT NULL
+        ORDER BY timestamp DESC LIMIT 1`,
+    );
+    const latest = rows[0];
+    if (!latest || !latest.allocations) return empty;
+    const byAsset: Record<string, number> = {};
+    for (const [k, v] of Object.entries(latest.allocations)) {
+      const n = Number(v);
+      if (Number.isFinite(n)) byAsset[k.toUpperCase()] = Math.round(n * 100) / 100;
+    }
+    // Assets at 0% that aren't USDC → hedgeability-clamped (BTC/ETH/SUI
+    // where NAV × alloc < 1.5 × minQty notional). USDC at 0 is not
+    // "unhedgeable"; it's just no reserve.
+    const unhedgeable = Object.entries(byAsset)
+      .filter(([k, v]) => v === 0 && k !== 'USDC' && ['BTC', 'ETH', 'SUI'].includes(k))
+      .map(([k]) => k);
+    return { asOf: latest.timestamp.toISOString(), byAsset, unhedgeable };
+  } catch (e) {
+    logger.warn('[Risk Overview] composition section failed', { error: String(e).slice(0, 200) });
+    return empty;
+  }
+}
+
 async function getLatestSignals(): Promise<RiskOverviewResponse['signals']> {
   try {
     // The aggregator returns one fused cross-asset prediction; BTC and ETH
@@ -495,7 +536,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
   if (limited) return limited as NextResponse<RiskOverviewResponse | { error: string }>;
 
   try {
-    const [pool, hedges, cronHealth, zkAttestations, signals, defense, incidents] = await Promise.all([
+    const [pool, hedges, cronHealth, zkAttestations, signals, defense, incidents, composition] = await Promise.all([
       getPoolMetrics(),
       getActiveHedges(),
       getCronHealth(),
@@ -503,6 +544,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       getLatestSignals(),
       getDefenseSection(),
       getIncidentsSection(),
+      getCompositionSection(),
     ]);
     const netCapital = pool.netCapital;
 
@@ -542,6 +584,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       agents: await getAgentSection(),
       defense,
       incidents,
+      composition,
     };
 
     return NextResponse.json(response);

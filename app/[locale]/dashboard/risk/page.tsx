@@ -51,6 +51,12 @@ interface IncidentsState {
   lastKillCategory: 'dust' | 'halt' | 'phantom' | 'deploy-drift' | 'other' | null;
 }
 
+interface CompositionState {
+  asOf: string | null;
+  byAsset: Record<string, number>;
+  unhedgeable: string[];
+}
+
 interface RiskOverview {
   asOf: string;
   platform: {
@@ -86,6 +92,7 @@ interface RiskOverview {
   };
   defense?: DefenseState;
   incidents?: IncidentsState;
+  composition?: CompositionState;
 }
 
 function fmtUsd(n: number, decimals = 2): string {
@@ -213,6 +220,73 @@ function DefenseStatusPanel({ d, i }: { d: DefenseState; i?: IncidentsState }) {
   );
 }
 
+const ASSET_COLORS: Record<string, string> = {
+  USDC: 'bg-green-400',
+  BTC: 'bg-amber-400',
+  ETH: 'bg-purple-400',
+  SUI: 'bg-blue-400',
+};
+
+function PoolCompositionPanel({ c }: { c: CompositionState }) {
+  const entries = Object.entries(c.byAsset)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (total === 0) return null;
+  return (
+    <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-[#1d1d1f] flex-shrink-0" />
+          <h2 className="text-base sm:text-[17px] font-semibold text-[#1d1d1f]">Pool composition</h2>
+        </div>
+        <div className="text-[11px] text-[#86868b]">
+          allocation as of {c.asOf ? new Date(c.asOf).toLocaleTimeString() : '—'}
+        </div>
+      </div>
+
+      <div className="h-6 sm:h-7 rounded-lg overflow-hidden flex bg-[#f5f5f7] mb-3">
+        {entries.map(([asset, pct]) => (
+          <div
+            key={asset}
+            className={ASSET_COLORS[asset] || 'bg-gray-400'}
+            style={{ width: `${(pct / total) * 100}%` }}
+            title={`${asset} ${pct.toFixed(1)}%`}
+          />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[12px]">
+        {['USDC', 'BTC', 'ETH', 'SUI'].map((asset) => {
+          const pct = c.byAsset[asset] ?? 0;
+          const unhedgeable = c.unhedgeable.includes(asset);
+          return (
+            <div key={asset} className="flex items-center gap-2 min-w-0">
+              <span className={`inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0 ${ASSET_COLORS[asset] || 'bg-gray-400'} ${pct === 0 ? 'opacity-30' : ''}`} />
+              <span className={`font-mono truncate ${pct === 0 ? 'text-[#86868b]' : 'text-[#1d1d1f]'}`}>
+                {asset} <span className="tabular-nums">{pct.toFixed(1)}%</span>
+              </span>
+              {unhedgeable && (
+                <span className="text-[10px] text-amber-700 flex-shrink-0" title="Hedgeability clamp: current NAV too small for this asset's perp minQty">
+                  min-clamp
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {c.unhedgeable.length > 0 && (
+        <p className="text-[11px] text-[#86868b] mt-3 leading-relaxed">
+          <span className="text-amber-700 font-medium">{c.unhedgeable.join(', ')}</span> at 0% by design:
+          at current NAV, allocating there would produce a perp hedge below the venue's minQty (creates dust).
+          Hedgeability clamp redirects to USDC / other assets until NAV grows past the threshold.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function HedgePositionRow({ h }: { h: HedgeRow }) {
   const pnlPositive = h.unrealizedPnlUsd >= 0;
   return (
@@ -324,6 +398,9 @@ export default function PlatformRiskPage() {
 
           {/* Share-price history — visual centerpiece */}
           <NavHistoryChart />
+
+          {/* Pool composition — where's the money */}
+          {data.composition && <PoolCompositionPanel c={data.composition} />}
 
           {/* Hedge engine */}
           <section className="bg-white border border-black/5 rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden">
