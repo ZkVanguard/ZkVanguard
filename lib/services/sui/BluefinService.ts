@@ -32,6 +32,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { envFlag } from '@/lib/utils/env-flag';
+import { signOrderRequest, type OrderSignedFields } from '@/lib/services/sui/bluefin/sign-request';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
 import { parseTickerOpenInterest } from '@/lib/services/sui/bluefin-ticker-parsers';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
@@ -517,52 +518,14 @@ export class BluefinService {
   }
 
   /**
-   * Sign order fields with SUI wallet using signPersonalMessage
-   * Transforms fields to BlueFin Pro UI format and signs
-   *
-   * Per SDK: fields are transformed to UI format, pretty-printed JSON,
-   * then signed with signPersonalMessage
+   * Sign order fields — delegates to the extracted signOrderRequest
+   * primitive in @/lib/services/sui/bluefin/sign-request. Kept as a thin
+   * wrapper so the existing 3 call sites (line ~1289, 1562, 1710) don't
+   * need to know about the signer parameter.
    */
-  private async signOrderFields(signedFields: {
-    idsId: string;
-    accountAddress: string;
-    symbol: string;
-    priceE9: string;
-    quantityE9: string;
-    leverageE9: string;
-    side: string;
-    isIsolated: boolean;
-    expiresAtMillis: number;
-    salt: string;
-    signedAtMillis: number;
-  }): Promise<string> {
+  private async signOrderFields(signedFields: OrderSignedFields): Promise<string> {
     if (!this.keypair) throw new Error('Keypair not initialized');
-
-    // Transform to UI format per SDK's toUICreateOrderRequest
-    const uiOrderRequest = {
-      type: 'Bluefin Pro Order',
-      ids: signedFields.idsId,
-      account: signedFields.accountAddress,
-      market: signedFields.symbol,
-      price: signedFields.priceE9,
-      quantity: signedFields.quantityE9,
-      leverage: signedFields.leverageE9,
-      side: signedFields.side.toString(),
-      positionType: signedFields.isIsolated ? 'ISOLATED' : 'CROSS',
-      expiration: signedFields.expiresAtMillis.toString(),
-      salt: signedFields.salt,
-      signedAt: signedFields.signedAtMillis.toString(),
-    };
-
-    // SDK uses pretty-printed JSON with 2-space indent
-    const orderJson = JSON.stringify(uiOrderRequest, null, 2);
-    const messageBytes = new TextEncoder().encode(orderJson);
-
-    // Sign using signPersonalMessage
-    const { signature } = await this.keypair.signPersonalMessage(messageBytes);
-
-    // Return the base64 serialized signature
-    return signature;
+    return signOrderRequest(this.keypair, signedFields);
   }
 
   /**
