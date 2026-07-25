@@ -30,6 +30,10 @@ import {
   type AIMarketContext,
 } from '../../lib/services/AIMarketIntelligence';
 import { logger } from '@shared/utils/logger';
+import {
+  logReturns, pearsonCorrelation, lag1Autocorrelation, annualizedVolatility,
+  deriveCorrelationFromMarketProxy, optimalHedgeRatio,
+} from './hedging-math';
 import { ethers } from 'ethers';
 import type {
   FiveMinBTCSignal,
@@ -1147,31 +1151,7 @@ export class HedgingAgent extends BaseAgent {
     try {
       // Get spot-future correlation (already uses real data)
       const correlation = await this.calculateSpotFutureCorrelation(assetSymbol);
-
-      // For crypto perps, σ_spot ≈ σ_futures (perps track spot closely)
-      // So minimum variance hedge ratio h* ≈ ρ (correlation)
-      let ratio = correlation;
-
-      // Adjust for volatility regime
-      if (volatility > 0.8) {
-        // Extreme vol: hedge more aggressively
-        ratio = Math.min(ratio * 1.15, 1.0);
-      } else if (volatility > 0.5) {
-        // High vol: slight increase
-        ratio = Math.min(ratio * 1.05, 1.0);
-      } else if (volatility < 0.15) {
-        // Low vol: can be less aggressive
-        ratio *= 0.85;
-      }
-
-      // Adjust for position size (larger positions → more conservative)
-      if (notionalValue > 5_000_000) {
-        ratio = Math.min(ratio * 1.1, 1.0); // Large: hedge more
-      } else if (notionalValue < 50_000) {
-        ratio *= 0.9; // Small: transaction costs matter more
-      }
-
-      const finalRatio = Math.max(0.3, Math.min(ratio, 1.0));
+      const finalRatio = optimalHedgeRatio({ correlation, volatility, notionalValue });
 
       logger.info('Calculated optimal hedge ratio', {
         assetSymbol,
@@ -1207,27 +1187,10 @@ export class HedgingAgent extends BaseAgent {
         throw new Error(`Insufficient candlestick data: got ${historicalPrices.length} candles`);
       }
 
-      // Calculate daily log returns
-      const returns = [];
-      for (let i = 1; i < historicalPrices.length; i++) {
-        if (historicalPrices[i - 1].price > 0) {
-          const ret = Math.log(historicalPrices[i].price / historicalPrices[i - 1].price);
-          returns.push(ret);
-        }
-      }
-
-      if (returns.length < 3) {
-        throw new Error('Not enough valid returns for volatility');
-      }
-
-      // Calculate standard deviation (sample variance with n-1)
-      const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-      const variance =
-        returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (returns.length - 1);
-      const dailyVol = Math.sqrt(variance);
-
-      // Annualize (crypto trades 365 days)
-      const volatility = dailyVol * Math.sqrt(365);
+      const returns = logReturns(historicalPrices.map((p) => p.price));
+      if (returns.length < 3) throw new Error('Not enough valid returns for volatility');
+      const volatility = annualizedVolatility(returns);
+      const dailyVol = volatility / Math.sqrt(365);
 
       logger.info('Calculated real volatility from Exchange candlestick data', {
         assetSymbol,
@@ -1290,121 +1253,47 @@ export class HedgingAgent extends BaseAgent {
 
       // Case 1: Both spot and perp data available → real Pearson correlation
       if (spotPrices.length >= 10 && perpPrices.length >= 10) {
-        const spotReturns: number[] = [];
-        for (let i = 1; i < spotPrices.length; i++) {
-          if (spotPrices[i - 1].price > 0) {
-            spotReturns.push(Math.log(spotPrices[i].price / spotPrices[i - 1].price));
-          }
-        }
-
-        const perpReturns: number[] = [];
-        for (let i = 1; i < perpPrices.length; i++) {
-          if (perpPrices[i - 1].price > 0) {
-            perpReturns.push(Math.log(perpPrices[i].price / perpPrices[i - 1].price));
-          }
-        }
-
+        const spotReturns = logReturns(spotPrices.map((p) => p.price));
+        const perpReturns = logReturns(perpPrices.map((p) => p.price));
         const n = Math.min(spotReturns.length, perpReturns.length);
         if (n >= 5) {
           const spotSlice = spotReturns.slice(0, n);
           const perpSlice = perpReturns.slice(0, n);
-
-          const spotMean = spotSlice.reduce((a, b) => a + b, 0) / n;
-          const perpMean = perpSlice.reduce((a, b) => a + b, 0) / n;
-
-          let num = 0,
-            spotVar = 0,
-            perpVar = 0;
-          for (let i = 0; i < n; i++) {
-            const sd = spotSlice[i] - spotMean;
-            const pd = perpSlice[i] - perpMean;
-            num += sd * pd;
-            spotVar += sd * sd;
-            perpVar += pd * pd;
-          }
-
-          const denom = Math.sqrt(spotVar * perpVar);
-          // If variance is zero (identical returns), correlation is undefined — compute autocorrelation instead
-          if (denom === 0) {
-            // Compute lag-1 autocorrelation of spot returns as market efficiency proxy
-            let autocov = 0,
-              autoVar = 0;
-            for (let i = 1; i < spotSlice.length; i++) {
-              autocov += (spotSlice[i] - spotMean) * (spotSlice[i - 1] - spotMean);
-              autoVar += (spotSlice[i] - spotMean) * (spotSlice[i] - spotMean);
-            }
-            const autocorr = autoVar > 0 ? Math.abs(autocov / autoVar) : 0;
-            // Low autocorrelation → efficient market → high correlation estimate
+          const rawCorrelation = pearsonCorrelation(spotSlice, perpSlice);
+          if (rawCorrelation === 0) {
+            // Degenerate variance — fall back to autocorrelation-based estimate
+            const autocorr = lag1Autocorrelation(spotSlice);
             const correlation = Math.max(0.5, Math.min(0.99, 1 - autocorr * 0.4));
             logger.info('Spot-perp correlation from autocorrelation (degenerate variance)', {
-              assetSymbol,
-              autocorr,
-              correlation,
-              dataPoints: n,
+              assetSymbol, autocorr, correlation, dataPoints: n,
             });
             return correlation;
           }
-          const rawCorrelation = num / denom;
           const correlation = Math.max(0.5, Math.min(1.0, Math.abs(rawCorrelation)));
-
           logger.info('Calculated real spot-perp correlation from Exchange candlestick data', {
-            assetSymbol,
-            correlation,
-            dataPoints: n,
+            assetSymbol, correlation, dataPoints: n,
           });
-
           return correlation;
         }
       }
 
       // Case 2: Only spot data → derive correlation proxy from market efficiency
       if (spotPrices.length >= 10) {
-        const spotReturns: number[] = [];
-        for (let i = 1; i < spotPrices.length; i++) {
-          if (spotPrices[i - 1].price > 0) {
-            spotReturns.push(Math.log(spotPrices[i].price / spotPrices[i - 1].price));
-          }
-        }
-
+        const spotReturns = logReturns(spotPrices.map((p) => p.price));
         if (spotReturns.length >= 5) {
-          // Use volume × liquidity as proxy: higher volume → tighter spot-perp tracking
           const avgVolume =
             spotPrices.reduce((sum, p) => sum + (p.volume24h || 0), 0) / spotPrices.length;
-
-          // Also compute return variance to assess market regime
-          const mean = spotReturns.reduce((a, b) => a + b, 0) / spotReturns.length;
-          const variance =
-            spotReturns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / spotReturns.length;
-          const dailyVol = Math.sqrt(variance);
-
-          // Compute lag-1 autocorrelation as market efficiency proxy
-          let autocov = 0,
-            autoVar = 0;
-          for (let i = 1; i < spotReturns.length; i++) {
-            autocov += (spotReturns[i] - mean) * (spotReturns[i - 1] - mean);
-            autoVar += (spotReturns[i] - mean) * (spotReturns[i] - mean);
-          }
-          const autocorr = autoVar > 0 ? Math.abs(autocov / autoVar) : 0;
-
-          // Continuous formula using real data:
-          // - volumeScore: log-scaled market depth (0 → 1)
-          // - dailyVol: higher vol → more basis divergence → lower correlation
-          // - autocorr: higher autocorrelation → less efficient → lower correlation
-          const volumeScore = avgVolume > 0 ? Math.min(1, Math.log10(avgVolume) / 10) : 0;
-          const baseCorr = 0.5 + volumeScore * 0.47;
-          const volPenalty = dailyVol * 0.3;
-          const efficiencyPenalty = autocorr * 0.15;
-          let correlation = baseCorr - volPenalty - efficiencyPenalty;
-
-          correlation = Math.max(0.5, Math.min(0.99, correlation));
-
+          const dailyVol = annualizedVolatility(spotReturns) / Math.sqrt(365);
+          const autocorr = lag1Autocorrelation(spotReturns);
+          const correlation = deriveCorrelationFromMarketProxy({
+            volume: avgVolume, dailyVol, autocorr,
+          });
           logger.info('Derived spot-perp correlation from volume and volatility', {
             assetSymbol,
             avgVolume: avgVolume.toFixed(0),
             dailyVol: (dailyVol * 100).toFixed(2) + '%',
             correlation,
           });
-
           return correlation;
         }
       }
