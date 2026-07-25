@@ -10,7 +10,10 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { riskToleranceToThreshold, computeRiskScore } from '@/lib/services/hedging/risk-scoring';
+import {
+  riskToleranceToThreshold, computeRiskScore,
+  computeCommunityPoolRiskScore, computeSuiPoolRiskScore,
+} from '@/lib/services/hedging/risk-scoring';
 import { getActiveHedges, createHedge } from '@/lib/db/hedges';
 import { query } from '@/lib/db/postgres';
 import { getAgentOrchestrator } from '../agent-orchestrator';
@@ -46,7 +49,7 @@ import {
   generateHedgeRecommendations,
 } from './hedge-risk-math';
 import { SIZING_LIMITS, isPriceFreshEnough, safeLeverage, buildDecisionToken } from './calibration';
-import { computeCommunityPoolRiskScore, computeSuiPoolRiskScore } from '@/lib/services/hedging/risk-score'; // Re-export shared types for existing consumers
+// Re-export shared types for existing consumers
 export type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 class AutoHedgingService {
