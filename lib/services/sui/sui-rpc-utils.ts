@@ -17,14 +17,32 @@
  */
 import { logger } from '@/lib/utils/logger';
 
-// ── TTL constants ──────────────────────────────────────────────────────────
-export const SUI_STATS_TTL_MS = 60_000;      // 60s pool stats
-export const SUI_MEMBER_TTL_MS = 30_000;     // 30s member positions
-export const SUI_MEMBERS_TTL_MS = 120_000;   // 2m all members (leaderboard)
+/** Read a numeric env with a default. Trims + parses safely — an invalid
+ *  value (garbage, empty, negative when negative is nonsensical) falls
+ *  back to the default rather than propagating NaN through the system. */
+function envNumber(name: string, defaultValue: number): number {
+  const raw = process.env[name];
+  if (raw == null) return defaultValue;
+  const parsed = Number(String(raw).trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
 
-// ── RPC defaults ───────────────────────────────────────────────────────────
-export const SUI_RPC_TIMEOUT_MS = 10_000;
-export const SUI_RPC_MAX_RETRIES = 2;
+// ── TTL constants (env-overridable per environment) ────────────────────────
+// Defaults are conservative for prod. Dev / backfill may want lower TTLs
+// to see fresh writes immediately; local testing may want higher to
+// reduce RPC noise. Every value clamps to > 0 or falls back to default.
+export const SUI_STATS_TTL_MS = envNumber('SUI_STATS_TTL_MS', 60_000);
+export const SUI_MEMBER_TTL_MS = envNumber('SUI_MEMBER_TTL_MS', 30_000);
+export const SUI_MEMBERS_TTL_MS = envNumber('SUI_MEMBERS_TTL_MS', 120_000);
+
+// ── RPC + circuit breaker defaults (env-overridable) ───────────────────────
+// SUI public RPC (fullnode.mainnet.sui.io) has 100 req/sec IP limits and
+// occasional 5s blips. Private QuickNode / Ankr endpoints tolerate more
+// concurrency and faster failover. Tune per-env at ops discretion.
+export const SUI_RPC_TIMEOUT_MS = envNumber('SUI_RPC_TIMEOUT_MS', 10_000);
+export const SUI_RPC_MAX_RETRIES = envNumber('SUI_RPC_MAX_RETRIES', 2);
+const CIRCUIT_BREAKER_THRESHOLD = envNumber('SUI_RPC_CIRCUIT_THRESHOLD', 5);
+const CIRCUIT_BREAKER_RESET_MS = envNumber('SUI_RPC_CIRCUIT_RESET_MS', 30_000);
 
 // ── Cache infrastructure ───────────────────────────────────────────────────
 interface CacheEntry<T> {
@@ -40,10 +58,10 @@ export const suiRpcCircuitBreaker = {
   failures: 0,
   lastFailure: 0,
   state: 'closed' as 'closed' | 'open' | 'half-open',
-  /** Max consecutive failures before opening circuit */
-  threshold: 5,
-  /** Time to wait before trying again (ms) */
-  resetTimeout: 30_000,
+  /** Max consecutive failures before opening circuit (env: SUI_RPC_CIRCUIT_THRESHOLD) */
+  threshold: CIRCUIT_BREAKER_THRESHOLD,
+  /** Time to wait before trying again (ms) (env: SUI_RPC_CIRCUIT_RESET_MS) */
+  resetTimeout: CIRCUIT_BREAKER_RESET_MS,
 
   recordSuccess() {
     this.failures = 0;
