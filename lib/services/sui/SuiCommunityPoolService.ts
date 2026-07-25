@@ -17,7 +17,16 @@
 import { logger } from '@/lib/utils/logger';
 import { composeNavUsdc, computeSharePrice, isNavSane } from '@/lib/services/sui/pool-nav';
 import { parseTargetAllocation, computeLiveAllocation } from '@/lib/services/sui/pool-allocation';
-import { getMarketDataService } from '../market-data/RealMarketDataService'; // Re-export all types and configs from the dedicated types module
+import { getMarketDataService } from '../market-data/RealMarketDataService';
+import {
+  suiFetchWithTimeout,
+  suiCachedFetch,
+  invalidateSuiCache,
+  SUI_STATS_TTL_MS as SUI_STATS_TTL,
+  SUI_MEMBER_TTL_MS as SUI_MEMBER_TTL,
+  SUI_MEMBERS_TTL_MS as SUI_MEMBERS_TTL,
+  SUI_RPC_TIMEOUT_MS,
+} from '@/lib/services/sui/sui-rpc-utils'; // Re-export all types and configs from the dedicated types module
 export {
   SUI_POOL_CONFIG,
   SUI_USDC_COIN_TYPE,
@@ -53,141 +62,6 @@ import {
   type SuiMemberPosition,
   type SuiTreasuryInfo,
 } from '@/lib/types/sui-pool-types'; // ============================================
-// IN-MEMORY CACHE (matches EVM CommunityPoolStatsService)
-// ============================================
-
-interface CacheEntry<T> {
-  data: T;
-  expiresAt: number;
-}
-
-const suiStatsCache = new Map<string, CacheEntry<unknown>>();
-const suiPendingRequests = new Map<string, Promise<unknown>>();
-
-const SUI_STATS_TTL = 60_000; // 60s pool stats
-const SUI_MEMBER_TTL = 30_000; // 30s member positions
-const SUI_MEMBERS_TTL = 120_000; // 2m all members (leaderboard)
-
-/** Default timeout for SUI RPC calls */
-const SUI_RPC_TIMEOUT_MS = 10_000; // 10 seconds
-const SUI_RPC_MAX_RETRIES = 2;
-
-// ============================================
-// CIRCUIT BREAKER
-// ============================================
-
-/** Simple in-memory circuit breaker for SUI RPC calls */
-const circuitBreaker = {
-  failures: 0,
-  lastFailure: 0,
-  state: 'closed' as 'closed' | 'open' | 'half-open',
-  /** Max consecutive failures before opening circuit */
-  threshold: 5,
-  /** Time to wait before trying again (ms) */
-  resetTimeout: 30_000,
-
-  recordSuccess() {
-    this.failures = 0;
-    this.state = 'closed';
-  },
-  recordFailure() {
-    this.failures++;
-    this.lastFailure = Date.now();
-    if (this.failures >= this.threshold) {
-      this.state = 'open';
-      logger.error('[SUI-RPC] Circuit breaker OPEN — too many consecutive failures', {
-        failures: this.failures,
-      });
-    }
-  },
-  canAttempt(): boolean {
-    if (this.state === 'closed') return true;
-    if (this.state === 'open' && Date.now() - this.lastFailure > this.resetTimeout) {
-      this.state = 'half-open';
-      logger.info('[SUI-RPC] Circuit breaker half-open — attempting probe request');
-      return true;
-    }
-    if (this.state === 'half-open') {
-      // Allow one probe request in half-open; if it fails, reopen
-      return true;
-    }
-    return false;
-  },
-};
-
-/** Fetch with AbortController timeout, retry with backoff, and circuit breaker */
-async function suiFetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs = SUI_RPC_TIMEOUT_MS
-): Promise<Response> {
-  if (!circuitBreaker.canAttempt()) {
-    // Return a synthetic error response instead of throwing (recoverable)
-    logger.warn('[SUI-RPC] Circuit breaker OPEN — returning error response');
-    return new Response(
-      JSON.stringify({ error: { message: 'SUI RPC circuit breaker is OPEN — requests blocked' } }),
-      {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-  }
-
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= SUI_RPC_MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(url, { ...init, signal: controller.signal });
-      clearTimeout(timer);
-      circuitBreaker.recordSuccess();
-      return response;
-    } catch (error) {
-      clearTimeout(timer);
-      lastError = error;
-      if (attempt < SUI_RPC_MAX_RETRIES) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
-        logger.warn(`[SUI-RPC] Attempt ${attempt + 1} failed, retrying in ${delay}ms`, {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-  circuitBreaker.recordFailure();
-  throw lastError;
-}
-
-/**
- * Deduplicated fetch with in-memory caching.
- * Prevents thundering herd: 100 concurrent users = 1 RPC call.
- */
-async function suiCachedFetch<T>(
-  cacheKey: string,
-  fetcher: () => Promise<T>,
-  ttlMs: number
-): Promise<T> {
-  const cached = suiStatsCache.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.data as T;
-  }
-
-  const pending = suiPendingRequests.get(cacheKey) as Promise<T> | undefined;
-  if (pending) return pending;
-
-  const request = fetcher()
-    .then((result) => {
-      suiStatsCache.set(cacheKey, { data: result, expiresAt: Date.now() + ttlMs });
-      return result;
-    })
-    .finally(() => {
-      suiPendingRequests.delete(cacheKey);
-    });
-
-  suiPendingRequests.set(cacheKey, request);
-  return request;
-}
-
 // ============================================
 // SUI COMMUNITY POOL SERVICE
 // ============================================
@@ -218,8 +92,7 @@ export class SuiCommunityPoolService {
 
   /** Clear all SUI caches (call after deposit/withdraw) */
   clearCaches(): void {
-    suiStatsCache.clear();
-    suiPendingRequests.clear();
+    invalidateSuiCache();
     logger.info('[SuiCommunityPool] Caches cleared');
   }
 
@@ -953,8 +826,7 @@ export class SuiUsdcPoolService {
 
   /** Clear all caches */
   clearCaches(): void {
-    suiStatsCache.clear();
-    suiPendingRequests.clear();
+    invalidateSuiCache();
     this.fallbackService.clearCaches();
   }
 
