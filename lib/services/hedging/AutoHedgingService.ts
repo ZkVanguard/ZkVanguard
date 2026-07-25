@@ -46,7 +46,7 @@ import {
   generateHedgeRecommendations,
 } from './hedge-risk-math';
 import { SIZING_LIMITS, isPriceFreshEnough, safeLeverage, buildDecisionToken } from './calibration';
-import { computeCommunityPoolRiskScore } from '@/lib/services/hedging/risk-score'; // Re-export shared types for existing consumers
+import { computeCommunityPoolRiskScore, computeSuiPoolRiskScore } from '@/lib/services/hedging/risk-score'; // Re-export shared types for existing consumers
 export type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 class AutoHedgingService {
@@ -1014,23 +1014,24 @@ class AutoHedgingService {
       const volatility = calculateVolatility(positions);
       const concentrationRisk = calculateConcentrationRisk(positions, marketNAV);
 
-      // Calculate risk score
-      let riskScore = 1;
+      // Risk score — pure computation extracted to
+      // lib/services/hedging/risk-score.computeSuiPoolRiskScore.
+      // Distinct from the Cronos community-pool scorer (different tier
+      // weights, no prediction aggregation input). Contributions map
+      // gives operator per-signal breakdown at debug level.
       const isBelowPar = marketSharePrice < INCEPTION_SHARE_PRICE;
-      if (isBelowPar) {
-        const loss = ((INCEPTION_SHARE_PRICE - marketSharePrice) / INCEPTION_SHARE_PRICE) * 100;
-        if (loss >= 5) riskScore += 4;
-        else if (loss >= 2) riskScore += 3;
-        else if (loss >= 1) riskScore += 2;
-        else riskScore += 1;
-      }
-      if (drawdownPercent > 0.5) riskScore += 1;
-      if (drawdownPercent > 4) riskScore += 1;
-      if (volatility > 1.5) riskScore += 1;
-      if (concentrationRisk > 30) riskScore += 1;
-      const anyNegative = positions.some((p) => p.change24h < -1);
-      if (anyNegative) riskScore += 1;
-      riskScore = Math.min(riskScore, 10);
+      const sharePriceLossPercent = isBelowPar
+        ? ((INCEPTION_SHARE_PRICE - marketSharePrice) / INCEPTION_SHARE_PRICE) * 100
+        : 0;
+      const { riskScore, contributions } = computeSuiPoolRiskScore({
+        isBelowPar,
+        sharePriceLossPercent,
+        drawdownPercent,
+        volatility,
+        concentrationRisk,
+        anyPosition24hNegative: positions.some((p) => p.change24h < -1),
+      });
+      logger.debug('[AutoHedging] sui-risk-score breakdown', { riskScore, contributions });
 
       // Active hedges for SUI pool
       let activeHedges: Array<{

@@ -6,7 +6,7 @@
  * tier + the +/- prediction adjustment behavior.
  */
 import { describe, it, expect } from '@jest/globals';
-import { computeCommunityPoolRiskScore } from '@/lib/services/hedging/risk-score';
+import { computeCommunityPoolRiskScore, computeSuiPoolRiskScore } from '@/lib/services/hedging/risk-score';
 
 const HEALTHY = {
   isBelowPar: false,
@@ -110,6 +110,57 @@ describe('computeCommunityPoolRiskScore', () => {
       aggregatedPrediction: { direction: 'DOWN', confidence: 90, consensus: 90 }, // +2
     });
     // Sum: 1 + 4 + 3 + 2 + 2 + 1 + 2 = 15 → clamped to 10
+    expect(riskScore).toBe(10);
+  });
+});
+
+// ── SUI pool variant — different tier table ────────────────────────────────
+const SUI_HEALTHY = {
+  isBelowPar: false,
+  sharePriceLossPercent: 0,
+  drawdownPercent: 0,
+  volatility: 0.3,
+  concentrationRisk: 20,
+  anyPosition24hNegative: false,
+};
+
+describe('computeSuiPoolRiskScore', () => {
+  it('healthy state → score 1', () => {
+    expect(computeSuiPoolRiskScore(SUI_HEALTHY).riskScore).toBe(1);
+  });
+
+  it('below par tiers (5% / 2% / 1% / any)', () => {
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, isBelowPar: true, sharePriceLossPercent: 6 }).contributions.belowPar).toBe(4);
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, isBelowPar: true, sharePriceLossPercent: 2.5 }).contributions.belowPar).toBe(3);
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, isBelowPar: true, sharePriceLossPercent: 1.5 }).contributions.belowPar).toBe(2);
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, isBelowPar: true, sharePriceLossPercent: 0.3 }).contributions.belowPar).toBe(1);
+  });
+
+  it('drawdown is 2-tier vs Cronos 3-tier — no middle tier at 1.5%', () => {
+    // 2% drawdown should be +1 on SUI (not +2 like Cronos)
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, drawdownPercent: 2 }).contributions.drawdown).toBe(1);
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, drawdownPercent: 5 }).contributions.drawdown).toBe(2);
+  });
+
+  it('volatility is single-tier — high vol still +1 (not +2 like Cronos)', () => {
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, volatility: 5 }).contributions.volatility).toBe(1);
+  });
+
+  it('concentration is single-tier — same story', () => {
+    expect(computeSuiPoolRiskScore({ ...SUI_HEALTHY, concentrationRisk: 60 }).contributions.concentration).toBe(1);
+  });
+
+  it('predictionAdjustment is always 0 (SUI variant has no aggregated-prediction input)', () => {
+    expect(computeSuiPoolRiskScore(SUI_HEALTHY).predictionAdjustment).toBe(0);
+  });
+
+  it('maximum-everything scenario clamps to 10', () => {
+    const { riskScore } = computeSuiPoolRiskScore({
+      isBelowPar: true, sharePriceLossPercent: 10,
+      drawdownPercent: 20, volatility: 5, concentrationRisk: 80,
+      anyPosition24hNegative: true,
+    });
+    // 1 + 4 + 2 + 1 + 1 + 1 = 10 exactly
     expect(riskScore).toBe(10);
   });
 });

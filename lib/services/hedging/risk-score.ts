@@ -101,3 +101,57 @@ export function computeCommunityPoolRiskScore(inputs: RiskScoreInputs): RiskScor
   const clamped = Math.max(1, Math.min(riskScore, 10));
   return { riskScore: clamped, contributions, predictionAdjustment };
 }
+
+// ─── SUI pool variant ──────────────────────────────────────────────────────
+// Distinct from computeCommunityPoolRiskScore. Same shape but a
+// deliberately simpler weight table — the SUI pool has different
+// tolerance (institution-facing, more conservative), only 2 drawdown
+// tiers vs 3, no prediction aggregation input, tighter volatility
+// & concentration sensitivities. Kept separate so a Cronos-side
+// change doesn't accidentally re-tune the SUI weights.
+
+export interface SuiPoolRiskInputs {
+  isBelowPar: boolean;
+  sharePriceLossPercent: number;
+  drawdownPercent: number;
+  volatility: number;
+  concentrationRisk: number;
+  anyPosition24hNegative: boolean;
+}
+
+export function computeSuiPoolRiskScore(inputs: SuiPoolRiskInputs): RiskScoreBreakdown {
+  const contributions: Record<string, number> = {};
+  let riskScore = 1;
+
+  // Below par (3-tier: 5%+ / 2%+ / 1%+ / any)
+  if (inputs.isBelowPar) {
+    let sub: number;
+    if (inputs.sharePriceLossPercent >= 5) sub = 4;
+    else if (inputs.sharePriceLossPercent >= 2) sub = 3;
+    else if (inputs.sharePriceLossPercent >= 1) sub = 2;
+    else sub = 1;
+    contributions.belowPar = sub;
+    riskScore += sub;
+  }
+
+  // Drawdown (2-tier vs 3-tier — SUI is coarser)
+  let drawdown = 0;
+  if (inputs.drawdownPercent > 0.5) drawdown += 1;
+  if (inputs.drawdownPercent > 4) drawdown += 1;
+  if (drawdown > 0) { contributions.drawdown = drawdown; riskScore += drawdown; }
+
+  // Volatility (single tier)
+  if (inputs.volatility > 1.5) { contributions.volatility = 1; riskScore += 1; }
+
+  // Concentration (single tier)
+  if (inputs.concentrationRisk > 30) { contributions.concentration = 1; riskScore += 1; }
+
+  // Any negative 24h change across positions
+  if (inputs.anyPosition24hNegative) {
+    contributions.anyNegative24h = 1;
+    riskScore += 1;
+  }
+
+  const clamped = Math.max(1, Math.min(riskScore, 10));
+  return { riskScore: clamped, contributions, predictionAdjustment: 0 };
+}
