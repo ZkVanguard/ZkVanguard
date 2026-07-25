@@ -1,0 +1,111 @@
+/**
+ * Contract lock for the polymarket-edge-trader kill-switch evaluator.
+ *
+ * This is capital-critical: a wrong decision either lets a bleeding
+ * trader keep bleeding, or halts a healthy trader for 24h. Anchoring
+ * every branch of the 3-condition trip logic — plus the peak-floor
+ * regression guard that fixed the 2026-07-13 $0.10-win-then-loss trip.
+ */
+import { describe, it, expect } from '@jest/globals';
+import { evaluateKillSwitch } from '@/lib/services/trading/kill-switches';
+
+const NOW = 1_800_000_000_000;
+const CFG = {
+  maxConsecutiveLosses: 5,
+  maxDrawdownPct: 0.30,
+  dailyLossCapUsd: -10,
+  baseStakeUsd: 5,
+  haltDurationMs: 24 * 60 * 60 * 1000,
+  now: NOW,
+};
+
+describe('evaluateKillSwitch', () => {
+  it('no trip when everything is healthy', () => {
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: 5, peakPnlUsd: 5, consecutiveLosses: 0 },
+      { pnlUsd: 0 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(false);
+    expect(d.halted).toBe(false);
+  });
+
+  it('trips on 5 consecutive losses', () => {
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: -20, peakPnlUsd: 15, consecutiveLosses: 5 },
+      { pnlUsd: -8 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(true);
+    expect(d.reason).toBe('consecutive-losses');
+    expect(d.untilMs).toBe(NOW + CFG.haltDurationMs);
+  });
+
+  it('trips on 30% drawdown when peak is meaningful (>= 4×BASE_STAKE)', () => {
+    // peak $20 (>= max(4*5, 10) = 20), drop 30% → total $14
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: 14, peakPnlUsd: 20, consecutiveLosses: 1 },
+      { pnlUsd: 0 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(true);
+    expect(d.reason).toBe('drawdown');
+    expect(d.peakMeaningful).toBe(true);
+  });
+
+  it('does NOT trip on drawdown when peak is below floor (the 2026-07-13 regression)', () => {
+    // $0.10 win → peak = $0.10, then $0.10 loss → total = 0
+    // Drawdown = 100% but peak floor is $20 (max(4*5, 10)) → no trip.
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: 0, peakPnlUsd: 0.10, consecutiveLosses: 1 },
+      { pnlUsd: -0.10 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(false);
+    expect(d.peakMeaningful).toBe(false);
+    expect(d.drawdownPct).toBeGreaterThan(0.5); // drawdown IS 100% mathematically
+  });
+
+  it('trips on daily loss cap breach', () => {
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: -5, peakPnlUsd: 8, consecutiveLosses: 2 },
+      { pnlUsd: -12 }, // exceeds -10 cap
+      0, CFG,
+    );
+    expect(d.trip).toBe(true);
+    expect(d.reason).toBe('daily-cap');
+    expect(d.detail).toContain('-12');
+  });
+
+  it('daily cap trip fires exactly at the cap (≤ not <)', () => {
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: 0, peakPnlUsd: 0, consecutiveLosses: 0 },
+      { pnlUsd: -10 }, // exactly equal
+      0, CFG,
+    );
+    expect(d.trip).toBe(true);
+    expect(d.reason).toBe('daily-cap');
+  });
+
+  it('halted=true when currentHaltUntilMs is in future (no fresh trip)', () => {
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: 5, peakPnlUsd: 5, consecutiveLosses: 0 },
+      { pnlUsd: 0 },
+      NOW + 60_000, // still 1min of halt remaining
+      CFG,
+    );
+    expect(d.trip).toBe(false);
+    expect(d.halted).toBe(true);
+  });
+
+  it('losses trip takes priority over drawdown / daily-cap when all fire', () => {
+    // All three conditions fire; verify losses wins the reason
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: -100, peakPnlUsd: 50, consecutiveLosses: 6 },
+      { pnlUsd: -50 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(true);
+    expect(d.reason).toBe('consecutive-losses');
+  });
+});

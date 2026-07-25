@@ -167,6 +167,7 @@ const KEY_NOEDGE_STREAK = 'polymarket-edge:noedge-streak';
 // Extracted to lib/services/trading/adaptive-gates.ts (see module for full
 // design notes). Route just imports the resolved function.
 import { effectiveGates } from '@/lib/services/trading/adaptive-gates';
+import { evaluateKillSwitch } from '@/lib/services/trading/kill-switches';
 
 async function recordSkip(action: string, reason: string): Promise<void> {
   try {
@@ -1637,44 +1638,30 @@ async function maybeHalt(
   daily: DailyStats,
   currentHaltUntil: number,
 ): Promise<boolean> {
-  const drawdown =
-    stats.peakPnlUsd > 0 ? (stats.peakPnlUsd - stats.totalPnlUsd) / stats.peakPnlUsd : 0;
-  const tripLosses = stats.consecutiveLosses >= MAX_CONSECUTIVE_LOSSES;
-  // Absolute-$ floor for the drawdown check. Otherwise a $0.10 win
-  // followed by a $0.10 loss reads as "100% drawdown from peak" and
-  // trips the kill switch for 24 hours — even though absolute dollars
-  // are trivial. Observed 2026-07-13: trader made $0.10 on first SOL
-  // trade, gave $0.10 back on next, killed itself for 22h while SOL
-  // was showing STRONG_HEDGE_LONG 88/100. Floor at max(4×BASE_STAKE, $10)
-  // — a peak below that isn't "meaningful profit worth defending."
-  const DRAWDOWN_PEAK_FLOOR = Math.max(BASE_STAKE_USD * 4, 10);
-  const peakMeaningful = stats.peakPnlUsd >= DRAWDOWN_PEAK_FLOOR;
-  const tripDrawdown = drawdown >= MAX_DRAWDOWN_PCT && peakMeaningful;
-  const tripDaily = daily.pnlUsd <= DAILY_LOSS_CAP_USD;
-  if (tripLosses || tripDrawdown || tripDaily) {
-    const until = Date.now() + HALT_DURATION_MS;
-    await setCronState(KEY_HALTED_UNTIL, until);
-    const reason = tripLosses
-      ? `consecutiveLosses=${stats.consecutiveLosses}`
-      : tripDrawdown
-        ? `drawdown=${(drawdown * 100).toFixed(1)}%`
-        : `dailyPnL=$${daily.pnlUsd.toFixed(2)}`;
+  const decision = evaluateKillSwitch(stats, daily, currentHaltUntil, {
+    maxConsecutiveLosses: MAX_CONSECUTIVE_LOSSES,
+    maxDrawdownPct: MAX_DRAWDOWN_PCT,
+    dailyLossCapUsd: DAILY_LOSS_CAP_USD,
+    baseStakeUsd: BASE_STAKE_USD,
+    haltDurationMs: HALT_DURATION_MS,
+  });
+  if (decision.trip && decision.untilMs) {
+    await setCronState(KEY_HALTED_UNTIL, decision.untilMs);
     logger.warn('[PolymarketEdge] KILL SWITCH TRIPPED — halting 24h', {
-      reason,
+      reason: decision.detail,
       consecutiveLosses: stats.consecutiveLosses,
-      drawdown,
+      drawdown: decision.drawdownPct,
       totalPnlUsd: stats.totalPnlUsd,
       dailyPnlUsd: daily.pnlUsd,
     });
-    await notifyDiscord(`KILL SWITCH TRIPPED — halting 24h (${reason})`, 'KILL', {
+    await notifyDiscord(`KILL SWITCH TRIPPED — halting 24h (${decision.detail})`, 'KILL', {
       totalPnlUsd: stats.totalPnlUsd,
       peakPnlUsd: stats.peakPnlUsd,
       dailyPnlUsd: daily.pnlUsd,
       consecutiveLosses: stats.consecutiveLosses,
     });
-    return true;
   }
-  return currentHaltUntil > Date.now();
+  return decision.halted;
 }
 
 // QStash sends POST by default — support both methods. Without this the cron
