@@ -45,7 +45,8 @@ import {
   calculateConcentrationRisk,
   generateHedgeRecommendations,
 } from './hedge-risk-math';
-import { SIZING_LIMITS, isPriceFreshEnough, safeLeverage, buildDecisionToken } from './calibration'; // Re-export shared types for existing consumers
+import { SIZING_LIMITS, isPriceFreshEnough, safeLeverage, buildDecisionToken } from './calibration';
+import { computeCommunityPoolRiskScore } from '@/lib/services/hedging/risk-score'; // Re-export shared types for existing consumers
 export type { AutoHedgeConfig, RiskAssessment, HedgeRecommendation } from './hedge-types';
 
 class AutoHedgingService {
@@ -722,90 +723,10 @@ class AutoHedgingService {
       const volatility = calculateVolatility(positions);
       const concentrationRisk = calculateConcentrationRisk(positions, marketNAV);
 
-      // ==========================================
-      // AGGRESSIVE Risk Score - Protect $1.00 Par
-      // ==========================================
-      // Goal: Keep share price at or above $1.00
-      // ANY deviation below $1.00 requires immediate hedging action
-      let riskScore = 1;
-
-      // MOST IMPORTANT: Share price below par
-      if (isBelowPar) {
-        if (sharePriceLossPercent >= 5)
-          riskScore += 4; // 5%+ below par = CRITICAL
-        else if (sharePriceLossPercent >= 3)
-          riskScore += 3; // 3%+ below par = HIGH
-        else if (sharePriceLossPercent >= 2)
-          riskScore += 3; // 2%+ below par = HIGH
-        else if (sharePriceLossPercent >= 1)
-          riskScore += 2; // 1%+ below par = ELEVATED
-        else riskScore += 1; // Any loss = WARNING
-      }
-
-      // Drawdown from peak (additional)
-      if (drawdownPercent > 0.5) riskScore += 1; // Even small losses matter
-      if (drawdownPercent > 1.5) riskScore += 1; // Moderate loss
-      if (drawdownPercent > 4) riskScore += 1; // Significant loss
-
-      // Volatility
-      if (volatility > 1.5) riskScore += 1; // Lower vol threshold
-      if (volatility > 3) riskScore += 1; // High volatility
-
-      // Concentration risk
-      if (concentrationRisk > 30) riskScore += 1; // Any concentration risk
-      if (concentrationRisk > 45) riskScore += 1; // High concentration
-
-      // Any negative 24h change across positions adds risk
-      const anyNegative = positions.some((p) => p.change24h < -1);
-      if (anyNegative) riskScore += 1;
-
-      // 🔮 MULTI-SOURCE PREDICTION AGGREGATION: Combine multiple markets for optimal hedging
-      // Uses: Polymarket 5-min, Delphi Digital, Crypto.com, Funding Rate proxy
+      // Multi-source prediction aggregation — feeds into the scoring tier below.
       let aggregatedPrediction: AggregatedPrediction | null = null;
       try {
         aggregatedPrediction = await PredictionAggregatorService.getAggregatedPrediction();
-
-        if (aggregatedPrediction && aggregatedPrediction.consensus > 50) {
-          // High consensus + bearish direction = elevated risk
-          if (aggregatedPrediction.direction === 'DOWN') {
-            // Scale risk increase by confidence and consensus
-            const riskIncrease =
-              aggregatedPrediction.confidence >= 70
-                ? 2
-                : aggregatedPrediction.confidence >= 55
-                  ? 1
-                  : 0;
-            if (riskIncrease > 0) {
-              riskScore += riskIncrease;
-              logger.info('[AutoHedging] Aggregated prediction elevated risk (bearish consensus)', {
-                direction: aggregatedPrediction.direction,
-                confidence: aggregatedPrediction.confidence,
-                consensus: aggregatedPrediction.consensus,
-                recommendation: aggregatedPrediction.recommendation,
-                sizeMultiplier: aggregatedPrediction.sizeMultiplier,
-                sourcesUsed: aggregatedPrediction.sources.length,
-                addedRisk: riskIncrease,
-              });
-            }
-          }
-          // Strong bullish consensus with high confidence can reduce risk
-          else if (
-            aggregatedPrediction.direction === 'UP' &&
-            aggregatedPrediction.confidence >= 65 &&
-            aggregatedPrediction.consensus >= 70
-          ) {
-            riskScore = Math.max(1, riskScore - 1);
-            logger.info(
-              '[AutoHedging] Aggregated prediction reduced risk (strong bullish consensus)',
-              {
-                direction: aggregatedPrediction.direction,
-                confidence: aggregatedPrediction.confidence,
-                consensus: aggregatedPrediction.consensus,
-              }
-            );
-          }
-        }
-
         logger.info('[AutoHedging] Multi-source prediction aggregation complete', {
           direction: aggregatedPrediction?.direction,
           confidence: aggregatedPrediction?.confidence,
@@ -820,7 +741,37 @@ class AutoHedgingService {
         });
       }
 
-      riskScore = Math.min(riskScore, 10);
+      // ==========================================
+      // AGGRESSIVE Risk Score — pure computation extracted to
+      // lib/services/hedging/risk-score.ts. Weights are the strategy;
+      // change them there so the test suite runs against the current
+      // rules. Prediction adjustment: DOWN + high conf → +1/+2 risk;
+      // strong UP consensus → -1 (but never below 1).
+      // ==========================================
+      const { riskScore, contributions, predictionAdjustment } = computeCommunityPoolRiskScore({
+        isBelowPar,
+        sharePriceLossPercent,
+        drawdownPercent,
+        volatility,
+        concentrationRisk,
+        anyPosition24hNegative: positions.some((p) => p.change24h < -1),
+        aggregatedPrediction: aggregatedPrediction
+          ? {
+              direction: aggregatedPrediction.direction,
+              confidence: aggregatedPrediction.confidence,
+              consensus: aggregatedPrediction.consensus,
+            }
+          : null,
+      });
+      if (predictionAdjustment !== 0) {
+        logger.info('[AutoHedging] Prediction adjusted risk', {
+          adjustment: predictionAdjustment,
+          direction: aggregatedPrediction?.direction,
+          confidence: aggregatedPrediction?.confidence,
+          consensus: aggregatedPrediction?.consensus,
+        });
+      }
+      logger.debug('[AutoHedging] risk-score breakdown', { riskScore, contributions });
 
       // Fetch active hedges for community pool (gracefully handle DB unavailability)
       let activeHedges: Array<{
