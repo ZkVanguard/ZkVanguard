@@ -118,9 +118,12 @@ export class ProofGenerator {
         String(canonical.totalRisk),
         String(canonical.threshold),
       ],
-      // Non-hashed public metadata — for humans + on-chain lookups.
-      // Not part of `statement_hash`; changing these doesn't affect
-      // the STARK check.
+      // Public metadata — surfaced on-chain / to humans. As of the
+      // 2026-07-27 statement_hash canonicalization fix, the WHOLE
+      // statement folds into statement_hash (not just claim + public_inputs),
+      // so any drift in public_data between prove and verify time will
+      // reject at verification. Callers must pass the identical statement
+      // dict at verify() that was passed at generate().
       public_data: {
         portfolioId: canonical.portfolioId,
         chain: canonical.chain,
