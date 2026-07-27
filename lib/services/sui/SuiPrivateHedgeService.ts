@@ -409,7 +409,24 @@ export class SuiPrivateHedgeService {
     });
     if (!r.ok) return false;
     const body = await r.json() as { valid?: boolean };
-    return body.valid === true;
+    if (body.valid !== true) return false;
+
+    // Defense in depth: Python core-crypto verifier doesn't bind metadata
+    // (security_level, field_prime, blowup, query count) to the proof.
+    // Guard those explicitly so a downgraded proof can't slip through as
+    // an "attested" record. See fa728adc for the exhaustive tamper suite.
+    const { checkProofMetadata } = await import('@/zk/verifier/proof-metadata-guard');
+    const proofRecord = bundle.starkProof as unknown as { proof?: Record<string, unknown> };
+    const inner = proofRecord.proof ?? (bundle.starkProof as unknown as Record<string, unknown>);
+    const guard = checkProofMetadata(inner);
+    if (!guard.ok) {
+      const { logger } = await import('@/lib/utils/logger');
+      logger.warn('[SuiPrivateHedge] Attested proof metadata guard rejected', {
+        violations: guard.violations,
+      });
+      return false;
+    }
+    return true;
   }
 
   // ============================================

@@ -40,10 +40,32 @@ export async function POST(request: NextRequest) {
 
     const result = await response.json();
 
+    // Defense in depth: even if the Python core-crypto verifier accepts,
+    // check descriptive metadata against expected values. See
+    // zk/verifier/proof-metadata-guard.ts + fa728adc for the finding
+    // that Python doesn't bind security_level / field_prime / blowup to
+    // the proof — an attacker could downgrade the claim without invalidating
+    // the crypto.
+    let verified: boolean = result.valid === true;
+    let metadataViolations: string[] | undefined;
+    if (verified) {
+      const { checkProofMetadata } = await import('@/zk/verifier/proof-metadata-guard');
+      const inner = (proof?.proof as Record<string, unknown>) || proof;
+      const guard = checkProofMetadata(inner);
+      if (!guard.ok) {
+        logger.warn('[zk] Metadata guard rejected — refusing to trust', {
+          violations: guard.violations,
+        });
+        verified = false;
+        metadataViolations = guard.violations;
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      verified: result.valid, // Backend returns 'valid' not 'verified'
-      duration_ms: result.duration_ms
+      verified,
+      duration_ms: result.duration_ms,
+      ...(metadataViolations ? { metadata_violations: metadataViolations } : {}),
     });
   } catch (error: unknown) {
     logger.error('Error verifying proof:', error);
