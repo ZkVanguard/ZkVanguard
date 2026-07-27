@@ -24,7 +24,10 @@ from zkp.core.zk_system import (
     AuthenticProofManager
 )
 
-# Import CUDA optimizations
+# Import CUDA optimizations. Single source of truth for CUDA_AVAILABLE is
+# zkp.core.cuda_true_stark, which runs an actual kernel-compiling probe (see
+# 2026-07-27 fix). A successful `import cupy` does NOT imply GPU ops work —
+# missing nvrtc DLL is the common trap.
 try:
     from zkp.optimizations.cuda_acceleration import (
         CUDAAcceleratedZKStark,
@@ -32,10 +35,13 @@ try:
         get_optimized_zk_system,
         get_cuda_status
     )
-    CUDA_AVAILABLE = True
-    print("✅ CUDA optimizations loaded successfully")
+    from zkp.core.cuda_true_stark import CUDA_AVAILABLE
+    if CUDA_AVAILABLE:
+        print("[hub] CUDA optimizations loaded and probed OK")
+    else:
+        print("[hub] CUDA imports loaded but runtime probe failed - CPU mode")
 except ImportError as e:
-    print(f"⚠️ CUDA optimizations not available: {e}")
+    print(f"[hub] CUDA optimizations not available: {e}")
     CUDA_AVAILABLE = False
 
 

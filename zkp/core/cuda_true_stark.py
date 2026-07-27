@@ -68,25 +68,41 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 import numpy as np
 
-# Try to import CUDA libraries
+# Try to import CUDA libraries.
+# .use() alone only sets device context — it does NOT trigger nvrtc / kernel
+# compilation, so a broken CUDA install (missing nvrtc DLL) sneaks through.
+# We run a real kernel-compiling op (arithmetic + sync) to catch runtime gaps.
 CUDA_AVAILABLE = False
 try:
     import cupy as cp
     cp.cuda.Device(0).use()
+    _probe = (cp.arange(4, dtype=cp.int64) * 2 + 1).sum()
+    cp.cuda.Device().synchronize()
+    _ = int(_probe)  # force materialize
     CUDA_AVAILABLE = True
-    print("🚀 CUDA acceleration available via CuPy")
-except (ImportError, Exception):
+    print("[cuda] CuPy GPU probe passed - acceleration enabled")
+except Exception as _e:
+    print(f"[cuda] CuPy runtime probe failed: {type(_e).__name__}: {str(_e)[:120]}")
     try:
         import numba
         from numba import cuda
         if cuda.is_available():
+            @cuda.jit
+            def _numba_probe(x):
+                i = cuda.grid(1)
+                if i < x.size:
+                    x[i] += 1
+            import numpy as _np
+            _arr = cuda.to_device(_np.zeros(4, dtype=_np.int64))
+            _numba_probe[1, 4](_arr)
+            _ = _arr.copy_to_host()
             CUDA_AVAILABLE = True
-            print("🚀 CUDA acceleration available via Numba")
-    except ImportError:
-        pass
+            print("[cuda] Numba GPU probe passed - acceleration enabled")
+    except Exception as _ne:
+        print(f"[cuda] Numba probe failed: {type(_ne).__name__}: {str(_ne)[:120]}")
 
 if not CUDA_AVAILABLE:
-    print("⚠️ CUDA not available, using optimized CPU implementation")
+    print("[cuda] not available, using optimized CPU implementation")
 
 
 @dataclass

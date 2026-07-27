@@ -260,7 +260,28 @@ async def verify_proof(request: VerificationRequest):
         proof_data = request.proof
         public_inputs = request.public_inputs
         claim = request.claim
-        
+
+        # SECURITY (2026-07-27, tamper vector B12): reject any unknown top-level
+        # proof fields. Previously extra keys (e.g. attacker-injected
+        # `verified: true`, `trusted: true`) were tolerated by verify, which
+        # could deceive downstream callers that duck-type on those fields.
+        _ALLOWED_PROOF_FIELDS = {
+            'proof', 'version', 'statement_hash', 'merkle_root', 'challenge',
+            'response', 'witness_commitment', 'public_inputs', 'computation_steps',
+            'query_responses', 'execution_trace_length', 'extended_trace_length',
+            'field_prime', 'security_level', 'generation_time', 'timestamp',
+            'privacy_enhancements', 'proof_metadata', 'proof_hash',
+            '_original_proof_data', 'cuda_acceleration', 'gpu_memory_limit_gb',
+            'cuda_generation_time',
+        }
+        if isinstance(proof_data, dict):
+            unknown = set(proof_data.keys()) - _ALLOWED_PROOF_FIELDS
+            if unknown:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown proof fields rejected: {sorted(unknown)[:5]}",
+                )
+
         proof_data = parse_string_ints_to_int(proof_data)
         
         

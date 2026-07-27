@@ -35,16 +35,28 @@ class CUDAAcceleratedField(AuthenticFiniteField):
             print("⚠️ CUDA not available, using CPU field operations")
     
     def _check_cuda_availability(self) -> bool:
-        """Check if CUDA is available"""
+        """
+        Real CUDA-runtime probe. .use() alone doesn't trigger nvrtc, so a
+        broken install (missing nvrtc DLL) reports available=True incorrectly.
+        We run a small arithmetic + sync + materialize round-trip.
+        """
         try:
             import cupy as cp
             cp.cuda.Device(0).use()
+            _probe = (cp.arange(4, dtype=cp.int64) * 2 + 1).sum()
+            cp.cuda.Device().synchronize()
+            _ = int(_probe)
             return True
-        except (ImportError, Exception):
+        except Exception:
             try:
-                import numba.cuda
-                return numba.cuda.is_available()
-            except ImportError:
+                import numba.cuda as _nc
+                if not _nc.is_available():
+                    return False
+                import numpy as _np
+                _arr = _nc.to_device(_np.zeros(4, dtype=_np.int64))
+                _ = _arr.copy_to_host()
+                return True
+            except Exception:
                 return False
     
     def _get_gpu_memory_limit(self) -> float:
