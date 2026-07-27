@@ -318,6 +318,26 @@ export async function verifyProofOffChain(
 
     const result = await response.json();
     logger.info('Off-chain verification response', { result });
+
+    // Defense in depth: even if the Python core-crypto verifier accepts,
+    // check the descriptive metadata fields against expected values.
+    // Python verifier binds merkle_root / challenge / response / statement,
+    // but NOT security_level / field_prime / blowup — a downgrade attack
+    // could show "128-bit security" on a real 521-bit proof (or vice versa).
+    // See test/unit/proof-metadata-guard.test.ts for the 11-case contract.
+    if (result?.valid) {
+      const { checkProofMetadata } = await import('@/zk/verifier/proof-metadata-guard');
+      const inner = (proof as { proof?: Record<string, unknown> }).proof
+        ?? (proof as unknown as Record<string, unknown>);
+      const guard = checkProofMetadata(inner);
+      if (!guard.ok) {
+        logger.warn('[zk] Metadata guard rejected — refusing to trust', {
+          violations: guard.violations,
+        });
+        return { ...result, valid: false, metadata_violations: guard.violations };
+      }
+    }
+
     return result;
   } catch (error) {
     logger.error('Proof verification failed', error);
