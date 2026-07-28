@@ -9,6 +9,7 @@
 module zkvanguard::zkv_stark_tests {
     use zkvanguard::zkv_field;
     use zkvanguard::zkv_merkle::{Self, MerkleProofStep};
+    use zkvanguard::zkv_fri;
 
     // ============ Field constants ============
     // p = 2^64 - 2^32 + 1 = 18446744069414584321
@@ -239,5 +240,154 @@ module zkvanguard::zkv_stark_tests {
         assert!(zkv_merkle::verify(leaf, vector[], root), 0);
         // Any other root must reject.
         assert!(!zkv_merkle::verify(leaf, vector[], wrong_root()), 0);
+    }
+
+    // ============ Field helpers: u64_to_ascii + eval_poly + primitive_root ============
+
+    #[test]
+    fun u64_to_ascii_zero() {
+        assert!(zkv_field::u64_to_ascii(0) == b"0", 0);
+    }
+
+    #[test]
+    fun u64_to_ascii_single_digit() {
+        assert!(zkv_field::u64_to_ascii(7) == b"7", 0);
+    }
+
+    #[test]
+    fun u64_to_ascii_multi_digit() {
+        assert!(zkv_field::u64_to_ascii(42) == b"42", 0);
+        assert!(zkv_field::u64_to_ascii(12345) == b"12345", 0);
+    }
+
+    #[test]
+    fun u64_to_ascii_max_u64() {
+        // 18446744073709551615 = 2^64 - 1
+        assert!(zkv_field::u64_to_ascii(18446744073709551615) == b"18446744073709551615", 0);
+    }
+
+    #[test]
+    fun eval_poly_empty_is_zero() {
+        assert!(zkv_field::eval_poly(&vector[], 42) == 0, 0);
+    }
+
+    #[test]
+    fun eval_poly_constant() {
+        // P(x) = 7 for any x
+        assert!(zkv_field::eval_poly(&vector[7], 999) == 7, 0);
+    }
+
+    #[test]
+    fun eval_poly_linear() {
+        // P(x) = 3 + 5x, evaluated at 4: = 3 + 20 = 23
+        assert!(zkv_field::eval_poly(&vector[3, 5], 4) == 23, 0);
+    }
+
+    #[test]
+    fun eval_poly_quadratic() {
+        // P(x) = 1 + 2x + 3x², at x=10: = 1 + 20 + 300 = 321
+        assert!(zkv_field::eval_poly(&vector[1, 2, 3], 10) == 321, 0);
+    }
+
+    #[test]
+    fun primitive_root_of_order_2_squares_to_one() {
+        // The only order-2 root of unity is -1 (P - 1).
+        let r = zkv_field::primitive_root(2);
+        assert!(zkv_field::mul(r, r) == 1, 0);
+        assert!(r == P_MINUS_1, 0);
+    }
+
+    #[test]
+    fun primitive_root_of_order_4_has_order_4() {
+        let r = zkv_field::primitive_root(4);
+        // r^4 = 1 but r^2 != 1.
+        assert!(zkv_field::pow(r, 4) == 1, 0);
+        assert!(zkv_field::pow(r, 2) != 1, 0);
+    }
+
+    // ============ FRI: coset_shift_for + challenge_from_root ============
+
+    #[test]
+    fun coset_shift_matches_primitive_root_of_2N() {
+        // Prover uses get_primitive_root(extended_size * 2) as the coset
+        // shift; verifier must derive it the same way.
+        let extended_size: u64 = 256;
+        assert!(zkv_fri::coset_shift_for(extended_size)
+                == zkv_field::primitive_root(extended_size * 2), 0);
+    }
+
+    #[test]
+    fun coset_shift_is_outside_subgroup() {
+        // h^N = -1 (i.e., h is a primitive 2N-th root, so h^N has order 2).
+        let extended_size: u64 = 256;
+        let h = zkv_fri::coset_shift_for(extended_size);
+        let h_pow_n = zkv_field::pow(h, extended_size);
+        assert!(h_pow_n == P_MINUS_1, 0);
+    }
+
+    #[test]
+    fun challenge_from_zero_root_matches_python() {
+        // Golden vector from Python:
+        //   sha256(b'\0' * 32) = 66687aad...
+        //   int(digest, 16) % P = 7657728858192895983
+        let root: vector<u8> = x"0000000000000000000000000000000000000000000000000000000000000000";
+        assert!(zkv_fri::challenge_from_root(&root) == 7657728858192895983, 0);
+    }
+
+    #[test]
+    fun challenge_from_nontrivial_root_matches_python() {
+        // Golden vector: root = b"zkvanguard_test_root_00000000000\x01"
+        let root: vector<u8> = x"7a6b76616e67756172645f746573745f726f6f745f3030303030303030303001";
+        assert!(zkv_fri::challenge_from_root(&root) == 11069442325780867913, 0);
+    }
+
+    // ============ FRI: negative / structural cases ============
+
+    #[test]
+    fun fri_verify_empty_roots_rejects() {
+        // No layer roots → not a valid proof.
+        assert!(!zkv_fri::verify(
+            vector[],
+            vector[],
+            vector[],
+            1024,
+            80,
+        ), 0);
+    }
+
+    #[test]
+    fun fri_verify_oversized_final_poly_rejects() {
+        // Final polynomial coefficient count > max_final_degree + 1 → reject.
+        // Even with a single (trivially-invalid) root, degree check fires first.
+        let roots = vector[x"0000000000000000000000000000000000000000000000000000000000000000"];
+        let too_many_coeffs = vector[
+            1u64, 2u64, 3u64, 4u64, 5u64, 6u64, 7u64, 8u64, 9u64, 10u64,
+            11u64, 12u64, 13u64, 14u64, 15u64, 16u64, 17u64, 18u64, 19u64, 20u64,
+        ];
+        assert!(!zkv_fri::verify(
+            roots,
+            vector[],
+            too_many_coeffs,
+            1024,
+            8,  // max degree 8 → 9 coeffs max, but we supply 20
+        ), 0);
+    }
+
+    #[test]
+    fun fri_verify_underlength_query_rejects() {
+        // Query with fewer layers than the number of layer roots must reject
+        // (would otherwise index past the end).
+        let roots = vector[
+            x"0000000000000000000000000000000000000000000000000000000000000000",
+            x"1111111111111111111111111111111111111111111111111111111111111111",
+        ];
+        let query = zkv_fri::new_query(0, vector[]);  // 0 layers < 2 roots
+        assert!(!zkv_fri::verify(
+            roots,
+            vector[query],
+            vector[0u64],
+            256,
+            8,
+        ), 0);
     }
 }

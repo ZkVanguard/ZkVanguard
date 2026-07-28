@@ -93,4 +93,56 @@ module zkvanguard::zkv_field {
     public fun eq(a: u64, b: u64): bool {
         (a % P) == (b % P)
     }
+
+    /// Encode a u64 as its ASCII-decimal byte representation ("42" → 0x3432).
+    ///
+    /// Byte-identical to Python `str(int_value).encode()` for values in
+    /// [0, 2^64). Merkle leaves in FRI query responses are exactly this
+    /// encoding, so this is how the on-chain verifier reconstructs the
+    /// leaf preimage before hashing (matches `str(e).encode()` in
+    /// `MerkleTree(leaves=[str(e).encode() for e in extended_evaluations])`).
+    public fun u64_to_ascii(mut v: u64): vector<u8> {
+        if (v == 0) {
+            return b"0"
+        };
+        let mut buf = vector::empty<u8>();
+        while (v > 0) {
+            // 48 = '0'
+            std::vector::push_back(&mut buf, ((v % 10) as u8) + 48);
+            v = v / 10;
+        };
+        std::vector::reverse(&mut buf);
+        buf
+    }
+
+    /// Horner evaluation of a polynomial with the given coefficients
+    /// (lowest degree first) at point `x`. Matches Python `Polynomial.evaluate`.
+    ///
+    ///     P(x) = c_0 + c_1·x + c_2·x² + ... + c_{n-1}·x^{n-1}
+    ///
+    /// Empty coefficient list evaluates to 0 (matches Python 0-poly).
+    public fun eval_poly(coeffs: &vector<u64>, x: u64): u64 {
+        let n = std::vector::length(coeffs);
+        if (n == 0) return 0;
+        let mut result: u64 = *std::vector::borrow(coeffs, n - 1);
+        let mut i = n - 1;
+        while (i > 0) {
+            i = i - 1;
+            result = add(mul(result, x), *std::vector::borrow(coeffs, i));
+        };
+        result
+    }
+
+    /// Primitive N-th root of unity in Goldilocks: `g^((P-1) / order) mod P`
+    /// where g = 7 is the field generator. `order` MUST divide `P-1`
+    /// (aborts otherwise). Matches Python `CUDAFiniteField.get_primitive_root`.
+    ///
+    /// For extended domains used by FRI, `order` is always a power of 2
+    /// dividing 2^32, so the divisibility check trivially holds.
+    public fun primitive_root(order: u64): u64 {
+        assert!(order > 0, 1);
+        let p_minus_1: u64 = P - 1;
+        assert!(p_minus_1 % order == 0, 2);
+        pow(7, p_minus_1 / order)
+    }
 }
