@@ -55,36 +55,54 @@ verify circuit, replacing today's `ed25519_verify(sig, pubkey, commitment_hash)`
 one-liner. Chain observers can independently verify hedge invariants
 without trusting the operator's ed25519 key.
 
-**Scale:** ~800-1200 Move LOC across ~5 files, split into 5 sub-phases.
-Each sub-phase ships independently and is separately testable.
+**What's already there (do NOT rewrite):**
+- `contracts/sui/sources/zk_verifier.move` (484 LOC) — state, admin cap,
+  replay-protection via `used_proofs: Table`, `PROVER_PUBKEY_KEY`
+  dynamic-field pattern, event emission, existing `verify_proof` entry
+  point with an ed25519 path we'll keep as a fast path.
+- `contracts/sui/sources/zk_hedge_commitment.move` (502 LOC) — commitment
+  storage + nullifier replay-protection. New STARK verifier just needs
+  to be CALLED from here; storage layout already exists.
+- `sui::hash::sha2_256` (**native SUI opcode**) — no need to implement
+  SHA-256 in Move. Same for `sha3_256`, `keccak256`, `blake2b256`.
+- `sui::ed25519::ed25519_verify` (native) — fast path kept for
+  compatibility during migration.
+- `sui::table::Table`, `sui::dynamic_field`, `sui::clock::Clock` — all
+  already imported in zk_verifier.
+- `contracts/sui/tests/` — Move test framework already set up.
 
-### Phase A.1 — Move-side finite field arithmetic (~200 LOC)
+**Revised scale:** ~500-750 NEW Move LOC total (was over-estimated at
+800-1200), 2-3 weeks (was 3-6). No native crypto to hand-implement.
+
+### Phase A.1 — Goldilocks field arithmetic (~80-100 LOC)
 
 - New file: `contracts/sui/sources/zkv_field.move`.
-- Goldilocks arithmetic: add, sub, mul (with barrett/mont reduction),
-  inv, pow. All modulo `p = 2^64 − 2^32 + 1 = 18446744069414584321`.
-- Move's `u64` overflow behavior + explicit u128 intermediates.
-- Unit tests via `sui move test`: field axioms, random round-trips.
+- Public functions: `add`, `sub`, `mul`, `inv`, `pow` — all mod
+  `p = 2^64 − 2^32 + 1 = 18446744069414584321`.
+- Use `u128` for intermediates, reduce back to `u64` (since p < 2^64).
+- Mostly a mechanical port of the Python `CUDAFiniteField` primitives.
+- Unit tests: field axioms + round-trip vectors against the Python impl.
 
-### Phase A.2 — Move-side Merkle verify (~150 LOC)
+### Phase A.2 — Merkle-proof verify helper (~30-50 LOC)
 
-- New file: `contracts/sui/sources/zkv_merkle.move`.
-- SHA-256 over `vector<u8>` (native SUI opcode `sui::hash::sha2_256`).
-- `verify(leaf: vector<u8>, index: u64, proof: vector<vector<u8>>, root: vector<u8>): bool`.
-- Matches the exact Python `MerkleTree.verify` byte layout.
-- Unit tests: pass/fail on random Merkle trees.
+- Small addition to `zk_verifier.move` (no separate file needed).
+- `verify_merkle(leaf: vector<u8>, index: u64, proof: vector<vector<u8>>, root: vector<u8>): bool`
+- Just walks siblings, calling `sui::hash::sha2_256(left || right)` at
+  each level (SHA-256 is native — this is a ~15-line loop).
+- Matches Python `MerkleTree.verify` byte layout (already documented).
 
-### Phase A.3 — Move-side FRI folding-consistency check (~250 LOC)
+### Phase A.3 — FRI folding-consistency check (~150-200 LOC)
 
 - New file: `contracts/sui/sources/zkv_fri.move`.
+- Uses `zkv_field` primitives from A.1 and the Merkle helper from A.2.
 - Per-query, per-layer: reconstruct `(h_L, ω_L, N_L)`, Merkle-verify
   value + sibling at positions `(q, q + N/2 mod N)`, compute
   `(v+s)/2 + α·(v−s)/(2x)`, compare to Merkle-authenticated next-layer
   value or the final polynomial evaluation.
-- Fiat-Shamir binding: recompute α_L via `sha256(root_L)`.
-- Grinding PoW re-check: `sha256(transcript ‖ nonce)` has ≥N leading zeros.
+- Fiat-Shamir binding: recompute α_L via `sha2_256(root_L)`.
+- Grinding PoW re-check: `sha2_256(transcript ‖ nonce)` has ≥N leading zeros.
 
-### Phase A.4 — Move-side hedge composition check (~200 LOC)
+### Phase A.4 — Hedge composition check (~80-100 LOC)
 
 - New file: `contracts/sui/sources/zkv_hedge_air.move`.
 - Reconstruct hedge AIR row constraints (asset ∈ {1,2,3}, side ∈ {0,1},
@@ -92,24 +110,34 @@ Each sub-phase ships independently and is separately testable.
 - Per query: Merkle-verify trace opening at position q against
   `trace_merkle_root`, evaluate P_j(T(x_q)) locally, compare to FRI-
   layer-0 authenticated H(x_q).
-- Rebind α_j from `sha256(trace_merkle_root ‖ "alpha:{j}")`.
+- Rebind α_j from `sha2_256(trace_merkle_root ‖ "alpha:{j}")`.
 
-### Phase A.5 — Wire new verifier into `zk_verifier.move` (~200 LOC)
+### Phase A.5 — Wire the STARK path into existing `zk_verifier.move` (~100-150 LOC)
 
-- Extend `verify_proof(state, proof_bytes, commitment_hash, ...)` to
-  parse the STARK proof format (trace_merkle_root, fri_roots, query
-  responses, trace openings, grinding nonce, final polynomial).
-- Call the new verifier chain: A.2 → A.3 → A.4.
-- Keep the ed25519 sig path as a fast path (with `state.strict_mode`
-  toggle: strict rejects ed25519-only proofs).
-- Migration: deploy new package alongside v0.4.0; existing hedges keep
-  using ed25519; new hedges use full STARK.
+- MODIFY existing `verify_proof` — don't replace. Ed25519 stays as a
+  fast path with a `state.strict_mode` toggle (per file's existing
+  audit pattern from 2026-06-04). Full STARK path adds a new
+  `verify_proof_stark` entry that calls the A.2→A.3→A.4 chain.
+- Proof-bytes parser: reuses `vector<u8>` slicing already in use for
+  the ed25519 sig extraction (~line 244 of zk_verifier.move).
+- Migration: no new package deploy needed if the new entry function
+  is added — old hedges keep using ed25519, new hedges call the new
+  entry function. `admin_set_prover_pubkey` still governs ed25519 path.
 
-**Cost:** ~800-1200 Move LOC, 3-6 weeks of focused work + audit.
+### Phase A.6 — Tests (~150-200 Move LOC)
 
-**Gas:** rough estimate ~100k-500k SUI gas per verify. Prohibitive for
-per-hedge on-chain verification at scale; likely used for periodic
-audit-verification or on-demand challenge.
+- New file: `contracts/sui/tests/zkv_stark_tests.move`.
+- Test vectors generated by the Python prover (fixed statement + fixed
+  witness → known-good proof) pinned as constants; assertions match
+  what the harness already checks.
+- Follow the pattern in `contracts/sui/tests/community_pool_tests.move`.
+
+**Revised cost:** ~500-750 NEW Move LOC, 2-3 weeks of focused work +
+external audit (audit cost separate).
+
+**Gas:** Move-native SHA-256 and ed25519 keep cost manageable. Rough
+estimate ~100k-300k SUI gas per verify (~$0.01-0.03 at current gas).
+Usable for per-hedge verification, not just periodic audit.
 
 ---
 
@@ -214,21 +242,33 @@ Deferred indefinitely. Not blocking any product milestone.
 
 ## Milestone table
 
-| Phase | Effort | Status | Blocks |
-|-------|--------|--------|--------|
-| A.1 Move field arithmetic | ~200 Move LOC, 1w | pending | A.2 |
-| A.2 Move Merkle verify | ~150 Move LOC, 3d | pending | A.3, A.4 |
-| A.3 Move FRI verify | ~250 Move LOC, 2w | pending | A.5 |
-| A.4 Move hedge AIR check | ~200 Move LOC, 1w | pending | A.5 |
-| A.5 Wire into zk_verifier | ~200 Move LOC, 1w + audit | pending | on-chain STARK done |
-| B.1 Rust field + Merkle + FFT | ~800 Rust LOC, 2w | pending | B.2, B.3 |
-| B.2 Rust FRI | ~600 Rust LOC, 2w | pending | B.3, B.4 |
-| B.3 Rust STARK + hedge AIR | ~600 Rust LOC, 2w | pending | B.4 |
-| B.4 Rust HTTP server | ~400 Rust LOC, 1w | pending | 100x speedup done |
+| Phase | New LOC (existing infra credited) | Status | Blocks |
+|-------|-----------------------------------|--------|--------|
+| A.1 Goldilocks field (`zkv_field.move`) | ~80-100 Move | pending | A.3 |
+| A.2 Merkle verify helper (add to zk_verifier) | ~30-50 Move (sha2_256 is native) | pending | A.3, A.4 |
+| A.3 FRI folding (`zkv_fri.move`) | ~150-200 Move | pending | A.5 |
+| A.4 Hedge composition (`zkv_hedge_air.move`) | ~80-100 Move | pending | A.5 |
+| A.5 Wire STARK path into existing `zk_verifier.move` | ~100-150 Move | pending | on-chain STARK done |
+| A.6 Move tests (mirror the Python harness vectors) | ~150-200 Move | pending | ships with A.5 |
+| **A total** | **~500-750 NEW Move LOC (2-3w + audit)** | | |
+| B.1 Rust field + Merkle + FFT (or adopt Winterfell) | ~800 Rust LOC (or ~200 glue) | pending | B.2, B.3 |
+| B.2 Rust FRI | ~600 Rust LOC (or use existing) | pending | B.3, B.4 |
+| B.3 Rust STARK + hedge AIR | ~600 Rust LOC | pending | B.4 |
+| B.4 Rust HTTP server (byte-compat with current Python API) | ~400 Rust LOC | pending | 100x speedup done |
+| **B total** | **~1000-2400 Rust LOC (2-8w depending on adopt vs build)** | | |
 | C.1 wasm-pack build | ~200 LOC, 3d | pending on B | C.2 |
 | C.2 Browser JS integration | ~300 TS LOC, 1w | pending on C.1 | C.3 |
 | C.3 Depositor flow rewrite | ~200 TS LOC, 1w | pending on C.2 | cryptographic privacy done |
+| **C total** | **~700 LOC (2-4w after B)** | | |
 | D Formal verification (Coq/Lean) | ~1yr specialist | not planned | — |
+
+**Existing files that Phase A builds on (no rewrite needed):**
+- `contracts/sui/sources/zk_verifier.move` (484 LOC) — state, admin cap, replay-protection, ed25519 fast path, event emission
+- `contracts/sui/sources/zk_hedge_commitment.move` (502 LOC) — commitment/nullifier storage
+- `contracts/sui/sources/zk_proxy_vault.move` (727 LOC) — proxy vault
+- `sui::hash::sha2_256` + `sui::ed25519::ed25519_verify` (native Move opcodes, zero LOC)
+- `sui::table::Table`, `sui::dynamic_field`, `sui::clock::Clock` (already imported)
+- `contracts/sui/tests/` framework already set up (see `community_pool_tests.move` for the pattern)
 
 ## Ordering recommendation
 
