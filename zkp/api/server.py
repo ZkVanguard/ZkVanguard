@@ -27,6 +27,7 @@ if project_root not in sys.path:
 
 from zkp.integration.zk_system_hub import ZKSystemFactory
 from zkp.core.zk_system import AuthenticProofManager
+from zkp.core.cuda_true_stark import CUDA_AVAILABLE
 from zkp.core.risk_canonical import (
     assert_risk_binding,
     RiskBindingError,
@@ -265,14 +266,32 @@ async def verify_proof(request: VerificationRequest):
         # proof fields. Previously extra keys (e.g. attacker-injected
         # `verified: true`, `trusted: true`) were tolerated by verify, which
         # could deceive downstream callers that duck-type on those fields.
+        #
+        # 2026-07-28: extended for CUDATrueSTARK cutover — trace_length,
+        # trace_merkle_root, fri_roots/challenges/final_polynomial, grinding_*,
+        # query_indices, protocol, blowup_factor, air_satisfied, verified,
+        # cuda_accelerated, public_output, statement. Legacy AuthenticZKStark
+        # fields kept during transition so old cached proofs don't 400.
         _ALLOWED_PROOF_FIELDS = {
-            'proof', 'version', 'statement_hash', 'merkle_root', 'challenge',
-            'response', 'witness_commitment', 'public_inputs', 'computation_steps',
-            'query_responses', 'execution_trace_length', 'extended_trace_length',
-            'field_prime', 'security_level', 'generation_time', 'timestamp',
+            # Common / envelope
+            'proof', 'version', 'protocol', 'num_queries',
+            'statement_hash', 'statement', 'public_inputs', 'public_output',
+            'field_prime', 'security_level',
+            'generation_time', 'timestamp',
+            # CUDATrueSTARK — trace + FRI
+            'trace_length', 'extended_trace_length', 'blowup_factor',
+            'trace_merkle_root', 'fri_roots', 'fri_challenges',
+            'fri_final_polynomial', 'query_indices', 'query_responses',
+            # CUDATrueSTARK — grinding
+            'grinding_bits', 'grinding_nonce',
+            # CUDATrueSTARK — status flags
+            'air_satisfied', 'cuda_accelerated', 'verified',
+            # Legacy AuthenticZKStark (transitional — remove after cache drain)
+            'merkle_root', 'challenge', 'response', 'witness_commitment',
+            'computation_steps', 'execution_trace_length',
             'privacy_enhancements', 'proof_metadata', 'proof_hash',
-            '_original_proof_data', 'cuda_acceleration', 'gpu_memory_limit_gb',
-            'cuda_generation_time',
+            '_original_proof_data', 'cuda_acceleration',
+            'gpu_memory_limit_gb', 'cuda_generation_time',
         }
         if isinstance(proof_data, dict):
             unknown = set(proof_data.keys()) - _ALLOWED_PROOF_FIELDS
@@ -308,7 +327,7 @@ async def verify_proof(request: VerificationRequest):
             "valid": is_valid,
             "verified_at": datetime.now().isoformat(),
             "duration_ms": int(duration),
-            "cuda_accelerated": zk_factory.cuda_optimizer is not None
+            "cuda_accelerated": CUDA_AVAILABLE
         }
         
     except Exception as e:
@@ -452,7 +471,7 @@ async def get_zk_stats():
         "pending_jobs": sum(1 for j in proof_jobs.values() if j["status"] == "pending"),
         "completed_jobs": sum(1 for j in proof_jobs.values() if j["status"] == "completed"),
         "failed_jobs": sum(1 for j in proof_jobs.values() if j["status"] == "failed"),
-        "cuda_enabled": zk_factory.cuda_optimizer is not None
+        "cuda_enabled": CUDA_AVAILABLE
     }
 
 
@@ -593,7 +612,8 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"📍 Server: http://0.0.0.0:8000")
     print(f"📖 Docs: http://0.0.0.0:8000/docs")
-    print(f"🔧 CUDA: {'Enabled' if zk_factory.cuda_optimizer else 'Disabled (CPU fallback)'}")
+    print(f"🔧 CUDA: {'Enabled' if CUDA_AVAILABLE else 'Disabled (CPU fallback)'}")
+    print(f"🔬 Prover: CUDATrueSTARK (Goldilocks, FRI + grinding)")
     print("=" * 60)
     
     uvicorn.run(

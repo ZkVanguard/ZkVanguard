@@ -16,83 +16,68 @@ from typing import Dict, Any, Optional, Union
 # Add project root to path
 sys.path.append('.')
 
-# Import the ONLY authoritative ZK system
+# Prod ZK prover — 2026-07-28 cutover: CUDATrueSTARK replaces AuthenticZKStark.
+# The whitepaper (§7) describes CUDATrueSTARK (Goldilocks field, real FRI with
+# multiplicative-coset folding, per-layer consistency check, 20-bit grinding).
+# AuthenticZKStark used NIST P-521 and had no FRI folding check — kept ONLY
+# for AuthenticProofManager storage helpers during transition.
+from zkp.core.cuda_true_stark import CUDATrueSTARK, CUDA_AVAILABLE
 from zkp.core.zk_system import (
-    AuthenticZKStark,
-    AuthenticFiniteField,
-    AuthenticMerkleTree,
-    AuthenticProofManager
+    AuthenticFiniteField,   # legacy field helper — kept for external callers
+    AuthenticMerkleTree,    # legacy merkle helper — kept for external callers
+    AuthenticProofManager,  # storage wrapper — works with any prover
 )
 
-# Import CUDA optimizations. Single source of truth for CUDA_AVAILABLE is
-# zkp.core.cuda_true_stark, which runs an actual kernel-compiling probe (see
-# 2026-07-27 fix). A successful `import cupy` does NOT imply GPU ops work —
-# missing nvrtc DLL is the common trap.
+if CUDA_AVAILABLE:
+    print("[hub] CUDATrueSTARK loaded, CUDA probe passed")
+else:
+    print("[hub] CUDATrueSTARK loaded, CPU mode (CUDA probe failed or absent)")
+
+# Optional CUDA-accelerated helper (legacy wrapper around AuthenticZKStark);
+# only used by ZKSystemFactory as a fallback path for old callers that still
+# need the AuthenticZKStark surface. Prod prover comes from CUDATrueSTARK.
 try:
     from zkp.optimizations.cuda_acceleration import (
         CUDAAcceleratedZKStark,
         CUDAOptimizer,
         get_optimized_zk_system,
-        get_cuda_status
+        get_cuda_status,
     )
-    from zkp.core.cuda_true_stark import CUDA_AVAILABLE
-    if CUDA_AVAILABLE:
-        print("[hub] CUDA optimizations loaded and probed OK")
-    else:
-        print("[hub] CUDA imports loaded but runtime probe failed - CPU mode")
 except ImportError as e:
-    print(f"[hub] CUDA optimizations not available: {e}")
-    CUDA_AVAILABLE = False
+    print(f"[hub] legacy CUDA optimizations not available: {e}")
+    get_cuda_status = None
 
 
 class ZKSystemFactory:
-    """Factory for creating optimized ZK systems"""
-    
+    """Factory for creating whitepaper-aligned ZK systems (CUDATrueSTARK)."""
+
     def __init__(self):
-        self.cuda_optimizer = None
-        if CUDA_AVAILABLE:
-            try:
-                from zkp.optimizations.cuda_acceleration import cuda_optimizer
-                self.cuda_optimizer = cuda_optimizer
-                print("🚀 CUDA optimizer initialized")
-            except:
-                print("⚠️ CUDA optimizer initialization failed")
-    
-    def create_zk_system(self, 
-                        enable_cuda: bool = True,
-                        **kwargs) -> AuthenticZKStark:
-        """Create the best available ZK system"""
-        
-        if enable_cuda and CUDA_AVAILABLE and self.cuda_optimizer:
-            try:
-                # Create CUDA-accelerated system
-                cuda_system = self.cuda_optimizer.create_optimized_zk_system()
-                print("🚀 Created CUDA-accelerated ZK system")
-                return cuda_system
-            except Exception as e:
-                print(f"⚠️ CUDA system creation failed, falling back to CPU: {e}")
-        
-        # Fallback to CPU system (the main authoritative implementation)
-        cpu_system = AuthenticZKStark()
-        print("🔧 Created CPU-based ZK system")
-        return cpu_system
-    
-    def create_proof_manager(self, 
-                           storage_dir: Optional[str] = None,
-                           enable_cuda: bool = True) -> AuthenticProofManager:
-        """Create proof manager with optimized ZK system"""
-        
-        # Create proof manager with the best available ZK system
+        # CUDATrueSTARK does its own CUDA probe at import; nothing to init here.
+        self.cuda_optimizer = None  # kept for backward-compat attribute access
+
+    def create_zk_system(self,
+                         enable_cuda: bool = True,
+                         **kwargs) -> CUDATrueSTARK:
+        """Create the whitepaper-aligned prover.
+
+        `enable_cuda` is retained for signature-compat but is a no-op — the
+        CUDATrueSTARK constructor auto-detects CUDA via the runtime probe in
+        `cuda_true_stark.py`. Passing `enable_cuda=False` no longer forces
+        CPU mode; if you need CPU-only behavior, unset the CUDA env vars
+        before importing.
+        """
+        return CUDATrueSTARK()
+
+    def create_proof_manager(self,
+                             storage_dir: Optional[str] = None,
+                             enable_cuda: bool = True) -> AuthenticProofManager:
+        """Create proof manager (storage helper) wired to CUDATrueSTARK."""
         manager = AuthenticProofManager(storage_dir)
-        
-        # Replace the internal ZK system with optimized version
-        optimized_zk = self.create_zk_system(enable_cuda=enable_cuda)
-        manager.zk_system = optimized_zk
-        
-        print(f"💾 Created proof manager with {'CUDA' if enable_cuda and CUDA_AVAILABLE else 'CPU'} optimization")
+        manager.zk_system = self.create_zk_system(enable_cuda=enable_cuda)
+        print(f"💾 Created proof manager (CUDATrueSTARK, {'GPU' if CUDA_AVAILABLE else 'CPU'})")
         return manager
-    
-    def get_prover(self, proof_type: str) -> Optional[AuthenticZKStark]:
+
+    def get_prover(self, proof_type: str) -> Optional[CUDATrueSTARK]:
         """
         Get a prover for a specific proof type.
         For test environments, returns a default prover for unknown types.
@@ -139,27 +124,27 @@ class ZKSystemFactory:
         status = {
             'zk_system': {
                 'available': True,
-                'implementation': 'AuthenticZKStark',
-                'location': 'privacy.zkp.core.zk_system'
+                'implementation': 'CUDATrueSTARK',
+                'location': 'zkp.core.cuda_true_stark',
             },
             'cuda_optimization': {
                 'available': CUDA_AVAILABLE,
-                'enabled': CUDA_AVAILABLE and self.cuda_optimizer is not None
+                'enabled': CUDA_AVAILABLE,
             },
             'components': {
-                'finite_field': 'AuthenticFiniteField',
-                'merkle_tree': 'AuthenticMerkleTree',
-                'proof_manager': 'AuthenticProofManager'
-            }
+                'finite_field': 'CUDAFiniteField (Goldilocks)',
+                'merkle_tree': 'MerkleTree (SHA-256)',
+                'proof_manager': 'AuthenticProofManager',
+            },
         }
-        
-        if CUDA_AVAILABLE and self.cuda_optimizer:
+
+        if CUDA_AVAILABLE and get_cuda_status is not None:
             try:
                 cuda_status = get_cuda_status()
                 status['cuda_optimization'].update(cuda_status)
-            except:
+            except Exception:
                 pass
-        
+
         return status
 
 
@@ -167,13 +152,13 @@ class ZKSystemFactory:
 zk_factory = ZKSystemFactory()
 
 
-def create_zk_system(**kwargs) -> AuthenticZKStark:
-    """Create optimized ZK system (main entry point)"""
+def create_zk_system(**kwargs) -> CUDATrueSTARK:
+    """Create whitepaper-aligned prover (main entry point)."""
     return zk_factory.create_zk_system(**kwargs)
 
 
 def create_proof_manager(**kwargs) -> AuthenticProofManager:
-    """Create optimized proof manager (main entry point)"""
+    """Create proof manager (storage helper) wired to CUDATrueSTARK."""
     return zk_factory.create_proof_manager(**kwargs)
 
 
@@ -291,18 +276,23 @@ class ZKSystemManager:
         return self.proof_manager.verify_proof_sync(proof_id)
     
     def get_performance_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics"""
+        """Get performance metrics."""
+        # CUDATrueSTARK exposes config on `self.zk_system.config`; older
+        # AuthenticZKStark exposed top-level attributes. Read from both.
+        blowup = getattr(self.zk_system, 'blowup_factor', None)
+        if blowup is None:
+            blowup = getattr(getattr(self.zk_system, 'config', None), 'blowup_factor', None)
         base_metrics = {
-            'system_type': 'CUDA-accelerated' if self.enable_cuda and CUDA_AVAILABLE else 'CPU-based',
-            'security_level': self.zk_system.security_level,
-            'field_prime': str(self.zk_system.prime),
-            'blowup_factor': self.zk_system.blowup_factor
+            'system_type': 'CUDA-accelerated' if getattr(self, 'enable_cuda', False) and CUDA_AVAILABLE else 'CPU-based',
+            'security_level': getattr(self.zk_system, 'security_level', None),
+            'field_prime': str(getattr(self.zk_system, 'prime', '')),
+            'blowup_factor': blowup,
         }
-        
+
         if hasattr(self.zk_system, 'get_cuda_status'):
             cuda_metrics = self.zk_system.get_cuda_status()
             base_metrics.update(cuda_metrics)
-        
+
         return base_metrics
 
 

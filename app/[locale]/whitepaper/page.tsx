@@ -522,11 +522,11 @@ export default function WhitepaperPage() {
               {t('zkp.protocolText')}
             </p>
             <ul className="list-disc pl-6 text-[#424245] space-y-2 [&_strong]:text-[#1d1d1f]">
-              <li><strong>Post-Quantum Security:</strong> 512-bit target security with 180-bit effective soundness via 80 FRI queries and 20-bit proof-of-work grinding (per FRI Theorem 1.2: ε ≤ ρ^q)</li>
+              <li><strong>Post-Quantum Security:</strong> 180-bit soundness — 160 bits from 80 FRI queries (per FRI Theorem 1.2: ε ≤ ρ^q) plus 20 bits of proof-of-work grinding. All layers enforced end-to-end: value + sibling Merkle binding at every FRI layer, per-layer folding consistency <code className="bg-[#f0f0f2] px-1 rounded">f_L+1(x²) = (v+s)/2 + α·(v−s)/(2x)</code> over a multiplicative coset, Fiat-Shamir challenges rebound to <code className="bg-[#f0f0f2] px-1 rounded">sha256(root_L)</code>, and final-polynomial degree bound</li>
               <li><strong>Goldilocks Prime Field:</strong> p = 2⁶⁴ - 2³² + 1 = 18446744069414584321 (same as Polygon zkEVM, Plonky2) with primitive root g = 7</li>
               <li><strong>No Trusted Setup:</strong> Fully transparent—all parameters are public constants verifiable by any auditor (Definition 1.1 from 2018/046)</li>
               <li><strong>Fiat-Shamir Transformation:</strong> SHA-256 based challenge derivation ensures non-interactive security in the random oracle model</li>
-              <li><strong>CUDA Acceleration:</strong> GPU-optimized NTT and field operations via CuPy/Numba for sub-second proof generation</li>
+              <li><strong>CUDA Acceleration (dev/self-host only):</strong> GPU-optimized NTT and field operations via CuPy/Numba are available in the CUDATrueSTARK prover and probe-verified at import. Production runs on Vercel serverless with no GPU, so the deployed prover is CPU-only</li>
             </ul>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.2 {t('zkp.security')}</h3>
@@ -534,24 +534,24 @@ export default function WhitepaperPage() {
               Per FRI Theorem 1.2 (Ben-Sasson et al. 2018/828), soundness error ε ≤ ρ^q where ρ is the rate and q is the number of queries:
             </p>
             <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
-              <pre style={{ color: '#4ade80' }}>{`FORMAL SOUNDNESS CALCULATION (per ePrint 2018/828)
+              <pre style={{ color: '#4ade80' }}>{`CONFIGURED SOUNDNESS TARGET (per ePrint 2018/828)
 ══════════════════════════════════════════════════
 
 Parameters:
   ρ (rate)        = 1/blowup_factor = 1/4 = 0.25
   q (queries)     = 80
-  grinding_bits   = 20
+  grinding_bits   = 20 (enforced at prove + verify)
 
 FRI Soundness (Theorem 1.2):
   ε = ρ^q = (1/4)^80 = 2^(-160)
 
-With Grinding:
+Target with Grinding:
   ε_total = 2^(-160) × 2^(-20) = 2^(-180)
 
 Security Comparison:
   NIST Post-Quantum Level 1:  128-bit
-  Our Implementation:         180-bit
-  Safety Margin:              +52 bits`}</pre>
+  Configured target:          180-bit
+  Margin (target - NIST L1):  +52 bits`}</pre>
             </div>
             <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl my-6 font-mono text-sm">
               <div className="space-y-2">
@@ -573,17 +573,17 @@ Security Comparison:
                   <p className="text-sm text-green-700 mb-3">
                     {t('zkp.verificationText')}
                   </p>
-                  <Link 
+                  <Link
                     href="/zk"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
                   >
-                    View Full Formal Verification →
+                    View Empirical Soundness Checks →
                   </Link>
                 </div>
               </div>
             </div>
             <p className="text-[#424245] leading-relaxed mb-4">
-              Our ZK system satisfies all required properties (47/47 tests + 6/6 theorems):
+              Our ZK system passes 47/47 unit tests and 6/6 empirical soundness checks<sup>†</sup>:
             </p>
             <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
@@ -600,41 +600,44 @@ Security Comparison:
                     <td className="p-4 text-[#424245]">Transparency</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 Def 1.1</td>
                     <td className="p-4 text-[#424245]">No trusted setup, all params public</td>
-                    <td className="p-4 text-green-600 font-semibold">✓ PROVED</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                   <tr>
                     <td className="p-4 text-[#424245]">Post-Quantum</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 §1.1</td>
                     <td className="p-4 text-[#424245]">No DLP/factoring, SHA-256 only</td>
-                    <td className="p-4 text-green-600 font-semibold">✓ PROVED</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                   <tr>
                     <td className="p-4 text-[#424245]">FRI Soundness</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/828 Thm 1.2</td>
                     <td className="p-4 text-[#424245]">ε = ρ^q = 2⁻¹⁶⁰, with grinding 2⁻¹⁸⁰</td>
-                    <td className="p-4 text-green-600 font-semibold">✓ PROVED</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                   <tr>
                     <td className="p-4 text-[#424245]">Zero-Knowledge</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 Def 1.3</td>
                     <td className="p-4 text-[#424245]">Witness hidden, proof reveals nothing</td>
-                    <td className="p-4 text-green-600 font-semibold">✓ PROVED</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                   <tr>
                     <td className="p-4 text-[#424245]">Completeness</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 Def 1.2</td>
                     <td className="p-4 text-[#424245]">Valid witness → valid proof (47/47 tests)</td>
-                    <td className="p-4 text-green-600 font-semibold">✓ PROVED</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                   <tr>
                     <td className="p-4 text-[#424245]">Soundness</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 Def 1.2</td>
                     <td className="p-4 text-[#424245]">Forgeries rejected (tamper tests pass)</td>
-                    <td className="p-4 text-green-600 font-semibold">✓ PROVED</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-[#86868b] italic leading-relaxed">
+              <sup>†</sup> Empirical checks confirm that on the inputs we tried, the implementation behaves as the whitepaper's construction requires (round-trip succeeds, tamper vectors are rejected, configured parameters match). They are a necessary soundness signal, not a machine-checked formal proof. A full formal proof would require a Coq/Lean encoding of the STARK protocol; that work is out of scope for this repo. Run <code className="bg-[#f0f0f2] px-1 rounded">python zkp/tests/empirical_soundness_harness.py</code> to reproduce.
+            </p>
 
             <h3 className="text-xl font-semibold text-[#1d1d1f] mt-8 mb-4">7.4 {t('zkp.hedgeArch')}</h3>
             <p className="text-[#424245] leading-relaxed">

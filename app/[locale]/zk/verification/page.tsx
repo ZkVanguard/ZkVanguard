@@ -145,15 +145,15 @@ export default function ZKVerificationPage() {
         {/* Header */}
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/10 rounded-full text-sm font-medium mb-6 text-green-600">
-            <span>Formal Verification</span>
+            <span>Empirical Soundness Checks</span>
             <span>•</span>
             <span>Audit-Ready</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-[#1d1d1f] mb-6 tracking-tight">
-            ZK-STARK Mathematical Proof
+            ZK-STARK Empirical Soundness Report
           </h1>
           <p className="text-xl text-[#86868b] max-w-2xl mx-auto leading-relaxed">
-            Formal verification that ZkVanguard implements a TRUE ZK-STARK according to Ben-Sasson et al. academic specifications
+            Reproducible checks that ZkVanguard&apos;s ZK-STARK matches the construction in Ben-Sasson et al. (ePrint 2018/046, 2018/828). Empirical only — not machine-checked formal proofs.
           </p>
         </div>
 
@@ -602,9 +602,12 @@ export default function ZKVerificationPage() {
 
         {/* Theorem Proofs */}
         <section className="mb-16">
-          <h2 className="text-2xl font-bold text-[#1d1d1f] mb-6">Formal Theorem Verification</h2>
-          <p className="text-[#424245] mb-6">
-            We prove our implementation satisfies all 6 required cryptographic theorems:
+          <h2 className="text-2xl font-bold text-[#1d1d1f] mb-6">Per-Property Empirical Checks</h2>
+          <p className="text-[#424245] mb-2">
+            Each of the 6 required cryptographic properties has an empirical check run against the implementation:
+          </p>
+          <p className="text-xs text-[#86868b] italic mb-6">
+            &ldquo;Empirical check passes&rdquo; means the implementation behaved as expected on the tested inputs. It is a necessary soundness signal, not a machine-checked formal proof. A full formal proof would require a Coq/Lean encoding of the STARK protocol.
           </p>
 
           {/* Theorem 1 */}
@@ -612,7 +615,7 @@ export default function ZKVerificationPage() {
             <div className="bg-green-50 px-6 py-4 border-b border-[#e5e5e5]">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-[#1d1d1f]">Theorem 1: Transparency (No Trusted Setup)</h3>
-                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ PROVED</span>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ Empirical check passes</span>
               </div>
             </div>
             <div className="p-6">
@@ -638,7 +641,7 @@ export default function ZKVerificationPage() {
             <div className="bg-green-50 px-6 py-4 border-b border-[#e5e5e5]">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-[#1d1d1f]">Theorem 2: Post-Quantum Security</h3>
-                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ PROVED</span>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ Empirical check passes</span>
               </div>
             </div>
             <div className="p-6">
@@ -695,7 +698,7 @@ export default function ZKVerificationPage() {
             <div className="bg-green-50 px-6 py-4 border-b border-[#e5e5e5]">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-[#1d1d1f]">Theorem 3: FRI Soundness</h3>
-                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ PROVED</span>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ Empirical check passes</span>
               </div>
             </div>
             <div className="p-6">
@@ -703,13 +706,13 @@ export default function ZKVerificationPage() {
                 <strong>Definition [Paper 2018/828, Theorem 1.2]:</strong> For rate ρ and q queries, soundness error ≤ ρ^q
               </p>
               <div className="bg-[#1d1d1f] p-4 rounded-lg font-mono text-xs mb-4 overflow-x-auto">
-                <pre style={{ color: '#4ade80' }}>{`FORMAL SOUNDNESS CALCULATION
+                <pre style={{ color: '#4ade80' }}>{`CONFIGURED SOUNDNESS TARGET
 ════════════════════════════
 
 Parameters:
   ρ (rate)        = 1/blowup_factor = 1/4 = 0.25
   q (queries)     = 80
-  grinding_bits   = 20
+  grinding_bits   = 20 (enforced at prove + verify)
 
 FRI Soundness Error:
   ε_FRI = ρ^q
@@ -717,18 +720,18 @@ FRI Soundness Error:
         = (2^-2)^80
         = 2^(-160)
 
-With Grinding (Proof-of-Work):
+Target with Grinding (Proof-of-Work):
   ε_total = ε_FRI × 2^(-grinding_bits)
           = 2^(-160) × 2^(-20)
           = 2^(-180)
 
 Security Comparison:
   NIST Level 1 (AES-128):     128-bit
-  Our Implementation:         180-bit
-  Safety Margin:              +52 bits (2^52 × safer)`}</pre>
+  Configured target:          180-bit
+  Margin (target - NIST L1):  +52 bits`}</pre>
               </div>
               <p className="text-sm text-green-600">
-                <strong>Conclusion:</strong> Soundness of 2⁻¹⁸⁰ exceeds NIST Post-Quantum Level 1 by 52 bits.
+                <strong>Enforced end-to-end:</strong> 2⁻¹⁸⁰ soundness = 2⁻¹⁶⁰ FRI + 2⁻²⁰ grinding. FRI runs on a multiplicative coset <code className="bg-[#f0f0f2] px-1 rounded">h·⟨ω⟩</code> so squaring preserves subgroup structure; per-layer folding <code className="bg-[#f0f0f2] px-1 rounded">f_L+1(x²) = (v + s)/2 + α·(v − s)/(2x)</code> is checked against the Merkle-authenticated next-layer value (or the final polynomial at the last committed layer). Both <code className="bg-[#f0f0f2] px-1 rounded">v = f(x)</code> and <code className="bg-[#f0f0f2] px-1 rounded">s = f(−x)</code> ship with Merkle proofs; challenges are rebound to <code className="bg-[#f0f0f2] px-1 rounded">sha256(root_L)</code> so Fiat-Shamir isn&apos;t trusted from the proof. Grinding&apos;s nonce is bound to the full trace + FRI transcript, so any tamper anywhere redoes the PoW.
               </p>
             </div>
           </div>
@@ -738,7 +741,7 @@ Security Comparison:
             <div className="bg-green-50 px-6 py-4 border-b border-[#e5e5e5]">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-[#1d1d1f]">Theorem 4: Zero-Knowledge (Witness Hiding)</h3>
-                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ PROVED</span>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ Empirical check passes</span>
               </div>
             </div>
             <div className="p-6">
@@ -776,7 +779,7 @@ Security Comparison:
             <div className="bg-green-50 px-6 py-4 border-b border-[#e5e5e5]">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-[#1d1d1f]">Theorem 5: Completeness</h3>
-                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ PROVED</span>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ Empirical check passes</span>
               </div>
             </div>
             <div className="p-6">
@@ -784,15 +787,15 @@ Security Comparison:
                 <strong>Definition [Paper 2018/046, Def 1.2]:</strong> Honest prover with valid witness always produces valid proof.
               </p>
               <div className="bg-[#f5f5f7] p-4 rounded-lg font-mono text-xs mb-4">
-                <p className="mb-2"><strong>Empirical Verification:</strong></p>
+                <p className="mb-2"><strong>Empirical check:</strong></p>
                 <p>Test Suite: zkp/tests/test_cuda_true_stark.py</p>
                 <p>Total Tests: 47</p>
                 <p>Passing: 47 ✓</p>
                 <p>Failing: 0</p>
-                <p className="mt-2">Completeness tests verify that valid witnesses ALWAYS produce valid proofs.</p>
+                <p className="mt-2">On the tested inputs, valid witnesses produced valid proofs.</p>
               </div>
               <p className="text-sm text-green-600">
-                <strong>Conclusion:</strong> 100% of valid witness tests pass. System is complete.
+                <strong>Result:</strong> 47/47 valid-witness tests pass. Completeness holds on the empirical inputs.
               </p>
             </div>
           </div>
@@ -802,7 +805,7 @@ Security Comparison:
             <div className="bg-green-50 px-6 py-4 border-b border-[#e5e5e5]">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-[#1d1d1f]">Theorem 6: Soundness (Forgery Resistance)</h3>
-                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ PROVED</span>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-medium rounded-full">✓ Empirical check passes</span>
               </div>
             </div>
             <div className="p-6">
@@ -936,23 +939,22 @@ python -c "import math; print(-math.log2(0.25**80))"  # Should print 160
 # 4. Run Full Test Suite
 python -m pytest zkp/tests/test_cuda_true_stark.py -v
 
-# 5. Run Formal Verification Script
-python zkp/tests/formal_verification.py`}</pre>
+# 5. Run Empirical Soundness Harness
+python zkp/tests/empirical_soundness_harness.py`}</pre>
           </div>
         </section>
 
         {/* Final Verdict */}
         <section className="mb-16">
           <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-5 sm:p-8 text-white">
-            <h2 className="text-2xl font-bold mb-4">✓ Mathematical Conclusion</h2>
+            <h2 className="text-2xl font-bold mb-4">✓ Empirical Summary</h2>
             <p className="text-lg mb-6">
-              This implementation IS a TRUE ZK-STARK. It satisfies all 6 cryptographic theorems from the 
-              academic literature (Ben-Sasson et al. 2018/046, 2018/828).
+              This implementation matches the STARK construction in Ben-Sasson et al. (ePrint 2018/046, 2018/828) on every empirical check we ran: parameters align, round-trips succeed, tested tamper vectors are rejected. Empirical passes are a necessary soundness signal, not a machine-checked formal proof.
             </p>
             <div className="grid md:grid-cols-3 gap-4 text-center">
               <div className="bg-white/10 rounded-xl p-4">
                 <p className="text-3xl font-bold">6/6</p>
-                <p className="text-sm text-white/80">Theorems Proved</p>
+                <p className="text-sm text-white/80">Empirical Checks Pass</p>
               </div>
               <div className="bg-white/10 rounded-xl p-4">
                 <p className="text-3xl font-bold">47/47</p>
@@ -960,7 +962,7 @@ python zkp/tests/formal_verification.py`}</pre>
               </div>
               <div className="bg-white/10 rounded-xl p-4">
                 <p className="text-3xl font-bold">2⁻¹⁸⁰</p>
-                <p className="text-sm text-white/80">Soundness Error</p>
+                <p className="text-sm text-white/80">Configured Soundness Target</p>
               </div>
             </div>
           </div>
