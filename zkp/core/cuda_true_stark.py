@@ -761,7 +761,14 @@ class FRI:
         
         # Iterate until polynomial degree is sufficiently small
         layer = 0
-        while len(current_domain) > self.config.num_queries * 2 and layer < self.config.num_fri_layers:
+        # Fold until domain shrinks to a small constant (or num_fri_layers cap
+        # hits). Previous stopping cap was `num_queries * 2` which capped
+        # folding at ~3 layers for default extended_size=1024, contradicting
+        # the whitepaper's "num_fri_layers=10" claim. Small constant lets the
+        # config cap drive the layer count so `actual_fri_layers` matches the
+        # whitepaper number. Final polynomial degree soundness is still
+        # enforced separately (`final_poly.degree() > num_queries` at verify).
+        while len(current_domain) > 8 and layer < self.config.num_fri_layers:
             # 1. Evaluate polynomial on current domain
             evaluations = current_poly.evaluate_domain(current_domain)
             
@@ -1097,15 +1104,30 @@ class CUDATrueSTARK:
             air = self.air
 
         # Config override for hedge proofs. Composition degree =
-        # max_constraint_deg × (trace_length − 1); we need extended_size /
-        # composition_deg ≥ 4 so FRI rate ρ ≤ 1/4 (soundness). Small trace +
-        # larger blowup keeps ρ good. Config is restored right before return
-        # (ponytail: non-thread-safe by design, matches the rest of the class).
+        # max_constraint_deg × (trace_length − 1); need extended_size /
+        # composition_deg ≥ 4 so FRI rate ρ ≤ 1/4 (soundness). Sizing:
+        #
+        #   trace_length = 1024  → composition deg = 4·1023 = 4092
+        #   blowup = 16          → extended_size = 16384
+        #   ρ = 4092/16384 ≈ 0.25  → ρ^80 ≈ 2^-160
+        #
+        # Fold count with 8-element cap: log2(16384/8) = 11 → capped at
+        # num_fri_layers = 10. That's the actual 10 folds the whitepaper §7
+        # claims (previously ~1 fold with trace_length=16).
+        #
+        # Grinding bumped 20→24 bits for hedge (2^-184 soundness). Python
+        # SHA-256 gives ~11s hedge proof-gen at this level; the legacy
+        # 47-test suite keeps 20 bits so it stays fast.
+        #
+        # Config is restored right before return (non-thread-safe by design,
+        # matches the rest of the class).
         _saved_trace_length = self.config.trace_length
         _saved_blowup = self.config.blowup_factor
+        _saved_grinding = self.config.grinding_bits
         if is_hedge:
-            self.config.trace_length = 16
+            self.config.trace_length = 1024
             self.config.blowup_factor = 16
+            self.config.grinding_bits = 24
 
         # ===== STEP 1: Generate Execution Trace =====
         trace = self.generate_execution_trace(statement, witness)
@@ -1115,6 +1137,7 @@ class CUDATrueSTARK:
             # Restore config on the error path too.
             self.config.trace_length = _saved_trace_length
             self.config.blowup_factor = _saved_blowup
+            self.config.grinding_bits = _saved_grinding
             raise ValueError("Execution trace does not satisfy AIR constraints")
         
         # ===== STEP 3: Interpolate Trace to Polynomial =====
@@ -1269,6 +1292,9 @@ class CUDATrueSTARK:
             'fri_roots': [tree.root().hex() for tree in fri_trees],
             'fri_challenges': [str(c) for c in fri_challenges],
             'fri_final_polynomial': [str(c) for c in fri_polys[-1].coefficients] if fri_polys else [],
+            # Observable FRI fold count (== len(fri_roots)). Matches the
+            # whitepaper's num_fri_layers claim when config permits.
+            'actual_fri_layers': len(fri_trees),
             
             # Query responses
             'query_indices': query_indices,
@@ -1309,6 +1335,7 @@ class CUDATrueSTARK:
         # Restore config after hedge overrides (see top of generate_proof).
         self.config.trace_length = _saved_trace_length
         self.config.blowup_factor = _saved_blowup
+        self.config.grinding_bits = _saved_grinding
 
         return {'proof': proof, **proof}
     

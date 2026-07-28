@@ -556,11 +556,11 @@ Security Comparison:
             <div className="bg-[#f5f5f7] p-4 sm:p-6 rounded-xl my-6 font-mono text-sm">
               <div className="space-y-2">
                 <p><strong>Target Security:</strong> 512 bits (configuration parameter)</p>
-                <p><strong>Effective Soundness:</strong> 2⁻¹⁸⁰ = (1/4)⁸⁰ × 2⁻²⁰</p>
+                <p><strong>Effective Soundness:</strong> 2⁻¹⁸⁰ = (1/4)⁸⁰ × 2⁻²⁰ (hedge: 2⁻¹⁸⁴ w/ 24-bit grinding)</p>
                 <p><strong>FRI Queries:</strong> 80 (exceeds 128-bit post-quantum threshold by 52 bits)</p>
-                <p><strong>Blowup Factor:</strong> 4× (rate ρ = 0.25)</p>
-                <p><strong>FRI Layers:</strong> 10 (Merkle tree depth)</p>
-                <p><strong>Grinding Bits:</strong> 20 (proof-of-work difficulty)</p>
+                <p><strong>Blowup Factor:</strong> 4× default (rate ρ = 0.25); hedge proofs use 16× for constraint-degree headroom</p>
+                <p><strong>FRI Folds:</strong> up to 10; hedge proofs deliver 10 (observable via <code>proof.actual_fri_layers</code>); legacy default delivers ~7</p>
+                <p><strong>Grinding Bits:</strong> 20 default; hedge proofs use 24</p>
               </div>
             </div>
 

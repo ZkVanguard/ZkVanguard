@@ -352,11 +352,20 @@ def main():
     hedge_witness = {'canonical': hedge_canonical}
 
     hedge_proof = stark.generate_proof(hedge_stmt, hedge_witness)
-    print(f"  Honest hedge proof generated (trace_openings="
-          f"{len(hedge_proof['proof'].get('trace_openings', []))})")
+    hp = hedge_proof['proof']
+    print(f"  Honest hedge proof generated:")
+    print(f"    trace_length        = {hp.get('trace_length')}")
+    print(f"    extended_trace_len  = {hp.get('extended_trace_length')}")
+    print(f"    actual_fri_layers   = {hp.get('actual_fri_layers')}  (whitepaper claims 10)")
+    print(f"    grinding_bits       = {hp.get('grinding_bits')}")
+    print(f"    trace_openings      = {len(hp.get('trace_openings', []))}")
     honest_ok = stark.verify_proof(hedge_proof, hedge_stmt)
     print(f'  Honest hedge round-trip:                  '
           f'{"VERIFIED ✓" if honest_ok else "FAILED ✗"}')
+    # Assert whitepaper claim: actual_fri_layers >= 10 for hedge.
+    fri_layer_match = int(hp.get('actual_fri_layers') or 0) >= 10
+    print(f'  Whitepaper FRI layer count (>=10):        '
+          f'{"MATCHES ✓ (" + str(hp.get("actual_fri_layers")) + ")" if fri_layer_match else "FALSE ✗"}')
 
     # Hedge tamper 1: bad-asset trace refuses to prove.
     bad_asset_wit = {'canonical': {**hedge_canonical, 'asset': 'DOGE'}}
@@ -418,6 +427,7 @@ def main():
 
     results['hedge_air'] = (
         honest_ok
+        and fri_layer_match
         and tamper_a_raised
         and tamper_b_raised
         and (not tamper_c_ok)

@@ -709,26 +709,24 @@ export default function ZKVerificationPage() {
                 <pre style={{ color: '#4ade80' }}>{`CONFIGURED SOUNDNESS TARGET
 ════════════════════════════
 
-Parameters:
-  ρ (rate)        = 1/blowup_factor = 1/4 = 0.25
-  q (queries)     = 80
-  grinding_bits   = 20 (enforced at prove + verify)
+Parameters (legacy / hedge):
+  ρ (rate)         = 1/4  (legacy)  |  1/16 (hedge — extra headroom for constraint degree)
+  q (queries)      = 80
+  grinding_bits    = 20   (legacy)  |  24    (hedge)
+  actual FRI folds = 7    (legacy)  |  10    (hedge — matches whitepaper §7)
 
-FRI Soundness Error:
-  ε_FRI = ρ^q
-        = (1/4)^80
-        = (2^-2)^80
-        = 2^(-160)
+FRI Soundness Error (Ben-Sasson 2018/828 Thm 1.2):
+  ε_FRI(legacy) = (1/4)^80  = 2^(-160)
+  ε_FRI(hedge)  = (1/16)^80 = 2^(-320)   (but effective bound is min with q_max)
 
-Target with Grinding (Proof-of-Work):
-  ε_total = ε_FRI × 2^(-grinding_bits)
-          = 2^(-160) × 2^(-20)
-          = 2^(-180)
+Total with Grinding:
+  ε_total(legacy) = 2^(-160) × 2^(-20) = 2^(-180)
+  ε_total(hedge)  = 2^(-160) × 2^(-24) = 2^(-184)
 
 Security Comparison:
-  NIST Level 1 (AES-128):     128-bit
-  Configured target:          180-bit
-  Margin (target - NIST L1):  +52 bits`}</pre>
+  NIST Level 1 (AES-128):        128-bit
+  Legacy proofs:                 180-bit (+52)
+  Hedge proofs:                  184-bit (+56)`}</pre>
               </div>
               <p className="text-sm text-green-600">
                 <strong>Enforced end-to-end:</strong> 2⁻¹⁸⁰ soundness = 2⁻¹⁶⁰ FRI + 2⁻²⁰ grinding. FRI runs on a multiplicative coset <code className="bg-[#f0f0f2] px-1 rounded">h·⟨ω⟩</code> so squaring preserves subgroup structure; per-layer folding <code className="bg-[#f0f0f2] px-1 rounded">f_L+1(x²) = (v + s)/2 + α·(v − s)/(2x)</code> is checked against the Merkle-authenticated next-layer value (or the final polynomial at the last committed layer). Both <code className="bg-[#f0f0f2] px-1 rounded">v = f(x)</code> and <code className="bg-[#f0f0f2] px-1 rounded">s = f(−x)</code> ship with Merkle proofs; challenges are rebound to <code className="bg-[#f0f0f2] px-1 rounded">sha256(root_L)</code> so Fiat-Shamir isn&apos;t trusted from the proof. Grinding&apos;s nonce is bound to the full trace + FRI transcript, so any tamper anywhere redoes the PoW.
