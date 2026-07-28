@@ -307,6 +307,126 @@ def main():
     print(f'\n  CHECK 6: {"✓ PASSES" if results["soundness"] else "✗ FAILS"}')
 
     # ==========================================================
+    # CHECK 7: HEDGE-AIR END-TO-END (composition polynomial soundness)
+    # ==========================================================
+    print_section('CHECK 7: HEDGE-AIR END-TO-END')
+    print()
+    print('Property: `zkv-hedge-v1` proofs cryptographically prove hedge')
+    print('invariants (asset in allow-list, side well-formed, leverage in')
+    print("range) — not just via the server-side gate, but via the FRI'd")
+    print('composition polynomial. Verifier locally re-evaluates the')
+    print('constraints on Merkle-authenticated T(x) at each FRI query.')
+    print()
+
+    from zkp.core.hedge_canonical import (
+        compute_commitment_hash,
+        compute_inputs_hash,
+        HEDGE_CANONICAL_VERSION,
+    )
+    hedge_canonical = {
+        'version': HEDGE_CANONICAL_VERSION,
+        'chain': 'sui',
+        'portfolioId': 42,
+        'timestampMs': 1_752_000_000_000,
+        'asset': 'BTC',
+        'side': 'LONG',
+        'sizeUnits': 1_000,
+        'leverageX': 3,
+        'entryPriceUsdcCents': 7_300_000_00,
+        'notionalValueUsdcCents': 21_900_00,
+        'leverageCap': 4,
+        'notionalCapUsdcCents': 1_000_000_00,
+        'salt': 'a' * 64,
+    }
+    hedge_ih = compute_inputs_hash(hedge_canonical)
+    hedge_ch = compute_commitment_hash(hedge_canonical, hedge_ih)
+    hedge_stmt = {
+        'claim': f'zkv-hedge-v{HEDGE_CANONICAL_VERSION}',
+        'public_inputs': [
+            hedge_ch,
+            hedge_ih,
+            hedge_canonical['notionalCapUsdcCents'],
+            hedge_canonical['leverageCap'],
+        ],
+    }
+    hedge_witness = {'canonical': hedge_canonical}
+
+    hedge_proof = stark.generate_proof(hedge_stmt, hedge_witness)
+    print(f"  Honest hedge proof generated (trace_openings="
+          f"{len(hedge_proof['proof'].get('trace_openings', []))})")
+    honest_ok = stark.verify_proof(hedge_proof, hedge_stmt)
+    print(f'  Honest hedge round-trip:                  '
+          f'{"VERIFIED ✓" if honest_ok else "FAILED ✗"}')
+
+    # Hedge tamper 1: bad-asset trace refuses to prove.
+    bad_asset_wit = {'canonical': {**hedge_canonical, 'asset': 'DOGE'}}
+    tamper_a_raised = False
+    try:
+        stark.generate_proof(hedge_stmt, bad_asset_wit)
+    except (ValueError, KeyError):
+        tamper_a_raised = True
+    print(f'  Bad-asset witness refused at prove-time:  '
+          f'{"REJECTED ✓" if tamper_a_raised else "ACCEPTED ✗"}')
+
+    # Hedge tamper 2: over-leverage refuses to prove (evaluate_all_constraints).
+    over_lev_wit = {'canonical': {**hedge_canonical, 'leverageX': 99}}
+    tamper_b_raised = False
+    try:
+        stark.generate_proof(hedge_stmt, over_lev_wit)
+    except ValueError:
+        tamper_b_raised = True
+    print(f'  Over-leverage witness refused at prove:   '
+          f'{"REJECTED ✓" if tamper_b_raised else "ACCEPTED ✗"}')
+
+    # Hedge tamper 3: verifier sees leverage_cap=2 while proof was made for
+    # cap=4 — verifier re-builds hedge AIR with the wrong constraint set,
+    # composition check must fail.
+    downgraded_stmt = dict(hedge_stmt)
+    downgraded_stmt['public_inputs'] = list(hedge_stmt['public_inputs'])
+    downgraded_stmt['public_inputs'][3] = 2
+    tamper_c_ok = stark.verify_proof(hedge_proof, downgraded_stmt)
+    print(f'  Leverage-cap downgrade at verify:         '
+          f'{"REJECTED ✓" if not tamper_c_ok else "ACCEPTED ✗"}')
+
+    # Hedge tamper 4: swap a trace opening value (Merkle proof breaks).
+    tamper_d_proof = dict(hedge_proof)
+    tamper_d_proof['proof'] = dict(tamper_d_proof['proof'])
+    tamper_d_proof['proof']['trace_openings'] = [
+        dict(o) for o in tamper_d_proof['proof']['trace_openings']
+    ]
+    tamper_d_proof['proof']['trace_openings'][0]['value'] = str(
+        (int(tamper_d_proof['proof']['trace_openings'][0]['value']) + 1)
+    )
+    tamper_d_ok = stark.verify_proof(tamper_d_proof, hedge_stmt)
+    print(f'  Tampered trace opening value:             '
+          f'{"REJECTED ✓" if not tamper_d_ok else "ACCEPTED ✗"}')
+
+    # Hedge tamper 5: honest proof + change ONE FRI-layer-0 value (H(x_q)) —
+    # FRI Merkle catches it before composition check even runs.
+    tamper_e_proof = dict(hedge_proof)
+    tamper_e_proof['proof'] = dict(tamper_e_proof['proof'])
+    new_qr = [dict(q) for q in tamper_e_proof['proof']['query_responses']]
+    new_qr[0] = dict(new_qr[0])
+    new_qr[0]['layers'] = [dict(l) for l in new_qr[0]['layers']]
+    new_qr[0]['layers'][0]['value'] = str(
+        (int(new_qr[0]['layers'][0]['value']) + 1) % stark.field.prime
+    )
+    tamper_e_proof['proof']['query_responses'] = new_qr
+    tamper_e_ok = stark.verify_proof(tamper_e_proof, hedge_stmt)
+    print(f'  Tampered composition value at FRI layer 0:'
+          f' {"REJECTED ✓" if not tamper_e_ok else "ACCEPTED ✗"}')
+
+    results['hedge_air'] = (
+        honest_ok
+        and tamper_a_raised
+        and tamper_b_raised
+        and (not tamper_c_ok)
+        and (not tamper_d_ok)
+        and (not tamper_e_ok)
+    )
+    print(f'\n  CHECK 7: {"✓ PASSES" if results["hedge_air"] else "✗ FAILS"}')
+
+    # ==========================================================
     # FINAL SUMMARY
     # ==========================================================
     print_header('EMPIRICAL SOUNDNESS SUMMARY')
@@ -321,7 +441,7 @@ def main():
     print()
     print('=' * 72)
     if all_pass:
-        print('  CONCLUSION: All 6 empirical soundness checks pass.')
+        print(f'  CONCLUSION: All {len(results)} empirical soundness checks pass.')
         print()
         print('  Parameters match the whitepaper construction (Ben-Sasson et al.')
         print('  ePrint 2018/046, 2018/828). A fresh proof round-trips and the')

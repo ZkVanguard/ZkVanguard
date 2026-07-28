@@ -588,73 +588,148 @@ class MerkleTree:
 
 class AIR:
     """
-    Algebraic Intermediate Representation (AIR)
-    Defines computation as polynomial constraints
-    Following StarkWare AIR specification
+    Algebraic Intermediate Representation (AIR).
+
+    Holds two kinds of constraints:
+
+    - **Transition constraint** — `T(g·x) = f(T(x), i)` — a polynomial
+      identity across consecutive trace rows. Default is the historical
+      increment `T(i+1) = T(i) + 1`. Disable via `use_transition_constraint =
+      False` for AIRs whose trace is pure witness pinning (e.g. hedge).
+
+    - **Row constraints** — pairs `(row_index, P_i)` where `P_i(value)`
+      must equal 0 iff the invariant at that row holds. Used by the hedge
+      AIR to encode `asset ∈ {1,2,3}`, `side ∈ {0,1}`, `leverage ∈
+      {1..cap}`. Row constraints are the ONLY things folded into the
+      composition polynomial today; the transition constraint is checked
+      at prove-time only (kept for backward compat with the legacy
+      trace = t+1 AIR).
     """
-    
+
     def __init__(self, field: CUDAFiniteField):
         self.field = field
-    
+        # Historical simple-increment transition, opt-out via flag below.
+        self.use_transition_constraint = True
+        # List of (row_index, callable(int) -> int). Callable returns 0
+        # iff the invariant holds for the value at that trace row.
+        self.row_constraints: List[Tuple[int, Any]] = []
+
+    def add_row_constraint(self, row_index: int, invariant_fn) -> None:
+        """Register a constraint `invariant_fn(trace[row_index]) == 0`.
+
+        `invariant_fn` MUST be a polynomial in `trace_value` — the verifier
+        will evaluate it locally on Merkle-authenticated `T(x)` values, so
+        it can't depend on anything outside the trace and the closed-over
+        constants (leverage cap, allowed values).
+        """
+        self.row_constraints.append((row_index, invariant_fn))
+
     def boundary_constraints(self, trace: List[int]) -> List[Tuple[int, int]]:
-        """
-        Boundary constraints: (index, expected_value) pairs
-        Constrains first and last elements of trace
-        """
+        """Legacy first/last pinning — skipped for row-constraint AIRs
+        (hedge). Row constraints are the more general form."""
+        if self.row_constraints:
+            return []
         constraints = []
         if len(trace) > 0:
-            constraints.append((0, trace[0]))  # Input constraint
+            constraints.append((0, trace[0]))
         if len(trace) > 1:
-            constraints.append((len(trace) - 1, trace[-1]))  # Output constraint
+            constraints.append((len(trace) - 1, trace[-1]))
         return constraints
-    
+
     def transition_constraint(self, current: int, next_val: int, step: int) -> int:
-        """
-        Transition constraint polynomial
-        Defines valid state transitions
-        
-        For general computation: next = f(current, step)
-        Returns 0 if constraint satisfied
-        """
-        # Simple increment constraint: trace[i+1] = trace[i] + 1
+        """Returns 0 iff transition satisfied. Disabled for row-constraint AIRs."""
+        if not self.use_transition_constraint:
+            return 0
         expected = self.field.add(current, 1)
         return self.field.sub(next_val, expected)
-    
+
+    def evaluate_row_constraint(self, row_index: int, trace_value: int) -> int:
+        """Return the field residue from all row constraints at this row.
+        Any nonzero residue means an invariant was violated."""
+        for i, fn in self.row_constraints:
+            if i == row_index:
+                r = fn(trace_value) % self.field.prime
+                if r != 0:
+                    return r
+        return 0
+
     def evaluate_all_constraints(self, trace: List[int]) -> bool:
-        """Check if entire trace satisfies AIR constraints"""
-        # Check transition constraints
+        """Prove-time full-trace check. Refuses to generate a proof
+        against an inconsistent trace."""
         for i in range(len(trace) - 1):
             if self.transition_constraint(trace[i], trace[i + 1], i) != 0:
                 return False
-        
-        # Check boundary constraints
+        for row_idx, fn in self.row_constraints:
+            if row_idx < len(trace) and (fn(trace[row_idx]) % self.field.prime) != 0:
+                return False
         for index, expected in self.boundary_constraints(trace):
             if trace[index] != expected:
                 return False
-        
         return True
-    
+
     def get_constraint_polynomial(self, trace_poly: Polynomial, domain: List[int]) -> Polynomial:
         """
-        Build constraint polynomial that vanishes on valid traces
-        C(x) = transition_constraint(T(x), T(g*x))
+        Build constraint polynomial from transition residuals across the
+        domain. Retained for callers that depend on it; new code should
+        use row_constraints + `build_composition_evaluations` instead.
         """
-        # For each domain point, evaluate transition constraint
         n = len(domain)
-        generator = self.field.get_primitive_root(n)
-        
         constraint_values = []
         for i, x in enumerate(domain):
             next_x = domain[(i + 1) % n]
             current_val = trace_poly.evaluate(x)
             next_val = trace_poly.evaluate(next_x)
-            
-            constraint_val = self.transition_constraint(current_val, next_val, i)
-            constraint_values.append(constraint_val)
-        
-        # Interpolate constraint values to polynomial
+            constraint_values.append(self.transition_constraint(current_val, next_val, i))
+
         points = list(zip(domain, constraint_values))
         return Polynomial.interpolate(points, self.field)
+
+
+def hedge_invariant_air(
+    field: CUDAFiniteField,
+    leverage_cap: int,
+    allowed_asset_codes: Tuple[int, ...] = (1, 2, 3),
+    allowed_side_codes: Tuple[int, ...] = (0, 1),
+) -> AIR:
+    """
+    Build the AIR that verifies a private hedge's invariants inside the
+    STARK, not just at the server-side gate.
+
+    Trace layout (planted by the prover; verifier reads the values via
+    Merkle-authenticated trace queries):
+        trace[0] = asset_code   ∈ allowed_asset_codes
+        trace[1] = side_code    ∈ allowed_side_codes
+        trace[2] = leverageX    ∈ {1..leverage_cap}
+        trace[3..] = deterministic filler (no invariant)
+
+    Each invariant is a polynomial identity on trace[i]:
+        asset  : ∏_{k ∈ allowed_asset_codes} (T(g^0) − k) = 0
+        side   : ∏_{k ∈ allowed_side_codes}  (T(g^1) − k) = 0
+        lev    : ∏_{k=1..cap}                 (T(g^2) − k) = 0
+
+    The prover folds these into the composition polynomial and the
+    verifier re-evaluates them on Merkle-authenticated T(x). Notional-vs-
+    cap and salt-shape checks stay server-side (need range proofs, out
+    of scope for this AIR pass).
+    """
+    air = AIR(field)
+    air.use_transition_constraint = False  # hedge trace is pure witness planting
+
+    def _make_membership(allowed):
+        allowed = tuple(int(k) for k in allowed)
+        p = field.prime
+        def _fn(v: int) -> int:
+            v = int(v) % p
+            acc = 1
+            for k in allowed:
+                acc = (acc * ((v - k) % p)) % p
+            return acc
+        return _fn
+
+    air.add_row_constraint(0, _make_membership(allowed_asset_codes))
+    air.add_row_constraint(1, _make_membership(allowed_side_codes))
+    air.add_row_constraint(2, _make_membership(tuple(range(1, leverage_cap + 1))))
+    return air
 
 
 class FRI:
@@ -925,22 +1000,68 @@ class CUDATrueSTARK:
     
     def generate_execution_trace(self, statement: Dict[str, Any], witness: Dict[str, Any]) -> List[int]:
         """
-        Generate execution trace from statement and witness
-        The trace represents the computational steps being proven
+        Generate execution trace from statement and witness.
+
+        For `zkv-hedge-v1` claims: plant asset_code / side_code / leverageX
+        at rows 0/1/2 (matches hedge_invariant_air's row constraint indices).
+        The rest of the trace is deterministic filler seeded from the witness.
+
+        For any other claim: fall back to the legacy `trace[i+1] = trace[i] + 1`
+        so pre-hedge callers still work.
         """
-        # Extract inputs
+        claim = str(statement.get('claim', '')) if isinstance(statement, dict) else ''
+
+        if claim.startswith('zkv-hedge-v'):
+            canonical = witness.get('canonical') if isinstance(witness, dict) else None
+            if not isinstance(canonical, dict):
+                raise ValueError(
+                    "zkv-hedge-v1 trace requires witness.canonical (a CanonicalHedgeInputs dict)"
+                )
+
+            from zkp.core.hedge_canonical import ASSET_CODE, SIDE_CODE
+            asset = str(canonical.get('asset', '')).upper()
+            side = str(canonical.get('side', '')).upper()
+            asset_code = ASSET_CODE.get(asset)
+            side_code = SIDE_CODE.get(side)
+            if asset_code is None or side_code is None:
+                raise ValueError(
+                    f"zkv-hedge-v1 trace: unsupported asset={asset!r} or side={side!r}"
+                )
+            leverage_x = int(canonical.get('leverageX', 0))
+
+            trace: List[int] = [
+                asset_code % self.prime,
+                side_code % self.prime,
+                leverage_x % self.prime,
+            ]
+
+            # Filler: SHA256 chain seeded from the canonical inputs_hash so
+            # the padding is deterministic but tied to the witness.
+            seed_material = (
+                str(canonical.get('asset', ''))
+                + str(canonical.get('side', ''))
+                + str(canonical.get('sizeUnits', ''))
+                + str(canonical.get('entryPriceUsdcCents', ''))
+                + str(canonical.get('notionalValueUsdcCents', ''))
+                + str(canonical.get('salt', ''))
+            )
+            seed = hashlib.sha256(seed_material.encode()).digest()
+            for _ in range(self.config.trace_length - len(trace)):
+                trace.append(int.from_bytes(seed, 'big') % self.prime)
+                seed = hashlib.sha256(seed).digest()
+            return trace
+
+        # Legacy fallback for non-hedge claims.
         secret = witness.get('secret_value', witness.get('age', witness.get('value', 42)))
         if isinstance(secret, str):
             secret = int(hashlib.sha256(secret.encode()).hexdigest(), 16) % self.prime
-        
-        # Generate trace: simple increment transition (trace[i+1] = trace[i] + 1)
+
         trace = []
         current = secret % self.prime
-        
-        for i in range(self.config.trace_length):
+        for _ in range(self.config.trace_length):
             trace.append(current)
             current = self.field.add(current, 1)
-        
+
         return trace
     
     def generate_proof(self, statement: Dict[str, Any], witness: Dict[str, Any]) -> Dict[str, Any]:
@@ -957,12 +1078,43 @@ class CUDATrueSTARK:
         7. Generate query responses
         """
         start_time = time.time()
-        
+
+        # Pick the right AIR for this proof. zkv-hedge-v* proofs get the
+        # hedge invariant AIR (asset/side/leverage row constraints); every
+        # other claim keeps the legacy transition AIR self.air was built with.
+        claim = str(statement.get('claim', '')) if isinstance(statement, dict) else ''
+        is_hedge = claim.startswith('zkv-hedge-v')
+        if is_hedge:
+            try:
+                stmt_pub = statement.get('public_inputs') or []
+                leverage_cap = int(stmt_pub[3]) if len(stmt_pub) >= 4 else 4
+            except (TypeError, ValueError):
+                raise ValueError(
+                    "zkv-hedge-v1 statement.public_inputs must supply leverage_cap at index 3"
+                )
+            air = hedge_invariant_air(self.field, leverage_cap)
+        else:
+            air = self.air
+
+        # Config override for hedge proofs. Composition degree =
+        # max_constraint_deg × (trace_length − 1); we need extended_size /
+        # composition_deg ≥ 4 so FRI rate ρ ≤ 1/4 (soundness). Small trace +
+        # larger blowup keeps ρ good. Config is restored right before return
+        # (ponytail: non-thread-safe by design, matches the rest of the class).
+        _saved_trace_length = self.config.trace_length
+        _saved_blowup = self.config.blowup_factor
+        if is_hedge:
+            self.config.trace_length = 16
+            self.config.blowup_factor = 16
+
         # ===== STEP 1: Generate Execution Trace =====
         trace = self.generate_execution_trace(statement, witness)
-        
+
         # ===== STEP 2: Verify AIR Constraints =====
-        if not self.air.evaluate_all_constraints(trace):
+        if not air.evaluate_all_constraints(trace):
+            # Restore config on the error path too.
+            self.config.trace_length = _saved_trace_length
+            self.config.blowup_factor = _saved_blowup
             raise ValueError("Execution trace does not satisfy AIR constraints")
         
         # ===== STEP 3: Interpolate Trace to Polynomial =====
@@ -996,11 +1148,63 @@ class CUDATrueSTARK:
         # ===== STEP 5: Commit to Extended Trace =====
         eval_bytes = [str(e).encode() for e in extended_evaluations]
         trace_merkle = MerkleTree(eval_bytes)
-        
+
         # ===== STEP 6: Build Composition Polynomial =====
-        # Combines boundary and transition constraints
-        composition_poly = trace_poly  # Simplified: use trace polynomial
-        
+        # For AIRs with row constraints (hedge), fold constraint identities
+        # into a single composition H(x). Verifier will re-evaluate the
+        # constraints locally on Merkle-authenticated T(x) and check that
+        # H(x) matches, at every FRI query point. FRI on H proves H is
+        # low-degree, which via the quotient argument implies each
+        # constraint vanishes at its designated row.
+        #
+        # For legacy AIRs with no row constraints, fall back to the
+        # trace polynomial itself (matches the pre-hedge behavior).
+        n_orig = len(trace)
+        original_domain = self.field.get_evaluation_domain(n_orig)
+        constraint_alphas: List[int] = []
+        if air.row_constraints:
+            # Fiat-Shamir bind alphas to the trace commitment so an
+            # attacker can't pick favorable weights.
+            for idx, _ in enumerate(air.row_constraints):
+                seed = hashlib.sha256(trace_merkle.root() + f"alpha:{idx}".encode()).hexdigest()
+                constraint_alphas.append(int(seed, 16) % self.field.prime)
+
+            h_evals: List[int] = []
+            # Precompute inv(x_k - g^{row_index}) for each (k, row_index)
+            row_omega_pow = [original_domain[row_idx] for row_idx, _ in air.row_constraints]
+            for k, x_k in enumerate(extended_domain):
+                t_at_x = extended_evaluations[k]
+                acc = 0
+                for j, (row_idx, fn) in enumerate(air.row_constraints):
+                    p_val = fn(t_at_x) % self.field.prime
+                    denom = self.field.sub(x_k, row_omega_pow[j])
+                    if denom == 0:
+                        # Extended coset is disjoint from trace domain, so
+                        # (x_k - g^i) is never zero. Bail if it happens.
+                        raise ValueError(
+                            f"composition: extended domain point coincides with trace row {row_idx}; "
+                            f"coset shift must place extended domain outside trace domain"
+                        )
+                    q_val = self.field.mul(p_val, self.field.inv(denom))
+                    acc = self.field.add(acc, self.field.mul(constraint_alphas[j], q_val))
+                h_evals.append(acc)
+
+            # Build H_poly whose evaluations on extended_domain match h_evals.
+            # extended_domain = coset_shift · <ω_e>, so:
+            #   G(y) := H(coset_shift · y)   has G(ω_e^k) = h_evals[k]
+            # Inverse-FFT h_evals → G's coefficients.
+            # Un-shift: H.coeffs[k] = G.coeffs[k] · coset_shift^(-k)
+            g_coeffs = self.field.fft(h_evals, inverse=True)
+            shift_inv = self.field.inv(coset_shift)
+            shift_inv_pow = 1
+            h_coeffs = []
+            for c in g_coeffs:
+                h_coeffs.append(self.field.mul(c, shift_inv_pow))
+                shift_inv_pow = self.field.mul(shift_inv_pow, shift_inv)
+            composition_poly = Polynomial(h_coeffs, self.field)
+        else:
+            composition_poly = trace_poly
+
         # ===== STEP 7: FRI Commit Phase =====
         fri_trees, fri_challenges, fri_polys = self.fri.commit(composition_poly, extended_domain)
         
@@ -1023,6 +1227,25 @@ class CUDATrueSTARK:
         
         # ===== STEP 10: FRI Query Phase =====
         fri_queries = self.fri.query(fri_trees, fri_challenges, fri_polys, query_indices)
+
+        # ===== STEP 10b: Per-Query Trace Openings =====
+        # For AIRs with row constraints, verifier needs T(x_q) at each FRI
+        # query position q to re-evaluate the composition locally. Attach
+        # a Merkle-authenticated trace value + proof per query, tied to
+        # trace_merkle_root (a separate commitment from FRI's layer-0
+        # composition tree).
+        trace_openings = []
+        if air.row_constraints:
+            extended_size = len(extended_evaluations)
+            for q_idx in query_indices:
+                q = q_idx % extended_size
+                trace_openings.append({
+                    'index': q,
+                    'value': str(extended_evaluations[q]),
+                    'merkle_proof': [
+                        (p.hex(), is_left) for p, is_left in trace_merkle.prove(q)
+                    ],
+                })
 
         # ===== STEP 11: Build Complete Proof =====
         generation_time = time.time() - start_time
@@ -1051,6 +1274,10 @@ class CUDATrueSTARK:
             'query_indices': query_indices,
             'query_responses': fri_queries,
 
+            # Per-query trace openings (only populated for row-constraint AIRs).
+            # Empty list means the composition == trace_poly (legacy path).
+            'trace_openings': trace_openings,
+
             # Grinding (proof-of-work over commitment transcript)
             'grinding_bits': self.config.grinding_bits,
             'grinding_nonce': str(grinding_nonce),
@@ -1078,7 +1305,11 @@ class CUDATrueSTARK:
             # The initial trace value (secret) should not be leaked
             'verified': True  # Proof was verified during generation
         }
-        
+
+        # Restore config after hedge overrides (see top of generate_proof).
+        self.config.trace_length = _saved_trace_length
+        self.config.blowup_factor = _saved_blowup
+
         return {'proof': proof, **proof}
     
     def verify_proof(self, proof: Dict[str, Any], statement: Dict[str, Any]) -> bool:
@@ -1132,11 +1363,16 @@ class CUDATrueSTARK:
                 print(f"❌ No FRI commitments found")
                 return False
             
-            # Verify trace root matches first FRI root (the trace commitment)
-            # In STARK, the first FRI layer is typically the trace commitment
-            if fri_roots[0] != trace_merkle_root:
-                print(f"❌ Trace Merkle root does not match first FRI commitment")
-                return False
+            # Legacy path (no row constraints): FRI runs on trace_poly, so
+            # fri_roots[0] must equal trace_merkle_root. For AIRs with row
+            # constraints (hedge), FRI runs on the composition polynomial
+            # H(x), and trace_merkle_root is a SEPARATE commitment used by
+            # the per-query trace openings — so the two hashes MUST differ.
+            trace_openings_present = bool(proof_data.get('trace_openings'))
+            if not trace_openings_present:
+                if fri_roots[0] != trace_merkle_root:
+                    print(f"❌ Trace Merkle root does not match first FRI commitment")
+                    return False
 
             # ===== STEP 4b: Verify Grinding (Proof-of-Work) =====
             # Whitepaper claims 2^-grinding_bits soundness contribution.
@@ -1202,12 +1438,113 @@ class CUDATrueSTARK:
                                    query_responses, final_poly, extended_size):
                 print(f"❌ FRI verification failed (Merkle or folding)")
                 return False
-            
+
+            # ===== STEP 6: Verify Composition (row-constraint AIRs) =====
+            # For hedge-shaped proofs, FRI runs on H(x) = Σ α_i · Q_i(x)
+            # where Q_i(x) = P_i(T(x)) / (x - g^{row_i}). At each FRI
+            # query point x_q, recompute the RHS locally on the Merkle-
+            # authenticated T(x_q) and check it equals the FRI-authenticated
+            # H(x_q). Fiat-Shamir binds α_i to trace_merkle_root so the
+            # prover can't pick favorable weights.
+            trace_openings = proof_data.get('trace_openings') or []
+            if trace_openings:
+                claim_str = str(statement.get('claim', '')) if isinstance(statement, dict) else ''
+                if not claim_str.startswith('zkv-hedge-v'):
+                    print(f"❌ trace_openings present but claim is not zkv-hedge-v* ({claim_str!r})")
+                    return False
+                if len(trace_openings) != len(query_responses):
+                    print(f"❌ trace_openings ({len(trace_openings)}) != query_responses "
+                          f"({len(query_responses)})")
+                    return False
+
+                # Re-derive the AIR from the statement to know the row constraints.
+                # public_inputs[3] = leverage_cap. Fall back to config default.
+                try:
+                    stmt_pub = statement.get('public_inputs') or [] if isinstance(statement, dict) else []
+                    leverage_cap = int(stmt_pub[3]) if len(stmt_pub) >= 4 else 4
+                except (TypeError, ValueError):
+                    print(f"❌ statement.public_inputs[3] (leverage_cap) missing or malformed")
+                    return False
+                air = hedge_invariant_air(self.field, leverage_cap)
+
+                # Recompute alphas via Fiat-Shamir on trace_merkle_root.
+                trace_root_bytes = bytes.fromhex(trace_merkle_root)
+                alphas = []
+                for idx, _ in enumerate(air.row_constraints):
+                    seed = hashlib.sha256(trace_root_bytes + f"alpha:{idx}".encode()).hexdigest()
+                    alphas.append(int(seed, 16) % self.field.prime)
+
+                # Reconstruct extended-domain point x_q from position q.
+                if (self.field.prime - 1) % (extended_size * 2) == 0:
+                    coset_shift = self.field.get_primitive_root(extended_size * 2)
+                else:
+                    coset_shift = self.field.generator
+                omega_e = self.field.get_primitive_root(extended_size)
+                n_trace_int = int(proof_data.get('trace_length') or self.config.trace_length)
+                omega_trace = self.field.get_primitive_root(n_trace_int)
+                # Constraint row positions in the ORIGINAL domain (g^{row_idx}).
+                row_points = [self.field.pow(omega_trace, row_idx)
+                              for row_idx, _ in air.row_constraints]
+
+                for opening, query in zip(trace_openings, query_responses):
+                    q_pos = int(opening.get('index', -1))
+                    if q_pos < 0 or q_pos >= extended_size:
+                        print(f"❌ trace opening index {q_pos} out of range")
+                        return False
+                    # Merkle-verify the trace opening against trace_merkle_root.
+                    try:
+                        t_value = int(opening.get('value', '0')) % self.field.prime
+                    except (TypeError, ValueError):
+                        print(f"❌ trace opening value malformed")
+                        return False
+                    m_proof = [(bytes.fromhex(h), is_left)
+                               for h, is_left in opening.get('merkle_proof', [])]
+                    if not MerkleTree.verify(
+                        str(t_value).encode(), q_pos, m_proof, trace_root_bytes
+                    ):
+                        print(f"❌ trace opening Merkle proof failed at position {q_pos}")
+                        return False
+
+                    # H(x_q) from FRI query layer 0 (already Merkle-verified by FRI.verify).
+                    try:
+                        h_at_x = int(query['layers'][0]['value']) % self.field.prime
+                    except (KeyError, ValueError, TypeError, IndexError):
+                        print(f"❌ FRI query layer[0] value malformed for composition check")
+                        return False
+                    # The FRI query pairs (q, q+N/2) — the value belongs to
+                    # the position stored in the query index. That should
+                    # match the opening's position.
+                    if int(query.get('index', -1)) != q_pos:
+                        print(f"❌ trace opening index {q_pos} != FRI query index {query.get('index')}")
+                        return False
+
+                    # Compute x_q in the extended coset.
+                    x_q = self.field.mul(
+                        coset_shift, self.field.pow(omega_e, q_pos)
+                    )
+                    # Expected: Σ α_j · P_j(T(x_q)) · inv(x_q - g^{row_j})
+                    expected = 0
+                    for j, (row_idx, fn) in enumerate(air.row_constraints):
+                        p_val = fn(t_value) % self.field.prime
+                        denom = self.field.sub(x_q, row_points[j])
+                        if denom == 0:
+                            print(f"❌ composition: x_q coincides with trace row {row_idx}")
+                            return False
+                        q_val = self.field.mul(p_val, self.field.inv(denom))
+                        expected = self.field.add(
+                            expected, self.field.mul(alphas[j], q_val)
+                        )
+
+                    if h_at_x != expected:
+                        print(f"❌ composition check failed at q={q_pos}: "
+                              f"H(x_q)={h_at_x} expected={expected}")
+                        return False
+
             # ===== STEP 7: Verify AIR Satisfaction Flag =====
             if not proof_data.get('air_satisfied', False):
                 print(f"❌ AIR constraints not satisfied")
                 return False
-            
+
             print(f"✅ STARK proof verified successfully")
             return True
             
