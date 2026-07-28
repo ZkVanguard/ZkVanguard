@@ -47,20 +47,13 @@ except ImportError as e:
     print(f"❌ ZK Core System unavailable: {e}")
     CORE_AVAILABLE = False
 
-# Import CUDA optimizations (optional)
+# CUDA availability — the legacy `zkp.optimizations.cuda_acceleration`
+# wrapper was removed in commit 1aed48ab. The single source of truth is
+# now `zkp.core.cuda_true_stark.CUDA_AVAILABLE`, which runs a real GPU
+# kernel probe at import (catches missing nvrtc DLLs on Windows).
 try:
-    from .optimizations.cuda_acceleration import (
-        CUDAAcceleratedZKStark,
-        CUDAAcceleratedField,
-        CUDAOptimizer,
-        get_optimized_zk_system,
-        get_cuda_status,
-        cuda_optimizer
-    )
-    CUDA_AVAILABLE = True
-    print("✅ CUDA Optimizations loaded")
-except ImportError as e:
-    print(f"⚠️ CUDA Optimizations unavailable: {e}")
+    from .core.cuda_true_stark import CUDA_AVAILABLE
+except ImportError:
     CUDA_AVAILABLE = False
 
 # Import integration hub (high-level API)
@@ -110,12 +103,8 @@ class ZKSystemTracker:
                 },
                 "cuda_optimization": {
                     "available": self.cuda_available,
-                    "location": "privacy.zkp.optimizations.cuda_acceleration",
-                    "classes": [
-                        "CUDAAcceleratedZKStark",
-                        "CUDAAcceleratedField",
-                        "CUDAOptimizer"
-                    ] if self.cuda_available else []
+                    "location": "zkp.core.cuda_true_stark",
+                    "classes": ["CUDATrueSTARK"] if self.cuda_available else [],
                 },
                 "integration_hub": {
                     "available": self.integration_available,

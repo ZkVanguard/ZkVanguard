@@ -1,36 +1,17 @@
-#!/usr/bin/env python3
 """
-🚀 ZK SYSTEM OPTIMIZATIONS MODULE
-=================================
-CUDA GPU acceleration for the ZK system
+ZK optimizations package — currently empty after the CUDATrueSTARK cutover
+(commit c56ff363) collapsed the legacy AuthenticZKStark wrapper into a
+single prover in zkp.core.cuda_true_stark. The old cuda_acceleration
+module was deleted in commit 1aed48ab.
 
-This module provides CUDA-accelerated implementations
-that extend the core ZK system for high performance.
+The `zkp.core.cuda_true_stark.CUDA_AVAILABLE` flag is now the single
+source of truth for CUDA state — probe-verified at import (runs an
+actual GPU kernel to catch missing nvrtc DLLs on Windows).
+
+Re-exported here for the small number of legacy callers that reach for
+`zkp.optimizations.CUDA_AVAILABLE`.
 """
 
-try:
-    from .cuda_acceleration import (
-        CUDAAcceleratedZKStark,
-        CUDAAcceleratedField,
-        CUDAOptimizer,
-        get_optimized_zk_system,
-        get_cuda_status,
-        cuda_optimizer
-    )
-    
-    CUDA_AVAILABLE = True
-    
-    __all__ = [
-        "CUDAAcceleratedZKStark",
-        "CUDAAcceleratedField", 
-        "CUDAOptimizer",
-        "get_optimized_zk_system",
-        "get_cuda_status",
-        "cuda_optimizer",
-        "CUDA_AVAILABLE"
-    ]
-    
-except ImportError as e:
-    CUDA_AVAILABLE = False
-    __all__ = ["CUDA_AVAILABLE"]
-    print(f"⚠️ CUDA optimizations unavailable: {e}")
+from zkp.core.cuda_true_stark import CUDA_AVAILABLE
+
+__all__ = ["CUDA_AVAILABLE"]

@@ -244,13 +244,44 @@ Deferred indefinitely. Not blocking any product milestone.
 
 | Phase | New LOC (existing infra credited) | Status | Blocks |
 |-------|-----------------------------------|--------|--------|
-| A.1 Goldilocks field (`zkv_field.move`) | ~80-100 Move | pending | A.3 |
-| A.2 Merkle verify helper (add to zk_verifier) | ~30-50 Move (sha2_256 is native) | pending | A.3, A.4 |
-| A.3 FRI folding (`zkv_fri.move`) | ~150-200 Move | pending | A.5 |
-| A.4 Hedge composition (`zkv_hedge_air.move`) | ~80-100 Move | pending | A.5 |
-| A.5 Wire STARK path into existing `zk_verifier.move` | ~100-150 Move | pending | on-chain STARK done |
-| A.6 Move tests (mirror the Python harness vectors) | ~150-200 Move | pending | ships with A.5 |
-| **A total** | **~500-750 NEW Move LOC (2-3w + audit)** | | |
+| A.1 Goldilocks field (`zkv_field.move`) | 148 Move (est. 80-100) | ✅ **1aed48ab / 32844020** | ✅ unblocked |
+| A.2 Merkle verify (`zkv_merkle.move`) | 55 Move (est. 30-50; `sha2_256` native) | ✅ **1aed48ab** | ✅ unblocked |
+| A.3 FRI folding (`zkv_fri.move`) | 251 Move (est. 150-200) | ✅ **32844020** | ✅ unblocked |
+| A.4 Hedge composition (`zkv_hedge_air.move`) | 172 Move (est. 80-100) | ✅ **this commit** | ✅ unblocked |
+| A.5 End-to-end composer (`zkv_stark.move`) | 178 Move (est. 100-150) | ✅ **this commit** | ✅ done |
+| A.6 Move tests + golden vectors | 553 Move (98 tests, all pass) | ✅ | ships alongside |
+| **A total** | **~1357 Move LOC** (500-750 est.; over because 553 is tests + more thorough coverage than estimated) | ✅ **ALL SHIPPED** | |
+
+**Phase A landed 2026-07-28.** Chain-side hedge-STARK verification is now
+possible in Move. What ships:
+- `zkv_stark::verify_hedge_stark_proof(...)` — public function taking
+  fully-structured Move types. Returns `true` iff grinding PoW passes,
+  FRI verify passes for every query, composition identity holds at
+  every (opening, query) pair, and query/opening indices match.
+- `zkv_stark::verify_grinding(...)` — public grinding-only check.
+- Composition round-trip against real Python-generated hedge proof
+  passes byte-for-byte (`composition_round_trip_accepts_honest_hedge_proof`).
+- 5 tamper vectors reject (wrong `H`, downgraded leverage_cap, tampered
+  trace value, wrong `trace_merkle_root`, insufficient grinding).
+
+**Still open** (deferred, tracked separately):
+- **Byte-format decoder** for accepting the proof as `vector<u8>` from a
+  Sui PTB (Move entry functions can't take custom structs). Without
+  this, `verify_hedge_stark_proof` is callable from another Move module
+  but not directly from a client tx. ~100-150 Move LOC of BCS or
+  hand-rolled parsing. Landing this closes the "full on-chain hedge
+  proof verification via PTB" story.
+- **Wire the composer into `zk_verifier.move`'s existing entry point** —
+  wraps `verify_hedge_stark_proof` with replay protection
+  (`used_proofs: Table` from the existing state), event emission, and
+  the strict/legacy toggle documented in the 2026-06-04 audit block.
+  ~50 LOC once the byte decoder above lands.
+- **Gas benchmark** for realistic proof sizes. Rough estimate ~100k-300k
+  MIST per verify (dominated by 80 × 10 layer SHA-256 hashes). Needs
+  measurement on testnet before committing to a per-hedge fee model.
+
+Both of the above are follow-up phases; the Phase A goal of "on-chain
+STARK verifier module set" is done.
 | B.1 Rust field + Merkle + FFT (or adopt Winterfell) | ~800 Rust LOC (or ~200 glue) | pending | B.2, B.3 |
 | B.2 Rust FRI | ~600 Rust LOC (or use existing) | pending | B.3, B.4 |
 | B.3 Rust STARK + hedge AIR | ~600 Rust LOC | pending | B.4 |

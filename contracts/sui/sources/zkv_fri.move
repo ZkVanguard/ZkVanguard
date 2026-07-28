@@ -67,6 +67,18 @@ module zkvanguard::zkv_fri {
         FriQuery { index, layers }
     }
 
+    /// Public accessor — needed by zkv_stark to cross-check that each
+    /// FRI query is paired with a same-position trace opening.
+    public fun query_index(q: &FriQuery): u64 { q.index }
+
+    /// Public accessor — H(x_q) = layer 0 value. Non-aborting: returns 0
+    /// if the query has no layers, which is separately rejected as an
+    /// underlength query in `verify`.
+    public fun layer0_value(q: &FriQuery): u64 {
+        if (vector::length(&q.layers) == 0) return 0;
+        vector::borrow(&q.layers, 0).value
+    }
+
     // ============ Coset shift + Fiat-Shamir helpers ============
 
     /// Compute the multiplicative coset shift `h` used by the prover.
