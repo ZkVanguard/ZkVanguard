@@ -33,19 +33,19 @@ if CUDA_AVAILABLE:
 else:
     print("[hub] CUDATrueSTARK loaded, CPU mode (CUDA probe failed or absent)")
 
-# Optional CUDA-accelerated helper (legacy wrapper around AuthenticZKStark);
-# only used by ZKSystemFactory as a fallback path for old callers that still
-# need the AuthenticZKStark surface. Prod prover comes from CUDATrueSTARK.
-try:
-    from zkp.optimizations.cuda_acceleration import (
-        CUDAAcceleratedZKStark,
-        CUDAOptimizer,
-        get_optimized_zk_system,
-        get_cuda_status,
-    )
-except ImportError as e:
-    print(f"[hub] legacy CUDA optimizations not available: {e}")
-    get_cuda_status = None
+# Inline CUDA status helper — was the last live surface of
+# `zkp.optimizations.cuda_acceleration` before that legacy wrapper was
+# removed. CUDATrueSTARK auto-probes CUDA at import; this just exposes the
+# probe result in the same dict shape older callers expect.
+def get_cuda_status():
+    return {
+        'cuda_acceleration': {
+            'available': CUDA_AVAILABLE,
+            'enabled': CUDA_AVAILABLE,
+        },
+        'optimization_level': 'GPU' if CUDA_AVAILABLE else 'CPU',
+        'performance_multiplier': '10-100x' if CUDA_AVAILABLE else '1x',
+    }
 
 
 class ZKSystemFactory:

@@ -17,18 +17,20 @@ The ZK-STARK system provides:
 zkp/
 ├── core/
 │   ├── true_stark.py         # Real STARK implementation (AIR + FRI)
-│   ├── zk_system.py          # Enhanced STARK with privacy features
-│   └── stark_compat.py       # Backward compatibility layer
+│   ├── cuda_true_stark.py    # Prod STARK prover (Goldilocks, FRI, grinding)
+│   ├── hedge_canonical.py    # Private-hedge canonical binding
+│   ├── risk_canonical.py     # Risk-score canonical binding
+│   └── zk_system.py          # Legacy shim (AuthenticZKStark = CUDATrueSTARK alias)
 ├── integration/
-│   └── zk_system_hub.py      # Integration hub with CUDA optimization
-├── optimizations/
-│   ├── cuda_acceleration.py  # GPU acceleration (optional)
-│   └── ultimate_military_verification_v2.py  # Enhanced verification
+│   └── zk_system_hub.py      # Factory: ZKSystemFactory → CUDATrueSTARK
 ├── cli/
 │   ├── generate_proof.py     # CLI proof generation
 │   └── verify_proof.py       # CLI proof verification
 └── tests/
-    └── test_stark.py         # Python tests
+    ├── empirical_soundness_harness.py  # 7 checks + 16 tamper vectors
+    ├── test_cuda_true_stark.py         # 47 unit tests
+    ├── test_hedge_canonical.py         # 21 unit tests
+    └── test_risk_canonical.py          # cross-language golden hash
 ```
 
 ## TypeScript Integration Layer
