@@ -33,6 +33,11 @@ from zkp.core.risk_canonical import (
     RiskBindingError,
     RISK_CANONICAL_VERSION,
 )
+from zkp.core.hedge_canonical import (
+    assert_hedge_binding,
+    HedgeBindingError,
+    HEDGE_CANONICAL_VERSION,
+)
 
 
 # Helper to convert large integers to strings for JSON serialization
@@ -424,6 +429,36 @@ async def attest_commitment(request: AttestationRequest):
         except RiskBindingError as e:
             raise HTTPException(status_code=400, detail=f"RISK_BINDING_FAILED: {e}")
 
+    # HEDGE_BINDING gate — same reasoning as risk-binding, but for the
+    # private-hedge canonical shape. Mis-signing an unbound hedge would
+    # let anyone submit an on-chain commitment claiming any leverage/
+    # notional envelope. Also enforces that commitment_hash the caller
+    # asks to sign matches the recomputed commitment from the witness.
+    is_hedge_proof = str(request.proof_type).lower() in (
+        "hedge", "hedge-existence", "hedge-solvency", "private-hedge",
+    )
+    is_hedge_bound_v1 = claim_str == f"zkv-hedge-v{HEDGE_CANONICAL_VERSION}"
+    if is_hedge_proof and is_hedge_bound_v1:
+        try:
+            assert_hedge_binding(request.statement, request.witness)
+        except HedgeBindingError as e:
+            raise HTTPException(status_code=400, detail=f"HEDGE_BINDING_FAILED: {e}")
+        # Sanity: the caller-supplied commitment_hash_hex MUST match the
+        # commitment in the statement's public_inputs[0]. Otherwise the
+        # signed 32 bytes would attest to a DIFFERENT commitment than the
+        # one the binding verified.
+        stmt_commit = str(request.statement.get("public_inputs", ["", ""])[0]).lower()
+        supplied = commitment_hash.hex().lower()
+        if stmt_commit != supplied:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"HEDGE_BINDING_FAILED: commitment_hash_hex ({supplied}) does not match "
+                    f"statement.public_inputs[0] ({stmt_commit}) — refusing to sign a "
+                    f"commitment the binding did not verify"
+                ),
+            )
+
     try:
         stark_proof = await prover.generate_proof_async(request.statement, request.witness)
     except Exception as e:
@@ -531,6 +566,29 @@ async def _generate_proof_async(
                 # generated here would falsely attest to something the
                 # inputs don't support.
                 raise ValueError(f"RISK_BINDING_FAILED: {e}")
+
+        # HEDGE-BINDING GATE: for private-hedge proofs, refuse to prove
+        # anything whose canonical inputs don't satisfy the vault
+        # invariants (asset allow-list, side, leverage ≤ cap, notional ≤
+        # cap) OR whose commitment_hash doesn't recompute. Analogous to
+        # RISK-BINDING but bound to the hedge canonical shape.
+        is_hedge_proof = str(proof_type).lower() in (
+            "hedge", "hedge-existence", "hedge-solvency", "private-hedge",
+        )
+        is_hedge_bound_v1 = claim_str == f"zkv-hedge-v{HEDGE_CANONICAL_VERSION}"
+        if is_hedge_proof and is_hedge_bound_v1:
+            try:
+                normalized_hedge = assert_hedge_binding(statement, witness)
+                print(
+                    f"[HEDGE-BIND] verified inputs→commitment binding:"
+                    f" asset={normalized_hedge['asset']}"
+                    f" side={normalized_hedge['side']}"
+                    f" leverageX={normalized_hedge['leverageX']}/{normalized_hedge['leverageCap']}"
+                    f" notional={normalized_hedge['notionalValueUsdcCents']}/"
+                    f"{normalized_hedge['notionalCapUsdcCents']}"
+                )
+            except HedgeBindingError as e:
+                raise ValueError(f"HEDGE_BINDING_FAILED: {e}")
 
         # Generate proof asynchronously
         proof_result = await prover.generate_proof_async(statement, witness)
