@@ -12,6 +12,9 @@ module zkvanguard::zkv_stark_tests {
     use zkvanguard::zkv_fri;
     use zkvanguard::zkv_hedge_air;
     use zkvanguard::zkv_stark;
+    use zkvanguard::zk_verifier::{Self, ZKVerifierState};
+    use sui::test_scenario;
+    use sui::clock;
 
     // ============ Field constants ============
     // p = 2^64 - 2^32 + 1 = 18446744069414584321
@@ -696,4 +699,102 @@ module zkvanguard::zkv_stark_tests {
     // above (composition_round_trip_accepts_honest_hedge_proof) plus
     // the grinding + inner-primitive unit tests jointly cover every
     // code path in zkv_stark::verify_hedge_stark_proof.
+
+    // ============ zk_verifier wired STARK path (Phase A.5 wire-in) ============
+    //
+    // Exercises `zk_verifier::verify_hedge_stark_proof_pub` — the entry
+    // that composes zkv_stark + replay protection + event emission and
+    // transfers a ProofRecord to the sender.
+
+    const TEST_USER: address = @0xBEEF;
+
+    fun sample_commitment(): vector<u8> {
+        x"deadbeefcafef00d0000000000000000ff11ff22ff33ff44ff55ff66ff77ff88"
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1, location = zkvanguard::zk_verifier)]
+    fun stark_verify_pub_rejects_below_minimum_grinding() {
+        // grinding_bits < MIN_GRINDING_BITS → zkv_stark returns false →
+        // verify_hedge_stark_proof_pub aborts with E_INVALID_PROOF (=1).
+        let mut scenario = test_scenario::begin(TEST_USER);
+        {
+            zk_verifier::init_for_testing(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, TEST_USER);
+        {
+            let mut state = test_scenario::take_shared<ZKVerifierState>(&scenario);
+            let ck = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+
+            zk_verifier::verify_hedge_stark_proof_pub(
+                &mut state,
+                sample_commitment(),  // trace_merkle_root (bogus; won't be used)
+                vector[],              // fri_roots
+                vector[],              // final_poly_coeffs
+                vector[],              // fri_queries
+                vector[],              // trace_openings
+                16384,                 // extended_size
+                1024,                  // trace_length
+                4,                     // leverage_cap
+                0,                     // grinding_nonce
+                19,                    // grinding_bits — below MIN → reject
+                80,                    // max_final_degree
+                sample_commitment(),
+                &ck,
+                test_scenario::ctx(&mut scenario),
+            );
+
+            clock::destroy_for_testing(ck);
+            test_scenario::return_shared(state);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 2, location = zkvanguard::zk_verifier)]
+    fun stark_verify_pub_rejects_replayed_commitment() {
+        // Seed used_proofs with the commitment, then a "fresh" submit for
+        // the same commitment must abort with E_PROOF_ALREADY_USED (=2)
+        // BEFORE zkv_stark is called (replay check fires first).
+        let mut scenario = test_scenario::begin(TEST_USER);
+        {
+            zk_verifier::init_for_testing(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, TEST_USER);
+        {
+            let mut state = test_scenario::take_shared<ZKVerifierState>(&scenario);
+            let ck = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+
+            // Pre-populate — simulates a prior successful verify.
+            zk_verifier::mark_commitment_used_for_testing(
+                &mut state,
+                sample_commitment(),
+            );
+
+            // Second submission with the same commitment_hash → aborts
+            // at the replay check before any STARK work happens. Args
+            // beyond commitment_hash are irrelevant to this abort code.
+            zk_verifier::verify_hedge_stark_proof_pub(
+                &mut state,
+                sample_commitment(),
+                vector[],
+                vector[],
+                vector[],
+                vector[],
+                16384,
+                1024,
+                4,
+                0,
+                20,  // valid min grinding_bits, so replay is the first thing to trip
+                80,
+                sample_commitment(),
+                &ck,
+                test_scenario::ctx(&mut scenario),
+            );
+
+            clock::destroy_for_testing(ck);
+            test_scenario::return_shared(state);
+        };
+        test_scenario::end(scenario);
+    }
 }

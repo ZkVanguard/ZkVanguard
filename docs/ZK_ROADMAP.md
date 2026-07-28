@@ -264,24 +264,40 @@ possible in Move. What ships:
 - 5 tamper vectors reject (wrong `H`, downgraded leverage_cap, tampered
   trace value, wrong `trace_merkle_root`, insufficient grinding).
 
+**Wired into `zk_verifier.move` as of 2026-07-28.** Added
+`verify_hedge_stark_proof_pub` that:
+- Delegates to `zkv_stark::verify_hedge_stark_proof` for the full check
+- Enforces replay protection via the existing `used_proofs: Table`
+  (BY COMMITMENT hash — a depositor commits once; any subsequent proof
+  over the same commitment aborts with `E_PROOF_ALREADY_USED`)
+- Emits `ProofVerified` event and mints a `ProofRecord` transferred to
+  the sender
+- Bumps `state.total_proofs_verified` counter for observability
+- Kept as a `public fun` (not `entry`) because Move entry functions
+  can't take custom struct arguments — see follow-up below
+
+Tests added (2 more, 100 total, all pass):
+- `stark_verify_pub_rejects_below_minimum_grinding` — insufficient
+  grinding_bits aborts with `E_INVALID_PROOF`
+- `stark_verify_pub_rejects_replayed_commitment` — pre-seeded
+  commitment aborts with `E_PROOF_ALREADY_USED` on second call
+
 **Still open** (deferred, tracked separately):
 - **Byte-format decoder** for accepting the proof as `vector<u8>` from a
   Sui PTB (Move entry functions can't take custom structs). Without
-  this, `verify_hedge_stark_proof` is callable from another Move module
-  but not directly from a client tx. ~100-150 Move LOC of BCS or
-  hand-rolled parsing. Landing this closes the "full on-chain hedge
-  proof verification via PTB" story.
-- **Wire the composer into `zk_verifier.move`'s existing entry point** —
-  wraps `verify_hedge_stark_proof` with replay protection
-  (`used_proofs: Table` from the existing state), event emission, and
-  the strict/legacy toggle documented in the 2026-06-04 audit block.
-  ~50 LOC once the byte decoder above lands.
-- **Gas benchmark** for realistic proof sizes. Rough estimate ~100k-300k
-  MIST per verify (dominated by 80 × 10 layer SHA-256 hashes). Needs
-  measurement on testnet before committing to a per-hedge fee model.
+  this, `verify_hedge_stark_proof_pub` is callable from another Move
+  module only, not directly from a client tx. ~100-150 Move LOC of BCS
+  or hand-rolled parsing. Two design options:
+  - (A) BCS-serialize the whole proof on the TS side, one blob arg —
+    Move decodes via `sui::bcs::peel_*`. Cleaner TS API, more Move code.
+  - (B) Flat-args entry function with ~15 primitive-vector parameters —
+    TS caller sends everything decomposed. Less Move code, uglier TS.
+- **Gas benchmark** for realistic proof sizes on testnet. Rough estimate
+  ~100k-300k MIST per verify (dominated by 80 × 10 layer SHA-256
+  hashes). Needs measurement before committing to a per-hedge fee model.
 
-Both of the above are follow-up phases; the Phase A goal of "on-chain
-STARK verifier module set" is done.
+The Phase A goal of "on-chain STARK verifier module set + wired into
+the existing state" is done.
 | B.1 Rust field + Merkle + FFT (or adopt Winterfell) | ~800 Rust LOC (or ~200 glue) | pending | B.2, B.3 |
 | B.2 Rust FRI | ~600 Rust LOC (or use existing) | pending | B.3, B.4 |
 | B.3 Rust STARK + hedge AIR | ~600 Rust LOC | pending | B.4 |
