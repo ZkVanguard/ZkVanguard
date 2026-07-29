@@ -548,29 +548,79 @@ export async function GET(request: NextRequest) {
       fetchActivePoolHedges().catch(() => [] as PoolHedge[]),
     ]);
 
+    // Defense in depth: if the live RPC path yielded a $0 NAV (impossible
+    // for a running pool with real deposits — the 2026-07-29 SUI public
+    // fullnode JSON-RPC deprecation triggered exactly this), fall back to
+    // the last recorded snapshot in community_pool_nav_history so the UI
+    // shows the truth-at-a-known-time instead of "$0". Fallback is
+    // annotated so the UI can flag it (`stale: true`, `staleAgeSeconds`).
+    let displayStats = stats;
+    let stale = false;
+    let staleAgeSeconds: number | undefined;
+    if (network === 'mainnet' && stats.totalNAVUsd < 1) {
+      try {
+        const { query } = await import('@/lib/db/postgres');
+        const rows = await query<{
+          total_nav: string;
+          share_price: string;
+          timestamp: Date;
+        }>(
+          `SELECT total_nav::text, share_price::text, timestamp
+           FROM community_pool_nav_history
+           WHERE chain = 'sui'
+           ORDER BY timestamp DESC
+           LIMIT 1`,
+        );
+        const latest = rows[0];
+        if (latest && Number(latest.total_nav) > 0) {
+          const dbNav = Number(latest.total_nav);
+          const dbSharePrice = Number(latest.share_price);
+          displayStats = {
+            ...stats,
+            totalNAV: dbNav,
+            totalNAVUsd: dbNav,
+            sharePrice: dbSharePrice,
+            sharePriceUsd: dbSharePrice,
+          };
+          stale = true;
+          staleAgeSeconds = Math.round(
+            (Date.now() - new Date(latest.timestamp).getTime()) / 1000,
+          );
+          logger.warn('[SUI-API] Live RPC returned $0 NAV; served last DB snapshot', {
+            dbNav,
+            staleAgeSeconds,
+          });
+        }
+      } catch (dbErr) {
+        logger.error('[SUI-API] DB fallback failed', { error: dbErr });
+      }
+    }
+
     return cachedJsonResponse({
       success: true,
       data: {
-        totalShares: stats.totalShares.toFixed(4),
-        totalNAV: stats.totalNAV.toFixed(4),
-        totalNAVUsd: stats.totalNAVUsd.toFixed(2),
-        sharePrice: stats.sharePrice.toFixed(6),
-        sharePriceUsd: stats.sharePriceUsd.toFixed(6),
-        allTimeHighNav: stats.allTimeHighNav.toFixed(6),
-        totalDeposited: (stats.totalDeposited ?? 0).toFixed(2),
-        totalWithdrawn: (stats.totalWithdrawn ?? 0).toFixed(2),
-        memberCount: stats.memberCount,
-        managementFeeBps: stats.managementFeeBps,
-        performanceFeeBps: stats.performanceFeeBps,
-        paused: stats.paused,
-        poolStateId: stats.poolStateId,
-        allocation: stats.allocation,
+        totalShares: displayStats.totalShares.toFixed(4),
+        totalNAV: displayStats.totalNAV.toFixed(4),
+        totalNAVUsd: displayStats.totalNAVUsd.toFixed(2),
+        sharePrice: displayStats.sharePrice.toFixed(6),
+        sharePriceUsd: displayStats.sharePriceUsd.toFixed(6),
+        allTimeHighNav: displayStats.allTimeHighNav.toFixed(6),
+        totalDeposited: (displayStats.totalDeposited ?? 0).toFixed(2),
+        totalWithdrawn: (displayStats.totalWithdrawn ?? 0).toFixed(2),
+        memberCount: displayStats.memberCount,
+        managementFeeBps: displayStats.managementFeeBps,
+        performanceFeeBps: displayStats.performanceFeeBps,
+        paused: displayStats.paused,
+        poolStateId: displayStats.poolStateId,
+        allocation: displayStats.allocation,
         hedges,
+        stale,
+        staleAgeSeconds,
       },
       chain: 'sui',
       network,
       duration: Date.now() - startTime,
-    }, 30);
+    }, stale ? 60 : 30);
     
   } catch (error) {
     logger.error('[SUI-API] Error', { error });

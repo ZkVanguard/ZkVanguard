@@ -398,27 +398,29 @@ export class SuiCommunityPoolService {
           const objectIds = fields.map((f: any) => f.objectId).filter(Boolean) as string[];
           const members: SuiMemberPosition[] = [];
 
+          // Migrated 2026-07-29 from raw `sui_multiGetObjects` JSON-RPC
+          // to SuiClient — public fullnode deprecated the raw method
+          // name (dashboard was reading $0 as a result).
+          const { SuiClient } = await import('@mysten/sui/client');
+          const rpcClient = new SuiClient({ url: this.config.rpcUrl });
+
           for (let i = 0; i < objectIds.length; i += BATCH_SIZE) {
             const batchIds = objectIds.slice(i, i + BATCH_SIZE);
             const batchAddrs = memberAddresses.slice(i, i + BATCH_SIZE);
             try {
-              const batchRes = await suiFetchWithTimeout(this.config.rpcUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  jsonrpc: '2.0',
-                  id: 1,
-                  method: 'sui_multiGetObjects',
-                  params: [batchIds, { showContent: true }],
-                }),
+              const objects = await rpcClient.multiGetObjects({
+                ids: batchIds,
+                options: { showContent: true },
               });
-              const batchData = await batchRes.json();
-              const objects = batchData.result || [];
 
               for (let j = 0; j < objects.length; j++) {
+                const content = objects[j]?.data?.content as
+                  | { fields?: Record<string, any> }
+                  | null
+                  | undefined;
                 const memberFields =
-                  objects[j]?.data?.content?.fields?.value?.fields ||
-                  objects[j]?.data?.content?.fields;
+                  (content?.fields as any)?.value?.fields ||
+                  content?.fields;
                 const memberAddress = batchAddrs[j];
                 if (memberFields && memberFields.shares) {
                   const shares = safeRawToDecimal(memberFields.shares || 0, SHARE_DECIMALS);
@@ -747,20 +749,20 @@ export class SuiCommunityPoolService {
    * Fetch object fields from SUI RPC
    */
   private async fetchObjectFields(objectId: string): Promise<Record<string, any> | null> {
+    // Use SuiClient from @mysten/sui/client instead of raw JSON-RPC —
+    // see SuiUsdcPoolService.fetchObjectFields for the same migration
+    // note. The public fullnode deprecated `sui_getObject` on
+    // 2026-07-29 (dashboard was showing $0 as a result); the SDK
+    // dispatches to whatever method is current under the hood.
     try {
-      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'sui_getObject',
-          params: [objectId, { showContent: true }],
-        }),
+      const { SuiClient } = await import('@mysten/sui/client');
+      const client = new SuiClient({ url: this.config.rpcUrl });
+      const res = await client.getObject({
+        id: objectId,
+        options: { showContent: true },
       });
-
-      const data = await response.json();
-      return data.result?.data?.content?.fields || null;
+      const content = res.data?.content as { fields?: Record<string, any> } | null | undefined;
+      return content?.fields ?? null;
     } catch (error) {
       logger.error('[SuiCommunityPool] Failed to fetch object:', { objectId, error });
       return null;

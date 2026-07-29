@@ -72,21 +72,23 @@ async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
   try {
     const rpcUrl =
       trim(process.env.NEXT_PUBLIC_SUI_RPC_URL) || 'https://fullnode.mainnet.sui.io:443';
-    const res = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'sui_getObject',
-        params: [poolStateId, { showContent: true, showType: true }],
-      }),
-      // Hard timeout — pool stats already covered upstream; this is a best-effort enrichment
-      signal: AbortSignal.timeout(5_000),
+    // Migrated 2026-07-29 from raw `sui_getObject` JSON-RPC to
+    // SuiClient — public fullnode deprecated the raw method name
+    // (dashboard was reading pool NAV = $0 as a result).
+    const { SuiClient } = await import('@mysten/sui/client');
+    const client = new SuiClient({ url: rpcUrl });
+    const objectPromise = client.getObject({
+      id: poolStateId,
+      options: { showContent: true, showType: true },
     });
-    if (!res.ok) return empty;
-    const json = (await res.json()) as { result?: { data?: { content?: { fields?: any } } } };
-    const fields = json?.result?.data?.content?.fields;
+    // Hard timeout — pool stats already covered upstream; this is a best-effort enrichment.
+    const timeoutPromise = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 5_000),
+    );
+    const res = await Promise.race([objectPromise, timeoutPromise]);
+    if (!res) return empty;
+    const content = res.data?.content as { fields?: any } | null | undefined;
+    const fields = content?.fields;
     if (!fields) return empty;
 
     const hedgeState = fields.hedge_state?.fields || {};

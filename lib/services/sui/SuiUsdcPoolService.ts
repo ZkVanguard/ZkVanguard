@@ -611,19 +611,21 @@ export class SuiUsdcPoolService {
 
   /** Fetch object fields from SUI RPC */
   private async fetchObjectFields(objectId: string): Promise<Record<string, any> | null> {
+    // Use SuiClient from @mysten/sui/client instead of raw JSON-RPC.
+    // The public fullnode deprecated the older `sui_getObject` method
+    // name (see 2026-07-29 health-check "Method not found" incident);
+    // the SDK dispatches to the current method under the hood and
+    // handles the migration for us — one place to update if it happens
+    // again instead of two hand-rolled fetches.
     try {
-      const response = await suiFetchWithTimeout(this.config.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'sui_getObject',
-          params: [objectId, { showContent: true }],
-        }),
+      const { SuiClient } = await import('@mysten/sui/client');
+      const client = new SuiClient({ url: this.config.rpcUrl });
+      const res = await client.getObject({
+        id: objectId,
+        options: { showContent: true },
       });
-      const data = await response.json();
-      return data.result?.data?.content?.fields || null;
+      const content = res.data?.content as { fields?: Record<string, any> } | null | undefined;
+      return content?.fields ?? null;
     } catch (error) {
       logger.error('[SuiUsdcPool] Failed to fetch object:', { objectId, error });
       return null;

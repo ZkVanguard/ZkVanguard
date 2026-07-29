@@ -223,18 +223,16 @@ async function readPoolStaticsOnChain(): Promise<{
   if (!poolStateId) return null;
   const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
   try {
-    const resp = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'sui_getObject',
-        params: [poolStateId, { showContent: true }],
-      }),
-      signal: AbortSignal.timeout(8000),
+    // Migrated 2026-07-29 from raw `sui_getObject` JSON-RPC to
+    // SuiClient — public fullnode deprecated the raw method name.
+    const { SuiClient } = await import('@mysten/sui/client');
+    const client = new SuiClient({ url: rpcUrl });
+    const res = await client.getObject({
+      id: poolStateId,
+      options: { showContent: true },
     });
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const fields = json?.result?.data?.content?.fields;
+    const content = res.data?.content as { fields?: Record<string, any> } | null | undefined;
+    const fields = content?.fields;
     if (!fields) return null;
     // Decimal handling: USDC has 6 decimals, share price stored in higher precision.
     // On-chain field is all_time_high_nav_per_share (verified against pool state
