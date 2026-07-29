@@ -4,6 +4,8 @@ members = [
     "zkv-field",
     "zkv-merkle",
     "zkv-fri",
+    "zkv-grinding",
+    "zkv-hedge-air",
 ]
 
 [workspace.package]
