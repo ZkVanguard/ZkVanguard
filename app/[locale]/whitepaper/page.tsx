@@ -583,7 +583,7 @@ Security Comparison:
               </div>
             </div>
             <p className="text-[#424245] leading-relaxed mb-4">
-              Our ZK system passes 47/47 unit tests and 6/6 empirical soundness checks<sup>†</sup>:
+              Our ZK system passes 7/7 empirical soundness checks + 16 tamper vectors + 68 Python STARK tests + 110 Move on-chain verifier tests + 677 TypeScript unit tests<sup>†</sup>:
             </p>
             <div className="overflow-x-auto my-4 sm:my-6 -mx-4 sm:mx-0">
               <table className="w-full border-collapse bg-[#fafafa] rounded-xl overflow-hidden border border-[#e5e5e5]">
@@ -623,13 +623,19 @@ Security Comparison:
                   <tr>
                     <td className="p-4 text-[#424245]">Completeness</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 Def 1.2</td>
-                    <td className="p-4 text-[#424245]">Valid witness → valid proof (47/47 tests)</td>
+                    <td className="p-4 text-[#424245]">Valid witness → valid proof (68/68 Python STARK tests)</td>
                     <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                   <tr>
                     <td className="p-4 text-[#424245]">Soundness</td>
                     <td className="p-4 text-[#424245] font-mono text-xs">2018/046 Def 1.2</td>
-                    <td className="p-4 text-[#424245]">Forgeries rejected (tamper tests pass)</td>
+                    <td className="p-4 text-[#424245]">Forgeries rejected (16 tamper vectors reject)</td>
+                    <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
+                  </tr>
+                  <tr>
+                    <td className="p-4 text-[#424245]">Hedge Invariants (AIR-in-STARK)</td>
+                    <td className="p-4 text-[#424245] font-mono text-xs">this repo, 2026-07</td>
+                    <td className="p-4 text-[#424245]">Asset/side/leverage constraints inside composition polynomial, verified on-chain</td>
                     <td className="p-4 text-green-600 font-semibold">✓ Empirical check passes</td>
                   </tr>
                 </tbody>
@@ -644,17 +650,44 @@ Security Comparison:
               {t('zkp.hedgeArchText')}
             </p>
             <div className="bg-[#1d1d1f] p-6 rounded-xl my-6 font-mono text-xs overflow-x-auto">
-              <pre style={{ color: '#4ade80' }}>{`PUBLIC (On-Chain)           PRIVATE (ZK-Protected)
-─────────────────           ──────────────────────
-• Commitment hash           • Portfolio composition
-• Stealth address           • Exact hedge sizes
-• Aggregate settlements     • Asset being hedged
-• Nullifier (anti-replay)   • Entry/exit prices
-                            • PnL calculations
+              <pre style={{ color: '#4ade80' }}>{`PUBLIC (On-Chain)              PRIVATE (ZK-Protected)
+─────────────────              ──────────────────────
+• Commitment hash (32 bytes)   • Asset being hedged
+• Nullifier (anti-replay)      • Direction (LONG / SHORT)
+• Vault-invariant caps pinned  • Exact hedge size
+  in statement.public_inputs   • Leverage used (only cap disclosed)
+• Proxy vault ID (optional)    • Entry price
+• ProofVerified event          • Notional value
+                               • Salt / commitment nonce
 
-Commitment Hash = SHA256(asset || side || size || entryPrice || salt)
-Example: 0x7a3f8b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0c91`}</pre>
+Commitment Hash (146-byte SHA-256 preimage, fixed binary layout):
+  SHA256(
+    version_u32BE                  (4)
+    portfolioId_u32BE              (4)
+    timestampMs_u64BE              (8)
+    asset_code_u8                  (1)   BTC=1, ETH=2, SUI=3
+    side_code_u8                   (1)   LONG=0, SHORT=1
+    leverageX_u32BE                (4)
+    leverageCap_u32BE              (4)
+    entryPriceUsdcCents_u64BE      (8)
+    sizeUnits_u64BE                (8)   per-asset step units
+    notionalValueUsdcCents_u128BE  (16)
+    notionalCapUsdcCents_u128BE    (16)
+    salt_32B                       (32)
+    inputsHash_32B                 (32)  SHA-256 of canonical JSON
+  )
+
+On-chain verification path (post-quantum, no ed25519):
+  zk_verifier::verify_hedge_stark_proof_entry(...)
+    → zkv_stark::verify_hedge_stark_proof
+      → grinding PoW (>= 20 bits, hedge = 24)
+      → FRI (Merkle + folding-consistency + Fiat-Shamir)
+      → composition polynomial identity for asset / side / leverage
+      → replay protection via used_proofs Table`}</pre>
             </div>
+            <p className="text-xs text-[#86868b] italic leading-relaxed">
+              The commitment binding, canonical JSON serialization, and on-chain STARK verifier are all SHA-256 based. No elliptic curves, no discrete-log assumptions, no pairings — Shor&apos;s algorithm is a non-threat. The legacy ed25519 attestation fast path can be disabled by admin via <code className="bg-[#f0f0f2] px-1 rounded">admin_set_stark_only_mode(true)</code>, forcing every verify through the post-quantum STARK path.
+            </p>
           </section>
 
           {/* Gasless */}

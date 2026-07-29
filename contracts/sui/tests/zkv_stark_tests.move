@@ -690,6 +690,97 @@ module zkvanguard::zkv_stark_tests {
         );
     }
 
+    // ============ Post-quantum strict mode (STARK_ONLY_MODE) ============
+    //
+    // When strict mode is enabled, the ed25519 attestation fast path
+    // (quantum-vulnerable via Shor's) MUST be rejected. All verify
+    // traffic has to route through `verify_hedge_stark_proof_entry`,
+    // which is fully post-quantum (SHA-256 collision resistance only).
+
+    #[test]
+    fun strict_mode_default_is_disabled() {
+        let mut scenario = test_scenario::begin(TEST_USER);
+        {
+            zk_verifier::init_for_testing(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, TEST_USER);
+        {
+            let state = test_scenario::take_shared<ZKVerifierState>(&scenario);
+            assert!(!zk_verifier::is_stark_only_mode(&state), 0);
+            test_scenario::return_shared(state);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    fun strict_mode_admin_toggle_round_trips() {
+        use sui::test_scenario;
+        let mut scenario = test_scenario::begin(TEST_USER);
+        {
+            zk_verifier::init_for_testing(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, TEST_USER);
+        {
+            let admin = test_scenario::take_from_sender<zk_verifier::AdminCap>(&scenario);
+            let mut state = test_scenario::take_shared<ZKVerifierState>(&scenario);
+
+            // Enable
+            zk_verifier::admin_set_stark_only_mode(&admin, &mut state, true);
+            assert!(zk_verifier::is_stark_only_mode(&state), 0);
+
+            // Disable
+            zk_verifier::admin_set_stark_only_mode(&admin, &mut state, false);
+            assert!(!zk_verifier::is_stark_only_mode(&state), 0);
+
+            // Re-enable (idempotent)
+            zk_verifier::admin_set_stark_only_mode(&admin, &mut state, true);
+            zk_verifier::admin_set_stark_only_mode(&admin, &mut state, true);
+            assert!(zk_verifier::is_stark_only_mode(&state), 0);
+
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(&scenario, admin);
+        };
+        test_scenario::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1, location = zkvanguard::zk_verifier)]
+    fun strict_mode_rejects_ed25519_fast_path() {
+        // With strict mode ON, verify_proof (the ed25519 fast path)
+        // must abort with E_INVALID_PROOF because verify_with_prover
+        // returns false unconditionally, regardless of proof shape.
+        use sui::test_scenario;
+        use std::string;
+        let mut scenario = test_scenario::begin(TEST_USER);
+        {
+            zk_verifier::init_for_testing(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, TEST_USER);
+        {
+            let admin = test_scenario::take_from_sender<zk_verifier::AdminCap>(&scenario);
+            let mut state = test_scenario::take_shared<ZKVerifierState>(&scenario);
+            let ck = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+
+            zk_verifier::admin_set_stark_only_mode(&admin, &mut state, true);
+
+            // Any bytes — strict mode aborts regardless of content.
+            zk_verifier::verify_proof(
+                &mut state,
+                b"non-empty-proof-data",
+                sample_commitment(),
+                string::utf8(b"hedge"),
+                string::utf8(b""),
+                &ck,
+                test_scenario::ctx(&mut scenario),
+            );
+
+            clock::destroy_for_testing(ck);
+            test_scenario::return_shared(state);
+            test_scenario::return_to_sender(&scenario, admin);
+        };
+        test_scenario::end(scenario);
+    }
+
     // Full round-trip test (grinding + FRI + composition + replay) with a
     // real Python hedge proof lives in Phase A.5's on-chain-parser test
     // suite once the byte-format decoder is written. Testing here would

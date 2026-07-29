@@ -30,6 +30,20 @@ module zkvanguard::zk_verifier {
     // deployed package state objects without a struct migration.
     const PROVER_PUBKEY_KEY: vector<u8> = b"zkv_prover_pubkey_v1";
 
+    // ============ Quantum-safe strict mode (2026-07-29) ============
+    //
+    // The ed25519 attestation fast path is CLASSICALLY secure but
+    // QUANTUM-VULNERABLE — Shor's algorithm breaks EdDSA. The STARK path
+    // (`verify_hedge_stark_proof_entry`) is fully post-quantum (SHA-256
+    // collision resistance only, no DLP anywhere in the protocol).
+    //
+    // When `STARK_ONLY_MODE_KEY` is set to true, `verify_with_prover`
+    // returns false unconditionally — every verify MUST route through
+    // the STARK path. Admin flip via `admin_set_stark_only_mode` behind
+    // AdminCap. Dynamic-field storage so already-deployed state can
+    // opt in without a struct migration.
+    const STARK_ONLY_MODE_KEY: vector<u8> = b"zkv_stark_only_mode_v1";
+
     // ============ Error Codes ============
     const E_NOT_AUTHORIZED: u64 = 0;
     const E_INVALID_PROOF: u64 = 1;
@@ -219,6 +233,33 @@ module zkvanguard::zk_verifier {
         df::exists_(&state.id, PROVER_PUBKEY_KEY)
     }
 
+    /// Enable / disable STARK-only strict mode. When enabled, the
+    /// ed25519 attestation fast path is disabled — every verify must
+    /// route through `verify_hedge_stark_proof_entry`. Post-quantum
+    /// deployments SHOULD enable this. Default (unset) = disabled
+    /// (accepts both paths, matches the pre-strict-mode behavior).
+    public entry fun admin_set_stark_only_mode(
+        _admin: &AdminCap,
+        state: &mut ZKVerifierState,
+        enabled: bool,
+    ) {
+        if (df::exists_(&state.id, STARK_ONLY_MODE_KEY)) {
+            let _: bool = df::remove(&mut state.id, STARK_ONLY_MODE_KEY);
+        };
+        if (enabled) {
+            df::add(&mut state.id, STARK_ONLY_MODE_KEY, true);
+        };
+    }
+
+    /// Read the strict-mode flag. Defaults to false when the dynamic
+    /// field hasn't been set (pre-strict-mode deployments).
+    public fun is_stark_only_mode(state: &ZKVerifierState): bool {
+        if (!df::exists_(&state.id, STARK_ONLY_MODE_KEY)) {
+            return false
+        };
+        *df::borrow(&state.id, STARK_ONLY_MODE_KEY)
+    }
+
     /// Extract the first 64 bytes of a proof as the ed25519 signature.
     /// Returns empty if proof is shorter than 64 bytes.
     fun extract_signature(proof: &vector<u8>): vector<u8> {
@@ -234,7 +275,18 @@ module zkvanguard::zk_verifier {
 
     /// Verify proof against the configured prover. If no pubkey is set,
     /// falls back to the legacy "proof must be non-empty" check.
+    ///
+    /// **STARK-only strict mode**: when `is_stark_only_mode(state)` is
+    /// true, this function returns false unconditionally so the entire
+    /// ed25519 fast path is disabled. Post-quantum deployments must
+    /// enable strict mode via `admin_set_stark_only_mode(admin, state, true)`
+    /// and route every verify through `verify_hedge_stark_proof_entry`.
     fun verify_with_prover(state: &ZKVerifierState, proof: &vector<u8>, msg: &vector<u8>): bool {
+        if (is_stark_only_mode(state)) {
+            // Quantum-vulnerable path is disabled by policy — force
+            // callers onto the STARK verify entry.
+            return false
+        };
         if (!df::exists_(&state.id, PROVER_PUBKEY_KEY)) {
             // INSECURE MODE — legacy length check. Operator should set
             // a prover pubkey before relying on the ZK gate.

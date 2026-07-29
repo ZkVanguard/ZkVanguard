@@ -164,10 +164,10 @@ export default function ZKVerificationPage() {
             <div>
               <h3 className="font-semibold text-green-700 mb-2">Implementation</h3>
               <ul className="text-sm text-green-600 space-y-1">
-                <li>• File: <code className="bg-green-100 px-1 rounded">zkp/core/cuda_true_stark.py</code></li>
-                <li>• Tests: <code className="bg-green-100 px-1 rounded">zkp/tests/test_cuda_true_stark.py</code></li>
-                <li>• Test Results: 47/47 passing</li>
-                <li>• Lines of Code: ~1,100</li>
+                <li>• Prover: <code className="bg-green-100 px-1 rounded">zkp/core/cuda_true_stark.py</code></li>
+                <li>• On-chain verifier: <code className="bg-green-100 px-1 rounded">contracts/sui/sources/zkv_{'{'}field,merkle,fri,hedge_air,stark{'}'}.move</code></li>
+                <li>• Test Results: 68 Python + 110 Move + 677 TypeScript unit + 7 property + 16 tamper vectors</li>
+                <li>• Total ZK code: ~1,673 Python + ~1,357 Move + ~700 TypeScript</li>
               </ul>
             </div>
             <div>
@@ -604,7 +604,7 @@ export default function ZKVerificationPage() {
         <section className="mb-16">
           <h2 className="text-2xl font-bold text-[#1d1d1f] mb-6">Per-Property Empirical Checks</h2>
           <p className="text-[#424245] mb-2">
-            Each of the 6 required cryptographic properties has an empirical check run against the implementation:
+            Each of the 6 required cryptographic properties from Ben-Sasson et al., plus the hedge-invariant AIR-in-STARK property specific to this repo, has an empirical check run against the implementation:
           </p>
           <p className="text-xs text-[#86868b] italic mb-6">
             &ldquo;Empirical check passes&rdquo; means the implementation behaved as expected on the tested inputs. It is a necessary soundness signal, not a machine-checked formal proof. A full formal proof would require a Coq/Lean encoding of the STARK protocol.
@@ -786,14 +786,14 @@ Security Comparison:
               </p>
               <div className="bg-[#f5f5f7] p-4 rounded-lg font-mono text-xs mb-4">
                 <p className="mb-2"><strong>Empirical check:</strong></p>
-                <p>Test Suite: zkp/tests/test_cuda_true_stark.py</p>
-                <p>Total Tests: 47</p>
-                <p>Passing: 47 ✓</p>
+                <p>Test Suite: zkp/tests/test_cuda_true_stark.py + test_hedge_canonical.py + empirical_soundness_harness.py</p>
+                <p>Total Tests: 68 Python STARK-side + 110 Move on-chain</p>
+                <p>Passing: 178 ✓</p>
                 <p>Failing: 0</p>
-                <p className="mt-2">On the tested inputs, valid witnesses produced valid proofs.</p>
+                <p className="mt-2">On the tested inputs, valid witnesses produced valid proofs both off-chain (Python) and on-chain (Move).</p>
               </div>
               <p className="text-sm text-green-600">
-                <strong>Result:</strong> 47/47 valid-witness tests pass. Completeness holds on the empirical inputs.
+                <strong>Result:</strong> 178/178 valid-witness tests pass. Completeness holds on the empirical inputs — including cross-language byte-exact BCS decode Move ↔ TS.
               </p>
             </div>
           </div>
@@ -949,18 +949,22 @@ python zkp/tests/empirical_soundness_harness.py`}</pre>
             <p className="text-lg mb-6">
               This implementation matches the STARK construction in Ben-Sasson et al. (ePrint 2018/046, 2018/828) on every empirical check we ran: parameters align, round-trips succeed, tested tamper vectors are rejected. Empirical passes are a necessary soundness signal, not a machine-checked formal proof.
             </p>
-            <div className="grid md:grid-cols-3 gap-4 text-center">
+            <div className="grid md:grid-cols-4 gap-4 text-center">
               <div className="bg-white/10 rounded-xl p-4">
-                <p className="text-3xl font-bold">6/6</p>
+                <p className="text-3xl font-bold">7/7</p>
                 <p className="text-sm text-white/80">Empirical Checks Pass</p>
               </div>
               <div className="bg-white/10 rounded-xl p-4">
-                <p className="text-3xl font-bold">47/47</p>
-                <p className="text-sm text-white/80">Tests Passing</p>
+                <p className="text-3xl font-bold">855</p>
+                <p className="text-sm text-white/80">Tests Passing<br />(178 Python+Move · 677 TS)</p>
               </div>
               <div className="bg-white/10 rounded-xl p-4">
-                <p className="text-3xl font-bold">2⁻¹⁸⁰</p>
-                <p className="text-sm text-white/80">Configured Soundness Target</p>
+                <p className="text-3xl font-bold">2⁻¹⁸⁴</p>
+                <p className="text-sm text-white/80">Hedge Soundness<br />(hedge grinding = 24)</p>
+              </div>
+              <div className="bg-white/10 rounded-xl p-4">
+                <p className="text-3xl font-bold">On-Chain</p>
+                <p className="text-sm text-white/80">Move verifier<br />(post-quantum)</p>
               </div>
             </div>
           </div>
