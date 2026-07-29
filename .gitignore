@@ -270,6 +270,12 @@ temp*
 *.sqlite3
 *.db-journal
 
+# Local pg_dump snapshots (see scripts/db-backup.mjs).
+# Aiven is the source of truth; these are on-disk copies for restore-
+# to-local-dev only. Never commit — they contain rows.
+db-backups/*.sql
+db-backups/*.sql.gz
+
 # -------------------------------------------
 # Local Scripts
 # -------------------------------------------

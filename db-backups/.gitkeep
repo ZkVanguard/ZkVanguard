@@ -1,0 +1,3 @@
+# Directory kept in git so `bun run db:backup` has somewhere to land
+# without needing to mkdir first. Backup files (`*.sql`, `*.sql.gz`) are
+# gitignored — see /.gitignore.
