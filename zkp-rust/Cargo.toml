@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "zkv-field",
     "zkv-merkle",
+    "zkv-fri",
 ]
 
 [workspace.package]
