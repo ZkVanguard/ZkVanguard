@@ -822,6 +822,56 @@ module zkvanguard::zkv_stark_tests {
         test_scenario::end(scenario);
     }
 
+    // ============ Cross-language BCS byte-exact (Move ↔ TS @mysten/sui/bcs) ============
+    //
+    // TS emits BCS via `zk/verifier/hedgeStarkBcs.ts` using the same
+    // struct schemas the Move decoders in `zkv_stark.move` expect. If
+    // the layouts drift, the golden hex TS produces here won't decode
+    // to the expected field values on Move, and the test fails LOUD
+    // before a proof is ever submitted on-chain.
+    //
+    // Golden hex generated 2026-07-29 by:
+    //   bun scripts/tmp-emit-bcs.ts   (see commit message for source)
+    // TS schema in zk/verifier/hedgeStarkBcs.ts.
+
+    #[test]
+    fun ts_emitted_fri_queries_decodes_correctly_in_move() {
+        // TS input:
+        //   [{ index: 42n, layers: [{
+        //       value: 5167587842234553007n, sibling_value: 9999n,
+        //       merkle_proof: [
+        //         (0xaa..., is_left: true),
+        //         (0xbb...1122, is_left: false),
+        //       ],
+        //       sibling_proof: [(0xcc..., is_left: true)],
+        //   }]}]
+        let blob = x"012a0000000000000001af920472c3f5b6470f270000000000000220aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0120bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1122000120cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc01";
+        let decoded = zkv_stark::decode_fri_queries(blob);
+        assert!(vector::length(&decoded) == 1, 0);
+        let q = vector::borrow(&decoded, 0);
+        assert!(zkv_fri::query_index(q) == 42, 0);
+        assert!(zkv_fri::layer0_value(q) == 5167587842234553007u64, 0);
+    }
+
+    #[test]
+    fun ts_emitted_trace_openings_decodes_correctly_in_move() {
+        // TS input:
+        //   [
+        //     { index: 504n, value: 5370617544811618451n,
+        //       merkle_proof: [(0xdd..., true), (0xee..., false)] },
+        //     { index: 1024n, value: 7n, merkle_proof: [] },
+        //   ]
+        let blob = x"02f8010000000000009320fac63344884a0220dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd0120eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000004000000000000070000000000000000";
+        let decoded = zkv_stark::decode_trace_openings(blob);
+        assert!(vector::length(&decoded) == 2, 0);
+        let o0 = vector::borrow(&decoded, 0);
+        let o1 = vector::borrow(&decoded, 1);
+        assert!(zkv_hedge_air::opening_index(o0) == 504, 0);
+        assert!(zkv_hedge_air::opening_value(o0) == 5370617544811618451u64, 0);
+        assert!(zkv_hedge_air::opening_index(o1) == 1024, 0);
+        assert!(zkv_hedge_air::opening_value(o1) == 7u64, 0);
+    }
+
     // ============ zk_verifier wired STARK path (Phase A.5 wire-in) ============
     //
     // Exercises `zk_verifier::verify_hedge_stark_proof_pub` — the entry

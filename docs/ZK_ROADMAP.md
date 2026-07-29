@@ -313,17 +313,39 @@ Tests added (5 more; 105 total, all pass):
 - Trace openings round-trip (2 openings, one with a proof)
 - PTB entry rejects below-minimum grinding through the wired path
 
-**Still open** (deferred):
-- **TS `@mysten/bcs` serializer** to build the two blobs from the
-  Python prover's JSON proof. ~150-200 TS LOC. Trivial mechanical
-  translation of the struct layout above; not blocking Move code.
+**TS `@mysten/sui/bcs` serializer shipped 2026-07-29** (`zk/verifier/hedgeStarkBcs.ts`, ~280 LOC):
+- `MerkleProofStep`, `FriQueryLayer`, `FriQuery`, `TraceOpening` BCS
+  schemas via `@mysten/sui/bcs` — byte-exact to the Move `sui::bcs::to_bytes`
+  side.
+- `serializeFriQueries(queries)` / `serializeTraceOpenings(openings)` —
+  produce the two `Uint8Array` blobs the Move entry function expects.
+  Accept either pre-normalized JS shape OR the raw Python prover JSON
+  (`query_responses[]` / `trace_openings[]`) via the adapters
+  `pythonQueriesToJs` / `pythonTraceOpeningsToJs`.
+- `buildHedgeStarkEntryArgs(pythonProof, commitmentHashHex)` — one-shot
+  builder returning every arg `verify_hedge_stark_proof_entry` needs,
+  ready to drop into a Sui PTB `moveCall`.
+
+**Cross-language byte-exact test shipped in the same pass** — 2 Move
+tests decode TS-emitted golden hex, 13 TS Jest tests exercise the
+serializer + Python-JSON adapters. Both sides fail loud if either
+struct schema drifts.
+
+**Still open** (deferred, non-blocking):
 - **Gas benchmark** for realistic proof sizes on testnet. Rough estimate
   ~100k-300k MIST per verify (dominated by 80 × 10 layer SHA-256
-  hashes). Needs measurement before committing to a per-hedge fee model.
+  hashes). Needs measurement on a live deployment before committing
+  to a per-hedge fee model.
+- **Route wire-up** — add a `/api/zk-proof/verify-hedge-onchain`
+  Next.js route that pulls a Python proof, calls
+  `buildHedgeStarkEntryArgs`, constructs a Sui PTB, and either returns
+  the tx bytes for wallet signing or submits with the operator's key.
+  ~50-100 TS LOC; blocked only by product decisions (which flow
+  triggers on-chain verify, who pays the gas).
 
-**Phase A is complete end-to-end on the Move side.** A Sui PTB can call
-`verify_hedge_stark_proof_entry` today; adding the TS serializer wires
-it into `/api/zk-proof/verify-onchain`.
+**Phase A is complete end-to-end.** A depositor's client can call
+`verify_hedge_stark_proof_entry` via a Sui PTB today, using the
+`hedgeStarkBcs` module to serialize the proof.
 | B.1 Rust field + Merkle + FFT (or adopt Winterfell) | ~800 Rust LOC (or ~200 glue) | pending | B.2, B.3 |
 | B.2 Rust FRI | ~600 Rust LOC (or use existing) | pending | B.3, B.4 |
 | B.3 Rust STARK + hedge AIR | ~600 Rust LOC | pending | B.4 |
