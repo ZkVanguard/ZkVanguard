@@ -70,15 +70,15 @@ async function readOnChain(): Promise<{
   if (!poolStateId) return { reachable: false, error: 'No mainnet pool state ID in env' };
   const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
   try {
-    const r = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_getObject', params: [poolStateId, { showContent: true }] }),
-      signal: AbortSignal.timeout(15_000),
+    // Migrated 2026-07-29 to SuiClient (see commit 61e889cb).
+    const { SuiClient } = await import('@mysten/sui/client');
+    const client = new SuiClient({ url: rpcUrl });
+    const res = await client.getObject({
+      id: poolStateId,
+      options: { showContent: true },
     });
-    if (!r.ok) return { reachable: false, error: `RPC HTTP ${r.status}` };
-    const j = await r.json() as { result?: { data?: { content?: { fields?: Record<string, unknown> } } } };
-    const f = j.result?.data?.content?.fields;
+    const content = res.data?.content as { fields?: Record<string, unknown> } | null | undefined;
+    const f = content?.fields;
     if (!f) return { reachable: false, error: 'No fields in RPC response' };
     // Handle both direct fields and nested hedge_state structure
     const hedgeState = f.hedge_state as { fields?: { active_hedges?: unknown[]; total_hedged_value?: string } } | undefined;

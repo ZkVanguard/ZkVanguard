@@ -44,6 +44,16 @@ export interface PoolSummary {
   totalWithdrawn?: number;
   /** Active BlueFin perp hedges (SUI pool only; undefined elsewhere). */
   hedges?: PoolHedge[];
+  /**
+   * NAV was served from the DB fallback because the live SUI RPC returned
+   * $0 (typical during a public-fullnode JSON-RPC deprecation window).
+   * When true, `staleAgeSeconds` says how old the served snapshot is —
+   * dashboard should annotate but not scare the user (the pool isn't
+   * actually at $0).
+   */
+  stale?: boolean;
+  /** Seconds since the fallback snapshot was recorded. */
+  staleAgeSeconds?: number;
 }
 
 export interface UserPosition {

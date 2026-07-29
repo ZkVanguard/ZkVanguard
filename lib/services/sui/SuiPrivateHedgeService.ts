@@ -619,20 +619,15 @@ export class SuiPrivateHedgeService {
   async getCommitment(_commitmentHash: string): Promise<{ exists: boolean }> {
     if (!this.isMainnetReady() && this.network === 'mainnet') return { exists: false };
     try {
-      const response = await fetch(this.config.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'sui_getObject',
-          params: [this.config.zkHedgeCommitmentState, { showContent: true }],
-        }),
-        signal: AbortSignal.timeout(10000),
+      // Migrated 2026-07-29 to SuiClient (see commit 61e889cb).
+      const { SuiClient } = await import('@mysten/sui/client');
+      const client = new SuiClient({ url: this.config.rpcUrl });
+      const res = await client.getObject({
+        id: this.config.zkHedgeCommitmentState,
+        options: { showContent: true },
       });
-      const data = await response.json();
-      const fields = data.result?.data?.content?.fields;
-      return { exists: !!fields };
+      const content = res.data?.content as { fields?: Record<string, any> } | null | undefined;
+      return { exists: !!content?.fields };
     } catch (e) {
       logger.error('[SuiZKHedge] Failed to fetch commitment', { error: e });
       return { exists: false };

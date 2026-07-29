@@ -9,8 +9,20 @@ interface PoolStatsProps {
   selectedChain: ChainKey;
 }
 
+function formatStaleAge(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  const hours = Math.round(seconds / 3600);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
 export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: PoolStatsProps) {
   const isSui = selectedChain === 'sui';
+  const isStale = Boolean(poolData.stale) && isSui;
+  const staleAgeLabel = poolData.staleAgeSeconds != null
+    ? formatStaleAge(poolData.staleAgeSeconds)
+    : undefined;
 
   const totalValueDisplay = useMemo(() => {
     if (isSui) {
@@ -70,6 +82,15 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
         <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
           <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
           <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
+          {isStale && (
+            <span
+              className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-medium"
+              title="Live RPC unavailable — showing last recorded on-chain snapshot"
+            >
+              <span className="w-1 h-1 rounded-full bg-amber-500" />
+              {staleAgeLabel ? `stale · ${staleAgeLabel}` : 'stale'}
+            </span>
+          )}
         </div>
         {isSui && profit ? (
           <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
@@ -117,6 +138,15 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
         <div className="text-center min-w-0">
           <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
+          {isStale && (
+            <span
+              className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[10px] font-medium"
+              title="Live SUI RPC returned $0 — showing the last recorded on-chain snapshot from the DB. Pool is unaffected; this is an RPC-level issue."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              {staleAgeLabel ? `snapshot · ${staleAgeLabel} old` : 'snapshot'}
+            </span>
+          )}
         </div>
         {isSui && profit && (
           <div className="text-center min-w-0">

@@ -71,6 +71,11 @@ export function mapApiToPoolSummary(data: ApiData): PoolSummary {
     totalDeposited: num(data.totalDeposited),
     totalWithdrawn: num(data.totalWithdrawn),
     hedges: mapHedges(data.hedges),
+    stale: (data.stale as boolean) || undefined,
+    staleAgeSeconds:
+      typeof data.staleAgeSeconds === 'number'
+        ? (data.staleAgeSeconds as number)
+        : undefined,
   };
 }
 

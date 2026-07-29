@@ -166,14 +166,15 @@ export class SuiService {
    */
   async getTransaction(digest: string): Promise<unknown> {
     try {
-      const data = await this.rpcFetchWithRetry({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'sui_getTransactionBlock',
-        params: [digest, { showEffects: true, showInput: true }],
+      // Migrated 2026-07-29 from raw `sui_getTransactionBlock` JSON-RPC
+      // to SuiClient — public fullnode deprecated the raw method name.
+      const { SuiClient } = await import('@mysten/sui/client');
+      const rpcUrl = SUI_NETWORKS[this.network].rpcUrl;
+      const client = new SuiClient({ url: rpcUrl });
+      return await client.getTransactionBlock({
+        digest,
+        options: { showEffects: true, showInput: true },
       });
-
-      return data.result;
     } catch (error) {
       logger.error('[SuiService] Failed to get transaction', error, { component: 'SuiService' });
       return null;

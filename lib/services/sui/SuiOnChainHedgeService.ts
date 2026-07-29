@@ -325,24 +325,17 @@ export class SuiOnChainHedgeService {
   async getHedgePosition(hedgeId: string): Promise<SuiHedgePosition | null> {
     if (!hedgeId.startsWith('0x')) return null;
     try {
-      const response = await fetch(this.config.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'sui_getObject',
-          params: [hedgeId, { showContent: true, showType: true }],
-        }),
-        signal: AbortSignal.timeout(10000),
+      // Migrated 2026-07-29 from raw `sui_getObject` JSON-RPC to
+      // SuiClient — public fullnode deprecated the raw method name.
+      const { SuiClient } = await import('@mysten/sui/client');
+      const client = new SuiClient({ url: this.config.rpcUrl });
+      const res = await client.getObject({
+        id: hedgeId,
+        options: { showContent: true, showType: true },
       });
-
-      const data = await response.json();
-      if (!data.result?.data?.content?.fields) {
-        return null;
-      }
-
-      const fields = data.result.data.content.fields;
+      const content = res.data?.content as { fields?: Record<string, any> } | null | undefined;
+      const fields = content?.fields;
+      if (!fields) return null;
       let asset: string;
       try {
         asset = new TextDecoder().decode(new Uint8Array(fields.asset || []));
@@ -374,24 +367,16 @@ export class SuiOnChainHedgeService {
   async getProxyInfo(proxyId: string): Promise<SuiProxyInfo | null> {
     if (!proxyId.startsWith('0x')) return null;
     try {
-      const response = await fetch(this.config.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'sui_getObject',
-          params: [proxyId, { showContent: true }],
-        }),
-        signal: AbortSignal.timeout(10000),
+      // Migrated 2026-07-29 to SuiClient (see getHedgePosition above).
+      const { SuiClient } = await import('@mysten/sui/client');
+      const client = new SuiClient({ url: this.config.rpcUrl });
+      const res = await client.getObject({
+        id: proxyId,
+        options: { showContent: true },
       });
-
-      const data = await response.json();
-      if (!data.result?.data?.content?.fields) {
-        return null;
-      }
-
-      const fields = data.result.data.content.fields;
+      const content = res.data?.content as { fields?: Record<string, any> } | null | undefined;
+      const fields = content?.fields;
+      if (!fields) return null;
       return {
         proxyId,
         owner: fields.owner,
