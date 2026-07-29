@@ -153,12 +153,24 @@ that runs the same protocol but 100-1000× faster. Enables:
 
 ### Phase B.1 — Rust field + Merkle + FFT (~800 LOC)
 
-- New crate: `zkp-rust/` with `Cargo.toml`, `src/field.rs`, `src/merkle.rs`,
-  `src/fft.rs`.
+- New workspace: `zkp-rust/` with `Cargo.toml`, `zkv-field/`, `zkv-merkle/`.
 - Goldilocks arithmetic (single-u64 with 128-bit intermediate).
 - Cooley-Tukey FFT + inverse.
 - SHA-256 Merkle tree.
 - Property tests via `proptest`.
+
+**Status (2026-07-29):**
+- ✅ **B.1a** Rust workspace + `zkv-field` (Goldilocks — add, sub, mul, neg,
+  pow, inv, div, eq, primitive_root, u64_to_ascii). **25 tests pass**,
+  including cross-language golden vectors byte-identical to Python
+  `CUDAFiniteField` (`pow(7, 100)` = 2_335_214_203_647_002_900,
+  `primitive_root(1024)` = 11_353_340_290_879_379_826).
+- ✅ **B.1b** `zkv-merkle` — SHA-256 tree with the exact same layout as
+  Python `MerkleTree` and Move `zkv_merkle`. **6 tests pass**, including
+  a cross-language golden root (`e3b58dfe27716ef42537b185903ddb93571f28061805339c06ab5d19cc87baa2`)
+  and a proof-path vector byte-exact to the Move test's hardcoded
+  siblings.
+- ⏳ **B.1c** FFT (`zkv-fft` — not started).
 
 ### Phase B.2 — Rust FRI (~600 LOC)
 

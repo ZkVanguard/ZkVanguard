@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+    "zkv-field",
+    "zkv-merkle",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["ZkVanguard"]
+repository = "https://github.com/anthropics/claude-code"
+
+[workspace.dependencies]
+sha2 = "0.10"
