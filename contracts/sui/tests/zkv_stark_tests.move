@@ -700,6 +700,128 @@ module zkvanguard::zkv_stark_tests {
     // the grinding + inner-primitive unit tests jointly cover every
     // code path in zkv_stark::verify_hedge_stark_proof.
 
+    // ============ BCS round-trip (Phase A entry point) ============
+    //
+    // Round-trip a hand-constructed FriQuery / TraceOpening through
+    // `bcs::to_bytes` then `zkv_stark::decode_*`. If the byte layouts
+    // drift between Move's `bcs::peel_*` and `@mysten/bcs` on the TS
+    // side, these tests fail loud before a proof is ever submitted.
+
+    #[test]
+    fun bcs_round_trip_empty_fri_queries() {
+        use sui::bcs;
+        let empty: vector<zkv_fri::FriQuery> = vector[];
+        let blob = bcs::to_bytes(&empty);
+        let decoded = zkv_stark::decode_fri_queries(blob);
+        assert!(vector::length(&decoded) == 0, 0);
+    }
+
+    #[test]
+    fun bcs_round_trip_single_fri_query_zero_layers() {
+        use sui::bcs;
+        let queries = vector[
+            zkv_fri::new_query(504, vector[]),
+        ];
+        let blob = bcs::to_bytes(&queries);
+        let decoded = zkv_stark::decode_fri_queries(blob);
+        assert!(vector::length(&decoded) == 1, 0);
+        let q = vector::borrow(&decoded, 0);
+        assert!(zkv_fri::query_index(q) == 504, 0);
+    }
+
+    #[test]
+    fun bcs_round_trip_fri_query_with_layer_and_merkle_proof() {
+        use sui::bcs;
+        // One query, one layer, each merkle proof has 2 steps —
+        // exercises every nesting level (query → layer → proof → step).
+        let layer = zkv_fri::new_layer(
+            5167587842234553007u64,
+            9999u64,
+            vector[
+                zkv_merkle::new_step(x"aa" , true),
+                zkv_merkle::new_step(x"bb11", false),
+            ],
+            vector[
+                zkv_merkle::new_step(x"cc2233", true),
+            ],
+        );
+        let queries = vector[zkv_fri::new_query(42, vector[layer])];
+        let blob = bcs::to_bytes(&queries);
+        let decoded = zkv_stark::decode_fri_queries(blob);
+        assert!(vector::length(&decoded) == 1, 0);
+        let q = vector::borrow(&decoded, 0);
+        assert!(zkv_fri::query_index(q) == 42, 0);
+        // layer0_value pulls the value from layers[0] — round-trip via
+        // the public accessor confirms nesting decoded correctly.
+        assert!(zkv_fri::layer0_value(q) == 5167587842234553007u64, 0);
+    }
+
+    #[test]
+    fun bcs_round_trip_trace_openings() {
+        use sui::bcs;
+        let openings = vector[
+            zkv_hedge_air::new_opening(
+                504,
+                5370617544811618451u64,
+                vector[
+                    zkv_merkle::new_step(x"aabb", true),
+                    zkv_merkle::new_step(x"ccdd", false),
+                ],
+            ),
+            zkv_hedge_air::new_opening(1024, 7u64, vector[]),
+        ];
+        let blob = bcs::to_bytes(&openings);
+        let decoded = zkv_stark::decode_trace_openings(blob);
+        assert!(vector::length(&decoded) == 2, 0);
+        let o0 = vector::borrow(&decoded, 0);
+        let o1 = vector::borrow(&decoded, 1);
+        assert!(zkv_hedge_air::opening_index(o0) == 504, 0);
+        assert!(zkv_hedge_air::opening_value(o0) == 5370617544811618451u64, 0);
+        assert!(zkv_hedge_air::opening_index(o1) == 1024, 0);
+        assert!(zkv_hedge_air::opening_value(o1) == 7u64, 0);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 1, location = zkvanguard::zk_verifier)]
+    fun ptb_entry_rejects_below_minimum_grinding() {
+        // Prove the entry function is wired: empty BCS blobs (decode to
+        // empty vectors), grinding_bits < MIN → aborts with E_INVALID_PROOF.
+        use sui::bcs;
+        let mut scenario = test_scenario::begin(TEST_USER);
+        {
+            zk_verifier::init_for_testing(test_scenario::ctx(&mut scenario));
+        };
+        test_scenario::next_tx(&mut scenario, TEST_USER);
+        {
+            let mut state = test_scenario::take_shared<ZKVerifierState>(&scenario);
+            let ck = clock::create_for_testing(test_scenario::ctx(&mut scenario));
+            let empty_queries: vector<zkv_fri::FriQuery> = vector[];
+            let empty_openings: vector<zkv_hedge_air::TraceOpening> = vector[];
+
+            zk_verifier::verify_hedge_stark_proof_entry(
+                &mut state,
+                sample_commitment(),
+                vector[],
+                vector[],
+                bcs::to_bytes(&empty_queries),
+                bcs::to_bytes(&empty_openings),
+                16384,
+                1024,
+                4,
+                0,
+                19,  // below MIN
+                80,
+                sample_commitment(),
+                &ck,
+                test_scenario::ctx(&mut scenario),
+            );
+
+            clock::destroy_for_testing(ck);
+            test_scenario::return_shared(state);
+        };
+        test_scenario::end(scenario);
+    }
+
     // ============ zk_verifier wired STARK path (Phase A.5 wire-in) ============
     //
     // Exercises `zk_verifier::verify_hedge_stark_proof_pub` — the entry

@@ -570,6 +570,63 @@ module zkvanguard::zk_verifier {
         transfer::transfer(proof_record, verifier);
     }
 
+    /// PTB-callable entry point for STARK hedge verify.
+    ///
+    /// Same protocol check as `verify_hedge_stark_proof_pub`, but accepts
+    /// the deeply-nested query/opening data as BCS-encoded blobs so it
+    /// can be called directly from a Sui transaction (Move entry
+    /// functions can't take `vector<FriQuery>` etc. as-is).
+    ///
+    /// Caller responsibility (TS SDK side, using `@mysten/bcs`):
+    ///   - `fri_queries_bcs` = BCS(vector<FriQuery>)  where FriQuery is
+    ///     { index: u64, layers: vector<FriQueryLayer> } and each layer
+    ///     is { value: u64, sibling_value: u64,
+    ///          merkle_proof: vector<{ sibling: vector<u8>, is_left: bool }>,
+    ///          sibling_proof: vector<{ sibling: vector<u8>, is_left: bool }> }
+    ///   - `trace_openings_bcs` = BCS(vector<TraceOpening>)  where
+    ///     TraceOpening is { index: u64, value: u64,
+    ///                       merkle_proof: vector<{ sibling: vector<u8>, is_left: bool }> }
+    ///
+    /// Everything else stays as native tx-arg types (primitives + shallow
+    /// vectors), so the TS caller only needs BCS for the two nested pieces.
+    public entry fun verify_hedge_stark_proof_entry(
+        state: &mut ZKVerifierState,
+        trace_merkle_root: vector<u8>,
+        fri_roots: vector<vector<u8>>,
+        final_poly_coeffs: vector<u64>,
+        fri_queries_bcs: vector<u8>,
+        trace_openings_bcs: vector<u8>,
+        extended_size: u64,
+        trace_length: u64,
+        leverage_cap: u64,
+        grinding_nonce: u64,
+        grinding_bits: u64,
+        max_final_degree: u64,
+        commitment_hash: vector<u8>,
+        clock: &Clock,
+        ctx: &mut TxContext,
+    ) {
+        let fri_queries = zkvanguard::zkv_stark::decode_fri_queries(fri_queries_bcs);
+        let trace_openings = zkvanguard::zkv_stark::decode_trace_openings(trace_openings_bcs);
+        verify_hedge_stark_proof_pub(
+            state,
+            trace_merkle_root,
+            fri_roots,
+            final_poly_coeffs,
+            fri_queries,
+            trace_openings,
+            extended_size,
+            trace_length,
+            leverage_cap,
+            grinding_nonce,
+            grinding_bits,
+            max_final_degree,
+            commitment_hash,
+            clock,
+            ctx,
+        );
+    }
+
     // ============ Test helpers for STARK path ============
 
     /// Pre-populate `used_proofs` with a commitment hash so replay-

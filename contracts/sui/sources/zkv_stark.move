@@ -19,8 +19,10 @@
 module zkvanguard::zkv_stark {
     use std::hash;
     use std::vector;
-    use zkvanguard::zkv_fri::{Self, FriQuery};
+    use sui::bcs;
+    use zkvanguard::zkv_fri::{Self, FriQuery, FriQueryLayer};
     use zkvanguard::zkv_hedge_air::{Self, TraceOpening};
+    use zkvanguard::zkv_merkle::{Self, MerkleProofStep};
 
     // ============ Constants ============
 
@@ -177,5 +179,83 @@ module zkvanguard::zkv_stark {
         };
 
         true
+    }
+
+    // ============ BCS decoders ============
+    //
+    // Move entry functions can't accept custom struct arguments, so
+    // callers submitting a hedge proof directly from a Sui PTB have to
+    // BCS-encode the deeply-nested pieces (vector<FriQuery> and
+    // vector<TraceOpening>) as vector<u8> blobs. These decoders
+    // reconstruct the Move structs from those blobs.
+    //
+    // BCS layout convention: struct fields in declaration order, no
+    // field names. Vectors are ULEB128 length prefix followed by
+    // concatenated elements (matches @mysten/bcs on the TS side).
+
+    /// Decode `vector<MerkleProofStep>` from a BCS cursor.
+    fun peel_merkle_proof(cursor: &mut bcs::BCS): vector<MerkleProofStep> {
+        let n = bcs::peel_vec_length(cursor);
+        let mut out = vector::empty<MerkleProofStep>();
+        let mut i: u64 = 0;
+        while (i < n) {
+            let sibling = bcs::peel_vec_u8(cursor);
+            let is_left = bcs::peel_bool(cursor);
+            vector::push_back(&mut out, zkv_merkle::new_step(sibling, is_left));
+            i = i + 1;
+        };
+        out
+    }
+
+    /// Decode one `FriQueryLayer` from a BCS cursor.
+    fun peel_fri_layer(cursor: &mut bcs::BCS): FriQueryLayer {
+        let value = bcs::peel_u64(cursor);
+        let sibling_value = bcs::peel_u64(cursor);
+        let merkle_proof = peel_merkle_proof(cursor);
+        let sibling_proof = peel_merkle_proof(cursor);
+        zkv_fri::new_layer(value, sibling_value, merkle_proof, sibling_proof)
+    }
+
+    /// Decode one `FriQuery` from a BCS cursor.
+    fun peel_fri_query(cursor: &mut bcs::BCS): FriQuery {
+        let index = bcs::peel_u64(cursor);
+        let n_layers = bcs::peel_vec_length(cursor);
+        let mut layers = vector::empty<FriQueryLayer>();
+        let mut i: u64 = 0;
+        while (i < n_layers) {
+            vector::push_back(&mut layers, peel_fri_layer(cursor));
+            i = i + 1;
+        };
+        zkv_fri::new_query(index, layers)
+    }
+
+    /// Public entry: decode a BCS-encoded `vector<FriQuery>` blob into
+    /// the Move types the verifier operates on.
+    public fun decode_fri_queries(blob: vector<u8>): vector<FriQuery> {
+        let mut cursor = bcs::new(blob);
+        let n = bcs::peel_vec_length(&mut cursor);
+        let mut out = vector::empty<FriQuery>();
+        let mut i: u64 = 0;
+        while (i < n) {
+            vector::push_back(&mut out, peel_fri_query(&mut cursor));
+            i = i + 1;
+        };
+        out
+    }
+
+    /// Public entry: decode a BCS-encoded `vector<TraceOpening>` blob.
+    public fun decode_trace_openings(blob: vector<u8>): vector<TraceOpening> {
+        let mut cursor = bcs::new(blob);
+        let n = bcs::peel_vec_length(&mut cursor);
+        let mut out = vector::empty<TraceOpening>();
+        let mut i: u64 = 0;
+        while (i < n) {
+            let index = bcs::peel_u64(&mut cursor);
+            let value = bcs::peel_u64(&mut cursor);
+            let merkle_proof = peel_merkle_proof(&mut cursor);
+            vector::push_back(&mut out, zkv_hedge_air::new_opening(index, value, merkle_proof));
+            i = i + 1;
+        };
+        out
     }
 }

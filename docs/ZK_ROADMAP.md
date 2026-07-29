@@ -282,22 +282,48 @@ Tests added (2 more, 100 total, all pass):
 - `stark_verify_pub_rejects_replayed_commitment` — pre-seeded
   commitment aborts with `E_PROOF_ALREADY_USED` on second call
 
-**Still open** (deferred, tracked separately):
-- **Byte-format decoder** for accepting the proof as `vector<u8>` from a
-  Sui PTB (Move entry functions can't take custom structs). Without
-  this, `verify_hedge_stark_proof_pub` is callable from another Move
-  module only, not directly from a client tx. ~100-150 Move LOC of BCS
-  or hand-rolled parsing. Two design options:
-  - (A) BCS-serialize the whole proof on the TS side, one blob arg —
-    Move decodes via `sui::bcs::peel_*`. Cleaner TS API, more Move code.
-  - (B) Flat-args entry function with ~15 primitive-vector parameters —
-    TS caller sends everything decomposed. Less Move code, uglier TS.
+**BCS decoders + PTB entry function shipped 2026-07-28** (hybrid approach:
+BCS blobs only for the deeply nested pieces, everything else as native
+tx-arg types):
+
+- `zkv_stark::decode_fri_queries(blob) → vector<FriQuery>`
+- `zkv_stark::decode_trace_openings(blob) → vector<TraceOpening>`
+- `zk_verifier::verify_hedge_stark_proof_entry(...)` — PTB-callable
+  entry function. Takes `trace_merkle_root`, `fri_roots`, `final_poly_coeffs`,
+  and all scalar parameters as native tx-arg types; takes `fri_queries_bcs`
+  and `trace_openings_bcs` as BCS-encoded `vector<u8>`. Decodes, calls
+  `verify_hedge_stark_proof_pub`, which delegates to `zkv_stark::verify_hedge_stark_proof`
+  and mints a `ProofRecord` on success.
+
+TS-side (using `@mysten/bcs`): only needs to BCS-encode the two nested
+pieces. Struct layout the encoder must match:
+- `FriQuery { index: u64, layers: vector<FriQueryLayer> }`
+- `FriQueryLayer { value: u64, sibling_value: u64,
+                   merkle_proof: vector<MerkleProofStep>,
+                   sibling_proof: vector<MerkleProofStep> }`
+- `MerkleProofStep { sibling: vector<u8>, is_left: bool }`
+- `TraceOpening { index: u64, value: u64,
+                  merkle_proof: vector<MerkleProofStep> }`
+
+Tests added (5 more; 105 total, all pass):
+- Empty FRI queries round-trip
+- Single FRI query with zero layers round-trip
+- FRI query with one layer + two-step Merkle proofs round-trip
+  (exercises every nesting level: query → layer → proof → step)
+- Trace openings round-trip (2 openings, one with a proof)
+- PTB entry rejects below-minimum grinding through the wired path
+
+**Still open** (deferred):
+- **TS `@mysten/bcs` serializer** to build the two blobs from the
+  Python prover's JSON proof. ~150-200 TS LOC. Trivial mechanical
+  translation of the struct layout above; not blocking Move code.
 - **Gas benchmark** for realistic proof sizes on testnet. Rough estimate
   ~100k-300k MIST per verify (dominated by 80 × 10 layer SHA-256
   hashes). Needs measurement before committing to a per-hedge fee model.
 
-The Phase A goal of "on-chain STARK verifier module set + wired into
-the existing state" is done.
+**Phase A is complete end-to-end on the Move side.** A Sui PTB can call
+`verify_hedge_stark_proof_entry` today; adding the TS serializer wires
+it into `/api/zk-proof/verify-onchain`.
 | B.1 Rust field + Merkle + FFT (or adopt Winterfell) | ~800 Rust LOC (or ~200 glue) | pending | B.2, B.3 |
 | B.2 Rust FRI | ~600 Rust LOC (or use existing) | pending | B.3, B.4 |
 | B.3 Rust STARK + hedge AIR | ~600 Rust LOC | pending | B.4 |
