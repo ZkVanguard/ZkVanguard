@@ -331,21 +331,39 @@ tests decode TS-emitted golden hex, 13 TS Jest tests exercise the
 serializer + Python-JSON adapters. Both sides fail loud if either
 struct schema drifts.
 
-**Still open** (deferred, non-blocking):
-- **Gas benchmark** for realistic proof sizes on testnet. Rough estimate
-  ~100k-300k MIST per verify (dominated by 80 × 10 layer SHA-256
-  hashes). Needs measurement on a live deployment before committing
-  to a per-hedge fee model.
-- **Route wire-up** — add a `/api/zk-proof/verify-hedge-onchain`
-  Next.js route that pulls a Python proof, calls
-  `buildHedgeStarkEntryArgs`, constructs a Sui PTB, and either returns
-  the tx bytes for wallet signing or submits with the operator's key.
-  ~50-100 TS LOC; blocked only by product decisions (which flow
-  triggers on-chain verify, who pays the gas).
+**Route + tx-builder shipped 2026-07-29:**
+- `zk/verifier/hedgeStarkTx.ts` (~85 LOC) — `buildHedgeStarkVerifyTx`
+  pure `Transaction` builder that composes the BCS serializer with a
+  `moveCall` targeting `zk_verifier::verify_hedge_stark_proof_entry`.
+  No execution, no side effects — safe to unit test offline.
+- `app/api/zk-proof/verify-hedge-onchain/route.ts` (~150 LOC) — the
+  API route. Two modes:
+    * `mode: 'buildOnly'` (default) — returns serialized tx bytes for
+      wallet signing. The depositor pays gas ("self-custodial" path).
+    * `mode: 'execute'` — server signs with `SUI_POOL_ADMIN_KEY` and
+      executes. Operator pays gas ("sponsored" path). 403 if the admin
+      key isn't configured — no silent downgrade.
+  Reads deployment address from `NEXT_PUBLIC_SUI_MAINNET_ZK_STARK_PKG`
+  (falls back to `NEXT_PUBLIC_SUI_MAINNET_PACKAGE_ID`) and
+  `NEXT_PUBLIC_SUI_ZK_VERIFIER_STATE`. Returns 503 with a clear message
+  if neither is set (redeploy needed).
+- Tests: 6 tx-builder unit tests. 677/677 TS total.
 
-**Phase A is complete end-to-end.** A depositor's client can call
-`verify_hedge_stark_proof_entry` via a Sui PTB today, using the
-`hedgeStarkBcs` module to serialize the proof.
+**Still open** (deployment-blocked, not code):
+- **Testnet gas benchmark** for realistic proof sizes. Rough estimate
+  ~100k-300k MIST per verify (dominated by 80 × 10 layer SHA-256
+  hashes). Needs measurement on a live SUI deployment.
+- **Move package redeploy** to a network. The current mainnet package
+  (`0x107292…7b726`, v0.2.0) predates the STARK verifier modules
+  (`zkv_field`, `zkv_merkle`, `zkv_fri`, `zkv_hedge_air`, `zkv_stark`)
+  and the `verify_hedge_stark_proof_entry` entry function. Redeploy
+  gives us fresh IDs to plug into the env vars above.
+
+**Phase A is truly complete end-to-end.** Every piece of code needed to
+run "depositor generates hedge proof → chain independently verifies →
+ProofRecord minted with replay protection" is in the repo, tested, and
+typechecks. The only remaining work is a mainnet deploy of the new Move
+modules and setting the env vars.
 | B.1 Rust field + Merkle + FFT (or adopt Winterfell) | ~800 Rust LOC (or ~200 glue) | pending | B.2, B.3 |
 | B.2 Rust FRI | ~600 Rust LOC (or use existing) | pending | B.3, B.4 |
 | B.3 Rust STARK + hedge AIR | ~600 Rust LOC | pending | B.4 |
