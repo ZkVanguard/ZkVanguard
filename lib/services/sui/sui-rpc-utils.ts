@@ -36,9 +36,25 @@ export const SUI_MEMBER_TTL_MS = envNumber('SUI_MEMBER_TTL_MS', 30_000);
 export const SUI_MEMBERS_TTL_MS = envNumber('SUI_MEMBERS_TTL_MS', 120_000);
 
 // ── RPC + circuit breaker defaults (env-overridable) ───────────────────────
-// SUI public RPC (fullnode.mainnet.sui.io) has 100 req/sec IP limits and
-// occasional 5s blips. Private QuickNode / Ankr endpoints tolerate more
-// concurrency and faster failover. Tune per-env at ops discretion.
+// The official public fullnode `fullnode.mainnet.sui.io` deprecated its
+// JSON-RPC surface in 2026-07 — every `sui_getObject` / `sui_getBalance`
+// call now returns `-32601 Method not found. JSON-RPC on public fullnodes
+// has been deprecated`. We default to BlockVision's free public RPC, which
+// still speaks JSON-RPC. Set SUI_MAINNET_RPC / SUI_TESTNET_RPC to override
+// (paid providers: BlockVision paid, Alchemy, Ankr, Triton).
+const SUI_MAINNET_DEFAULT_RPC = 'https://sui-mainnet-endpoint.blockvision.org';
+const SUI_TESTNET_DEFAULT_RPC = 'https://sui-testnet-endpoint.blockvision.org';
+
+export function mainnetRpcUrl(): string {
+  return (process.env.SUI_MAINNET_RPC || SUI_MAINNET_DEFAULT_RPC).trim();
+}
+export function testnetRpcUrl(): string {
+  return (process.env.SUI_TESTNET_RPC || SUI_TESTNET_DEFAULT_RPC).trim();
+}
+export function suiRpcUrlForNetwork(network: string): string {
+  return network === 'mainnet' ? mainnetRpcUrl() : testnetRpcUrl();
+}
+
 export const SUI_RPC_TIMEOUT_MS = envNumber('SUI_RPC_TIMEOUT_MS', 10_000);
 export const SUI_RPC_MAX_RETRIES = envNumber('SUI_RPC_MAX_RETRIES', 2);
 const CIRCUIT_BREAKER_THRESHOLD = envNumber('SUI_RPC_CIRCUIT_THRESHOLD', 5);
