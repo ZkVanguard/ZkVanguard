@@ -221,12 +221,11 @@ async function readPoolStaticsOnChain(): Promise<{
     ''
   ).trim();
   if (!poolStateId) return null;
-  const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
   try {
-    // Migrated 2026-07-29 from raw `sui_getObject` JSON-RPC to
-    // SuiClient — public fullnode deprecated the raw method name.
-    const { SuiClient } = await import('@mysten/sui/client');
-    const client = new SuiClient({ url: rpcUrl });
+    // Uses failover transport (2026-07-30) — single-provider clients
+    // silently returned $0 when the public fullnode killed JSON-RPC.
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+    const client = createFailoverSuiClient('mainnet');
     const res = await client.getObject({
       id: poolStateId,
       options: { showContent: true },

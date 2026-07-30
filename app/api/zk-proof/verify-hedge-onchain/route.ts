@@ -32,10 +32,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { logger } from '@/lib/utils/logger';
 import { safeErrorResponse } from '@/lib/security/safe-error';
+import { createFailoverSuiClient } from '@/lib/services/sui/sui-failover-transport';
 import {
   buildHedgeStarkVerifyTx,
   type HedgeStarkOnChainConfig,
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
     // buildOnly: serialize + return. The client wallet supplies the sender
     // and signs.
     if (mode === 'buildOnly') {
-      const suiClient = new SuiClient({ url: getFullnodeUrl(network as 'mainnet' | 'testnet' | 'devnet') });
+      const suiClient = createFailoverSuiClient(network === 'testnet' ? 'testnet' : 'mainnet');
       const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
       return NextResponse.json({
         success: true,
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
       );
       tx.setSender(keypair.toSuiAddress());
 
-      const suiClient = new SuiClient({ url: getFullnodeUrl(network as 'mainnet' | 'testnet' | 'devnet') });
+      const suiClient = createFailoverSuiClient(network === 'testnet' ? 'testnet' : 'mainnet');
       const result = await suiClient.signAndExecuteTransaction({
         signer: keypair,
         transaction: tx,

@@ -176,11 +176,8 @@ export async function runStep7Rebalance(input: Step7Input): Promise<Step7Result>
           let existingHedgedValue = 0;
           let dailyHedgedToday = 0;
           try {
-            const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-            const rpcUrl = network === 'mainnet'
-              ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-              : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-            const tmpClient = new SuiClient({ url: rpcUrl });
+            const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+            const tmpClient = createFailoverSuiClient(network);
             const poolConfig = SUI_USDC_POOL_CONFIG[network];
             if (poolConfig.poolStateId) {
               const obj = await tmpClient.getObject({ id: poolConfig.poolStateId, options: { showContent: true } });

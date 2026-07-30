@@ -108,7 +108,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
 
   // Check admin wallet USDC balance
   try {
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
 
     const adminKey = (
@@ -125,11 +125,7 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
       }
       const adminAddress = keypair.getPublicKey().toSuiAddress();
 
-      const rpcUrl =
-        network === 'mainnet'
-          ? process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')
-          : process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet');
-      const client = new SuiClient({ url: rpcUrl });
+      const client = createFailoverSuiClient(network);
 
       // Get USDC balance
       const usdcType = SUI_USDC_POOL_CONFIG[network].usdcCoinType;

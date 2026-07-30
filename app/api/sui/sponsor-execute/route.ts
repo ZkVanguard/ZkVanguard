@@ -39,10 +39,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Gas sponsoring unavailable' }, { status: 503 });
     }
 
-    const network = (process.env.SUI_NETWORK || process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet').trim();
+    const network: 'mainnet' | 'testnet' =
+      (process.env.SUI_NETWORK || process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet').trim() === 'testnet' ? 'testnet' : 'mainnet';
 
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
@@ -57,10 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const sponsorAddress = keypair.getPublicKey().toSuiAddress();
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const client = new SuiClient({ url: rpcUrl });
+    const client = createFailoverSuiClient(network);
 
     // txBytes is base64 of BCS bytes (what the wallet built and the user signed)
     const builtBytes = Uint8Array.from(Buffer.from(txBytes, 'base64'));

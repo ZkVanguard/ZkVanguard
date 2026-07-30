@@ -127,7 +127,7 @@ export async function emitPrivateHedgeCommitment(
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
@@ -138,10 +138,7 @@ export async function emitPrivateHedgeCommitment(
       return { success: false, error: `Invalid admin key: ${e instanceof Error ? e.message : String(e)}` };
     }
 
-    const rpcUrl = network === 'mainnet'
-      ? readEnv('SUI_MAINNET_RPC', getFullnodeUrl('mainnet'))
-      : readEnv('SUI_TESTNET_RPC', getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     const tx = new Transaction();
     tx.moveCall({

@@ -26,11 +26,8 @@ export async function getActiveHedges(network: 'mainnet' | 'testnet'): Promise<A
   if (!poolConfig.poolStateId) return [];
 
   try {
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+    const suiClient = createFailoverSuiClient(network);
 
     const obj = await suiClient.getObject({
       id: poolConfig.poolStateId,

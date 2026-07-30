@@ -38,12 +38,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Gas sponsoring unavailable' }, { status: 503 });
     }
 
-    const network = (process.env.SUI_NETWORK || process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet').trim();
+    const network: 'mainnet' | 'testnet' =
+      (process.env.SUI_NETWORK || process.env.NEXT_PUBLIC_SUI_NETWORK || 'mainnet').trim() === 'testnet' ? 'testnet' : 'mainnet';
 
     // Dynamic imports to avoid module-level conflicts
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     // Derive admin keypair (to get sponsor address)
     let keypair: InstanceType<typeof Ed25519Keypair>;
@@ -60,11 +61,8 @@ export async function POST(request: NextRequest) {
 
     const sponsorAddress = keypair.getPublicKey().toSuiAddress();
 
-    // Check admin has enough SUI for gas
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const client = new SuiClient({ url: rpcUrl });
+    // Check admin has enough SUI for gas (failover-aware)
+    const client = createFailoverSuiClient(network);
 
     const adminBalance = await client.getBalance({ owner: sponsorAddress, coinType: '0x2::sui::SUI' });
     const adminSui = BigInt(adminBalance.totalBalance);

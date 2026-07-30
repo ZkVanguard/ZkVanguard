@@ -10,11 +10,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { logger } from '@/lib/utils/logger';
 import { SUI_USDC_POOL_CONFIG } from '@/lib/services/sui/SuiCommunityPoolService';
+import { createFailoverSuiClient } from '@/lib/services/sui/sui-failover-transport';
 import { verifyAdminBearer } from '@/lib/security/auth-middleware';
 
 export const runtime = 'nodejs';
@@ -52,12 +52,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     const _adminAddress = keypair.getPublicKey().toSuiAddress();
 
-    // Connect to SUI
+    // Connect to SUI (failover-aware)
     const poolConfig = SUI_USDC_POOL_CONFIG[network];
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const client = new SuiClient({ url: rpcUrl });
+    const client = createFailoverSuiClient(network);
 
     // Read current state
     const objBefore = await client.getObject({ 

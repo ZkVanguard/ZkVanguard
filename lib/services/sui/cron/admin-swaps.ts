@@ -41,17 +41,14 @@ export async function replenishAdminUsdc(
 
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     const keypair = adminKey.startsWith('suiprivkey')
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
     const address = keypair.getPublicKey().toSuiAddress();
 
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     const aggregator = getBluefinAggregatorService(network);
 
@@ -219,7 +216,7 @@ export async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promi
 
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
@@ -231,10 +228,7 @@ export async function getAdminUsdcBalance(network: 'mainnet' | 'testnet'): Promi
     }
 
     const address = keypair.getPublicKey().toSuiAddress();
-    const rpcUrl = network === 'mainnet'
-      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
-      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     const usdcType = SUI_USDC_COIN_TYPE[network];
     const balance = await suiClient.getBalance({ owner: address, coinType: usdcType });
@@ -263,15 +257,12 @@ export async function getAdminAssetValuesUsd(
   if (!adminKey) return empty;
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
     const keypair = adminKey.startsWith('suiprivkey')
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
     const address = keypair.getPublicKey().toSuiAddress();
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
     const aggregator = getBluefinAggregatorService(network);
     const allBalances = await suiClient.getAllBalances({ owner: address });
     const result: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
@@ -365,15 +356,12 @@ export async function getAdminNonUsdcUsdValue(
   if (!adminKey) return 0;
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
     const keypair = adminKey.startsWith('suiprivkey')
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
     const address = keypair.getPublicKey().toSuiAddress();
-    const rpcUrl = network === 'mainnet'
-      ? ((process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim())
-      : ((process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim());
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
     const aggregator = getBluefinAggregatorService(network);
     const all = await suiClient.getAllBalances({ owner: address });
     let usdResidual = 0;

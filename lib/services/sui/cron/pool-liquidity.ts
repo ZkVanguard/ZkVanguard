@@ -43,12 +43,8 @@ export async function readPoolLiquidityState(network: 'mainnet' | 'testnet'): Pr
   if (!poolConfig.poolStateId) return null;
 
   try {
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-    const rpcUrl =
-      network === 'mainnet'
-        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
-        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+    const suiClient = createFailoverSuiClient(network);
 
     type PoolFields = {
       balance?: string | { fields?: { value?: string }; value?: string };

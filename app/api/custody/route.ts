@@ -71,9 +71,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const { SuiClient } = await import('@mysten/sui/client');
-    const rpcUrl = (process.env.SUI_MAINNET_RPC || 'https://fullnode.mainnet.sui.io:443').trim();
-    const client = new SuiClient({ url: rpcUrl });
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+    const client = createFailoverSuiClient('mainnet');
     const { RwaCustodyAttestService } = await import('@/lib/services/sui/RwaCustodyAttestService');
     const svc = new RwaCustodyAttestService(client, packageId, registryId);
     const attestations = await svc.getAttestationsForWallet(wallet, { onlyValid });

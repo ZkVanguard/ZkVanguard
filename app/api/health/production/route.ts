@@ -23,6 +23,7 @@ import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { query } from '@/lib/db/postgres';
 import { envFlag } from '@/lib/utils/env-flag';
+import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,48 @@ interface Component {
 }
 
 const HEDGE_MIN_NAV_USD = Number(process.env.HEDGE_MIN_NAV_USD || 20);
+
+// Loud-alert dedupe. Process-scoped: cold starts re-fire, which is the
+// point — a persistent outage should page every ~hour, not every ~minute.
+const STALE_NAV_ALERT_INTERVAL_MS = 60 * 60 * 1000;
+const STALE_NAV_AGE_THRESHOLD_S = 30 * 60;
+const RPC_DOWN_ALERT_INTERVAL_MS = 30 * 60 * 1000;
+let lastStaleNavAlertAt = 0;
+let lastRpcDownAlertAt = 0;
+
+async function maybeAlertStaleNav(
+  navFreshness: { status: 'ok' | 'warn' | 'down'; ageSeconds?: number; navUsd?: number },
+): Promise<void> {
+  const age = navFreshness.ageSeconds ?? 0;
+  if (age < STALE_NAV_AGE_THRESHOLD_S) return;
+  const now = Date.now();
+  if (now - lastStaleNavAlertAt < STALE_NAV_ALERT_INTERVAL_MS) return;
+  lastStaleNavAlertAt = now;
+  const mins = Math.floor(age / 60);
+  try {
+    await notifyDiscord(
+      `NAV snapshot stale for **${mins} min** (NAV $${(navFreshness.navUsd ?? 0).toFixed(2)}). SUI cron may be failing — check /api/health/production.`,
+      'ERROR',
+      { ageSeconds: age, navUsd: navFreshness.navUsd },
+    );
+  } catch { /* notifyDiscord no-ops without webhook */ }
+}
+
+async function maybeAlertRpcDown(
+  suiRpc: { status: 'ok' | 'warn' | 'down'; error?: string; activeProvider?: string; rotationCount?: number },
+): Promise<void> {
+  if (suiRpc.status !== 'down') return;
+  const now = Date.now();
+  if (now - lastRpcDownAlertAt < RPC_DOWN_ALERT_INTERVAL_MS) return;
+  lastRpcDownAlertAt = now;
+  try {
+    await notifyDiscord(
+      `SUI RPC is **DOWN across all failover providers**. Last error: ${suiRpc.error ?? 'unknown'}. Rotations attempted: ${suiRpc.rotationCount ?? 0}.`,
+      'ERROR',
+      { activeProvider: suiRpc.activeProvider, rotationCount: suiRpc.rotationCount },
+    );
+  } catch { /* notifyDiscord no-ops without webhook */ }
+}
 
 async function checkDb(): Promise<Component> {
   const start = Date.now();
@@ -356,6 +399,17 @@ export async function GET(req: NextRequest) {
   if (overall !== 'ok') {
     logger.warn('[health/production] degraded', { overall, components });
   }
+
+  // Loud stale-NAV alert. When the NAV snapshot is > 30 min old the pool
+  // is flying blind — trader can't gate against real capital, dashboard
+  // is misleading, and (before the failover transport shipped) this was
+  // the class of silent outage that killed weeks of profit. Fires
+  // Discord ERROR once per hour per process; cold starts re-fire.
+  await maybeAlertStaleNav(navFreshness);
+  // Same treatment for suiRpc — a rotation is already alerted from
+  // inside the transport, but if RPC is DOWN entirely (all providers
+  // failed) the transport can't fire; catch it here.
+  await maybeAlertRpcDown(suiRpc);
 
   const httpStatus = overall === 'down' ? 503 : 200;
   return NextResponse.json(body, {

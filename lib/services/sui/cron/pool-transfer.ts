@@ -57,7 +57,7 @@ export async function returnUsdcToPool(
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
@@ -68,10 +68,7 @@ export async function returnUsdcToPool(
       return { success: false, error: 'Invalid admin key format' };
     }
 
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     const usdcType = SUI_USDC_COIN_TYPE[network];
     const amountRaw = Math.floor(amountUsdc * 1e6);
@@ -221,7 +218,7 @@ export async function transferUsdcFromPoolToAdmin(
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
@@ -232,10 +229,7 @@ export async function transferUsdcFromPoolToAdmin(
       return { success: false, error: 'Invalid SUI_POOL_ADMIN_KEY format' };
     }
 
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     const amountRaw = Math.floor(amountUsdc * 1e6); // USDC has 6 decimals on SUI
     const usdcType = SUI_USDC_COIN_TYPE[network];

@@ -135,12 +135,9 @@ export class BluefinAggregatorService {
       return this.suiClient;
     }
 
-    const { SuiClient, getFullnodeUrl } = await getSuiSdk();
-    const rpcUrl =
-      this.network === 'mainnet'
-        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
-        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
-    this.suiClient = new SuiClient({ url: rpcUrl });
+    const { createFailoverSuiClient, getFailoverStats } = await import('@/lib/services/sui/sui-failover-transport');
+    this.suiClient = createFailoverSuiClient(this.network);
+    const rpcUrl = getFailoverStats().activeUrl;
 
     // H3: Verify RPC is reachable before using it for swaps (with timeout)
     try {
@@ -871,7 +868,8 @@ export class BluefinAggregatorService {
     }
 
     try {
-      const { Ed25519Keypair, Transaction, SuiClient, getFullnodeUrl } = await getSuiSdk();
+      const { Ed25519Keypair, Transaction } = await getSuiSdk();
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
       // Derive keypair from env (supports suiprivkey bech32 or hex)
       let keypair: InstanceType<typeof Ed25519Keypair>;
@@ -891,12 +889,8 @@ export class BluefinAggregatorService {
       }
       const senderAddress = keypair.getPublicKey().toSuiAddress();
 
-      // Safety: check gas reserve before executing
-      const rpcUrl =
-        this.network === 'mainnet'
-          ? process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')
-          : process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet');
-      const suiClient = new SuiClient({ url: rpcUrl });
+      // Safety: check gas reserve before executing (failover-aware)
+      const suiClient = createFailoverSuiClient(this.network);
 
       const balance = await suiClient.getBalance({ owner: senderAddress });
       const balanceMist = BigInt(balance.totalBalance);
@@ -1431,18 +1425,15 @@ export class BluefinAggregatorService {
     }
 
     try {
-      const { Ed25519Keypair, SuiClient, getFullnodeUrl } = await getSuiSdk();
+      const { Ed25519Keypair } = await getSuiSdk();
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
       const keypair = adminKey.startsWith('suiprivkey')
         ? Ed25519Keypair.fromSecretKey(adminKey)
         : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
       const address = keypair.getPublicKey().toSuiAddress();
 
-      const rpcUrl =
-        this.network === 'mainnet'
-          ? process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')
-          : process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet');
-      const suiClient = new SuiClient({ url: rpcUrl });
+      const suiClient = createFailoverSuiClient(this.network);
 
       const balance = await suiClient.getBalance({ owner: address });
       const suiBalance = (Number(balance.totalBalance) / 1e9).toFixed(4);
