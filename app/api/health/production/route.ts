@@ -157,19 +157,33 @@ async function checkPolymarket(): Promise<Component> {
   }
 }
 
-async function checkSuiRpc(): Promise<Component> {
+async function checkSuiRpc(): Promise<Component & { activeProvider?: string; rotationCount?: number }> {
   const start = Date.now();
   try {
     const poolStateId = (process.env.NEXT_PUBLIC_SUI_MAINNET_USDC_POOL_STATE
       || process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE
       || '').trim();
     if (!poolStateId) return { status: 'warn', detail: 'pool state id not configured' };
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-    const rpcUrl = (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim();
-    const client = new SuiClient({ url: rpcUrl });
+    const { createFailoverSuiClient, getFailoverStats } = await import('@/lib/services/sui/sui-failover-transport');
+    const client = createFailoverSuiClient('mainnet');
     const obj = await client.getObject({ id: poolStateId, options: { showType: true } });
     if (!obj.data) return { status: 'down', detail: 'pool object not found' };
-    return { status: 'ok', latencyMs: Date.now() - start };
+    const stats = getFailoverStats();
+    // Any rotation in this Lambda's lifetime means the primary provider
+    // failed at least once — flag it as warn so the overall health status
+    // degrades and monitoring notices. Cold-start resets; a persistent
+    // primary outage keeps the warn sticky across successive invocations.
+    const status = stats.rotationCount > 0 ? 'warn' : 'ok';
+    const detail = stats.rotationCount > 0
+      ? `failover active — primary ${new URL(stats.lastRotationFromUrl ?? '').host} down, now on ${new URL(stats.activeUrl).host}`
+      : undefined;
+    return {
+      status,
+      latencyMs: Date.now() - start,
+      activeProvider: stats.activeUrl ? new URL(stats.activeUrl).host : undefined,
+      rotationCount: stats.rotationCount,
+      ...(detail ? { detail } : {}),
+    };
   } catch (e: any) {
     return { status: 'down', error: e?.message?.slice(0, 100) };
   }
@@ -198,9 +212,8 @@ async function checkBluefin(): Promise<Component & {
         || process.env.NEXT_PUBLIC_SUI_MAINNET_COMMUNITY_POOL_STATE
         || '').trim();
       if (poolStateId) {
-        const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
-        const rpcUrl = (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim();
-        const client = new SuiClient({ url: rpcUrl });
+        const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+        const client = createFailoverSuiClient('mainnet');
         const obj = await client.getObject({ id: poolStateId, options: { showContent: true } });
         type SuiContentFields = { hedge_state?: { fields?: { total_hedged_value?: string; active_hedges?: unknown[] } } };
         const fields = (obj.data?.content as { fields?: SuiContentFields } | null)?.fields;

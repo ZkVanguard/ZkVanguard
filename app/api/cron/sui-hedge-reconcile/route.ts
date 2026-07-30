@@ -124,12 +124,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     // 1. Read on-chain hedge state
     const poolObj = await suiClient.getObject({

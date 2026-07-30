@@ -98,7 +98,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CollectFee
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     let keypair: InstanceType<typeof Ed25519Keypair>;
     try {
@@ -115,10 +115,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CollectFee
       });
     }
 
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     // Pre-flight: confirm cron's hot key still owns the FeeManagerCap.
     // Once the cap is transferred to the MSafe multisig, the cron MUST stop

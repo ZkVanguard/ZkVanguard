@@ -738,7 +738,7 @@ export async function POST(request: NextRequest) {
 
       // Import what we need
       const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-      const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
       const { SUI_USDC_POOL_CONFIG } = await import('@/lib/types/sui-pool-types');
       const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
 
@@ -747,10 +747,7 @@ export async function POST(request: NextRequest) {
         : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
       const address = keypair.getPublicKey().toSuiAddress();
 
-      const rpcUrl = network === 'mainnet'
-        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-      const suiClient = new SuiClient({ url: rpcUrl });
+      const suiClient = createFailoverSuiClient(network);
 
       // Fetch current prices for replenishment value estimate
       const mds = getMarketDataService();

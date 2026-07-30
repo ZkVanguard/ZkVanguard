@@ -52,15 +52,12 @@ export async function attestExternalNav(
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     const keypair = adminKey.startsWith('suiprivkey')
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     // Read on-chain balance + hedge_state from the pool object so we
     // compute the external portion correctly. Cron's navUsdTotal already
@@ -192,15 +189,12 @@ export async function aiDrivenResetDailyHedge(
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     const keypair = adminKey.startsWith('suiprivkey')
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
-    const rpcUrl = network === 'mainnet'
-      ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet'))
-      : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet'));
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     // Pre-flight: confirm the cron's hot key still owns the AdminCap.
     // Once the cap is transferred to the MSafe multisig, the cron MUST stop
