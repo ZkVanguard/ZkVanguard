@@ -15,6 +15,7 @@
 import { logger } from '@/lib/utils/logger';
 import { errMsg } from '@/lib/utils/error-handler';
 import { setCronState, getCronStateOr } from '@/lib/db/cron-state';
+import { query } from '@/lib/db/postgres';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import {
   MultiAssetSignalService,
@@ -124,10 +125,14 @@ export async function runPolyDiscoverTick(): Promise<PolyDiscoverTickResult> {
       );
     }
 
+    // ponytail: cap at last 2000 slugs. 2026-07-31 audit found this blob had
+    // grown to 32,429 items / 1.2 MB — every read parsed the whole thing.
+    // 2000 is ~10 days at ~200 new markets/day, plenty of dedup memory.
+    const SEEN_SLUGS_CAP = 2000;
     const seenBroadAfter = Array.from(new Set([
       ...seenBroadSlugs,
       ...broad.filter(m => m.horizon !== '5min').map(m => m.slug),
-    ]));
+    ])).slice(-SEEN_SLUGS_CAP);
     await setCronState(CRON_KEY_SEEN_BROAD, seenBroadAfter).catch(() => {});
     await setCronState(CRON_KEY_LAST_BROAD_SUMMARY, {
       ts: Date.now(),
@@ -233,6 +238,21 @@ export async function runPolyDiscoverTick(): Promise<PolyDiscoverTickResult> {
     if (trackedButMissing.length > 0) {
       logger.warn('[PolyDiscover] tracked assets missing from current Polymarket window', {
         trackedButMissing,
+      });
+    }
+
+    // ponytail: prune stale poly-momentum:history rows. Each tick writes
+    // history for top-75 markets by volume; when a market ages out of top-75
+    // (resolves/expires) its row is orphaned. 2026-07-31 audit found 32k
+    // orphaned rows accumulated over months. 7-day window keeps the ring
+    // buffers relevant for currently-active markets.
+    try {
+      await query(
+        "DELETE FROM cron_state WHERE key LIKE 'poly-momentum:history:%' AND updated_at < now() - interval '7 days'",
+      );
+    } catch (pruneErr) {
+      logger.warn('[PolyDiscover] history prune failed (non-critical)', {
+        error: pruneErr instanceof Error ? pruneErr.message : String(pruneErr),
       });
     }
 

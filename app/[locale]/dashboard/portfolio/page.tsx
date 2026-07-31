@@ -281,7 +281,7 @@ export default function DashboardOverviewPage() {
             <StatCard
               label="Active hedges"
               value={String(data.totals.activeHedgeCount)}
-              sub="across all sources"
+              sub="≥ $1 notional, all sources"
               icon={Shield}
             />
           </div>

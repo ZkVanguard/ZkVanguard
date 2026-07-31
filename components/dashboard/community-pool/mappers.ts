@@ -12,29 +12,23 @@ type ApiData = Record<string, unknown>;
 const num = (v: unknown): number => parseFloat(String(v)) || 0;
 
 /**
- * Live 4-asset composition (market-value % + USDC bucket). Falls back to
- * "SUI 100%" only when the server didn't compute one and the pool is non-empty.
+ * Live 4-asset composition (market-value % + USDC bucket). Returns all-zeros
+ * when the server didn't compute one — was silently defaulting to "SUI 100%"
+ * regardless of actual holdings (audit 2026-07-31). Consumers can detect
+ * `sum(allocations) === 0` and render an "allocation unavailable" state.
  */
 export function normalizeAllocations(
   apiAlloc: Record<string, unknown> | undefined,
-  totalValueUSD: number,
+  _totalValueUSD: number,
 ): PoolAllocation {
   const a = apiAlloc || {};
-  const sum =
-    (Number(a.BTC) || 0) +
-    (Number(a.ETH) || 0) +
-    (Number(a.SUI) || 0) +
-    (Number(a.USDC) || 0) +
-    (Number(a.CRO) || 0);
-  return sum > 0
-    ? {
-        BTC: Number(a.BTC) || 0,
-        ETH: Number(a.ETH) || 0,
-        SUI: Number(a.SUI) || 0,
-        USDC: Number(a.USDC) || 0,
-        CRO: Number(a.CRO) || 0,
-      }
-    : { BTC: 0, ETH: 0, SUI: totalValueUSD > 0 ? 100 : 0, CRO: 0, USDC: 0 };
+  return {
+    BTC: Number(a.BTC) || 0,
+    ETH: Number(a.ETH) || 0,
+    SUI: Number(a.SUI) || 0,
+    USDC: Number(a.USDC) || 0,
+    CRO: Number(a.CRO) || 0,
+  };
 }
 
 function mapHedges(raw: unknown): PoolHedge[] | undefined {

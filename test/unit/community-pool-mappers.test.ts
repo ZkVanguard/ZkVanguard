@@ -14,11 +14,11 @@ describe('normalizeAllocations', () => {
     expect(normalizeAllocations({ BTC: 35, ETH: 30, SUI: 20, USDC: 15, CRO: 0 }, 100))
       .toEqual({ BTC: 35, ETH: 30, SUI: 20, USDC: 15, CRO: 0 });
   });
-  it('falls back to SUI 100% for a non-empty pool with no server composition', () => {
-    expect(normalizeAllocations(undefined, 48.69)).toEqual({ BTC: 0, ETH: 0, SUI: 100, CRO: 0, USDC: 0 });
-    expect(normalizeAllocations({}, 48.69)).toEqual({ BTC: 0, ETH: 0, SUI: 100, CRO: 0, USDC: 0 });
-  });
-  it('uses 0% SUI for an empty pool', () => {
+  it('returns all-zeros when the server did not compute an allocation', () => {
+    // 2026-07-31: was silently defaulting to SUI 100% regardless of actual
+    // holdings. Now returns zeros so consumers can render "unavailable" honestly.
+    expect(normalizeAllocations(undefined, 48.69)).toEqual({ BTC: 0, ETH: 0, SUI: 0, CRO: 0, USDC: 0 });
+    expect(normalizeAllocations({}, 48.69)).toEqual({ BTC: 0, ETH: 0, SUI: 0, CRO: 0, USDC: 0 });
     expect(normalizeAllocations({}, 0)).toEqual({ BTC: 0, ETH: 0, SUI: 0, CRO: 0, USDC: 0 });
   });
 });

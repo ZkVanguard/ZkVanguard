@@ -17,6 +17,45 @@ function formatStaleAge(seconds: number): string {
   return `${Math.round(hours / 24)}d`;
 }
 
+type MetricSize = 'mobile-hero' | 'mobile-strip' | 'desktop';
+
+const SIZE_CLASS: Record<MetricSize, { value: string; label: string; wrapper: string }> = {
+  'mobile-hero': {
+    value: 'text-lg font-bold tabular-nums break-all',
+    label: 'text-[11px] mt-0.5 line-clamp-2 leading-tight',
+    wrapper: 'text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3',
+  },
+  'mobile-strip': {
+    value: 'text-xs font-semibold tabular-nums break-all',
+    label: 'text-[10px] leading-tight truncate',
+    wrapper: 'text-center min-w-0',
+  },
+  desktop: {
+    value: 'text-xl md:text-2xl font-bold tabular-nums break-all',
+    label: 'text-xs mt-0.5 line-clamp-2 leading-tight',
+    wrapper: 'text-center min-w-0',
+  },
+};
+
+interface MetricProps {
+  value: React.ReactNode;
+  label: React.ReactNode;
+  size: MetricSize;
+  valueColorClass?: string;
+  chip?: React.ReactNode;
+}
+
+function Metric({ value, label, size, valueColorClass, chip }: MetricProps) {
+  const cls = SIZE_CLASS[size];
+  return (
+    <div className={cls.wrapper}>
+      <p className={`${cls.value} ${valueColorClass ?? 'text-gray-900 dark:text-white'}`}>{value}</p>
+      <p className={`${cls.label} text-gray-500 dark:text-gray-400`}>{label}</p>
+      {chip}
+    </div>
+  );
+}
+
 export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: PoolStatsProps) {
   const isSui = selectedChain === 'sui';
   const isStale = Boolean(poolData.stale) && isSui;
@@ -26,42 +65,27 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
 
   const totalValueDisplay = useMemo(() => {
     if (isSui) {
-      // USDC pool: display in USD
       const totalUsdc = Number(poolData.totalValueUSD) || Number(poolData.totalShares) || 0;
       return formatUSD(totalUsdc);
     }
     return formatUSD(poolData.totalValueUSD);
   }, [isSui, poolData.totalValueUSD, poolData.totalShares]);
 
-  const totalValueSubtext = useMemo(() => {
-    if (isSui) return 'Total Pool Value (USDC)';
-    return 'Total Value';
-  }, [isSui]);
+  const totalValueSubtext = isSui ? 'Total Pool Value (USDC)' : 'Total Value';
 
   const sharePriceDisplay = useMemo(() => {
-    // Both EVM and SUI pools: show the live computed share price
-    // (NAV / totalShares). For SUI USDC pools the value starts at $1.00
-    // (1 share = 1 USDC at inception) and appreciates as the AI manages
-    // BTC/ETH/SUI allocations.
     const price = Number(poolData.sharePrice) || (isSui ? 1 : 0);
     return `$${price.toFixed(4)}`;
   }, [isSui, poolData.sharePrice]);
 
-  const sharePriceSubtext = useMemo(() => {
-    if (isSui) return 'Current Share Price (USDC at inception)';
-    return 'Share Price';
-  }, [isSui]);
+  const sharePriceSubtext = isSui ? 'Current Share Price (USDC at inception)' : 'Share Price';
 
-  // SUI USDC pool profit metrics. Inception share price = $1.00 (1 share = 1 USDC),
-  // so total return per share = sharePrice − 1. Pool-level $ profit = NAV − net
-  // capital deposited (lifetime deposits − withdrawals).
   const profit = useMemo(() => {
     if (!isSui) return null;
     const sharePrice = Number(poolData.sharePrice) || 1;
     const returnPct = (sharePrice - 1) * 100;
     const nav = Number(poolData.totalValueUSD) || 0;
     const netCapital = (Number(poolData.totalDeposited) || 0) - (Number(poolData.totalWithdrawn) || 0);
-    // Only meaningful once capital has actually been deposited.
     const profitUsd = netCapital > 0 ? nav - netCapital : null;
     const ath = Number(poolData.allTimeHighNav) || 0;
     const offAthPct = ath > 0 ? (sharePrice / ath - 1) * 100 : null;
@@ -73,8 +97,21 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
   const pnlColor = (v: number) =>
     v >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 
-  // Always-visible ATH drawdown chip. Severity by depth so a -50% pool doesn't
-  // look the same as -1%. Only rendered when off peak (offAthPct < 0).
+  // Single stale chip used on both breakpoints — one wording ("snapshot · Xh
+  // old"), one tooltip. Was two different phrasings pre-2026-07-31 refactor.
+  const staleChip = useMemo(() => {
+    if (!isStale) return null;
+    return (
+      <span
+        className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[10px] font-medium"
+        title="Live SUI RPC unavailable — showing last recorded on-chain snapshot from DB. Pool is unaffected; RPC-level issue."
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+        {staleAgeLabel ? `snapshot · ${staleAgeLabel} old` : 'snapshot'}
+      </span>
+    );
+  }, [isStale, staleAgeLabel]);
+
   const athChip = useMemo(() => {
     if (!isSui || !profit || profit.offAthPct == null || profit.offAthPct >= 0) return null;
     const dd = profit.offAthPct;
@@ -95,109 +132,87 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
     );
   }, [isSui, profit, poolData.allTimeHighNav]);
 
-  // Mobile: 2 hero cards + compact 3-metric strip below.
-  // Desktop: full grid (3 or 5 cols depending on chain).
   return (
     <div className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-w-0">
       {/* Mobile hero row */}
       <div className="grid grid-cols-2 gap-2 sm:hidden">
-        <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
-          <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
-          {isStale && (
-            <span
-              className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-medium"
-              title="Live RPC unavailable — showing last recorded on-chain snapshot"
-            >
-              <span className="w-1 h-1 rounded-full bg-amber-500" />
-              {staleAgeLabel ? `stale · ${staleAgeLabel}` : 'stale'}
-            </span>
-          )}
-        </div>
+        <Metric
+          size="mobile-hero"
+          value={totalValueDisplay}
+          label={totalValueSubtext}
+          chip={staleChip}
+        />
         {isSui && profit ? (
-          <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
-            <p className={`text-lg font-bold tabular-nums break-all ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Return</p>
-            {athChip}
-          </div>
+          <Metric
+            size="mobile-hero"
+            value={signedPct(profit.returnPct)}
+            label="Total Return"
+            valueColorClass={pnlColor(profit.returnPct)}
+            chip={athChip}
+          />
         ) : (
-          <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
-            <p className="text-lg font-bold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">Share Price</p>
-          </div>
+          <Metric size="mobile-hero" value={sharePriceDisplay} label="Share Price" />
         )}
       </div>
 
       {/* Mobile compact secondary strip */}
       <div className="grid grid-cols-3 gap-2 mt-2 sm:hidden">
         {isSui && profit && profit.profitUsd !== null && (
-          <div className="text-center min-w-0">
-            <p className={`text-xs font-semibold tabular-nums break-all ${pnlColor(profit.profitUsd)}`}>{signedUsd(profit.profitUsd)}</p>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Profit</p>
-          </div>
+          <Metric
+            size="mobile-strip"
+            value={signedUsd(profit.profitUsd)}
+            label="Profit"
+            valueColorClass={pnlColor(profit.profitUsd)}
+          />
         )}
         {isSui && profit && (
-          <div className="text-center min-w-0">
-            <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Share Price</p>
-          </div>
+          <Metric size="mobile-strip" value={sharePriceDisplay} label="Share Price" />
         )}
-        <div className="text-center min-w-0">
-          <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums">{Number(poolData.memberCount).toLocaleString()}</p>
-          <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">{poolData.memberCount === 1 ? 'Member' : 'Members'}</p>
-        </div>
+        <Metric
+          size="mobile-strip"
+          value={Number(poolData.memberCount).toLocaleString()}
+          label={poolData.memberCount === 1 ? 'Member' : 'Members'}
+        />
         {(!isSui || !profit) && (
-          <div className="text-center min-w-0">
-            <p className="text-xs font-semibold text-gray-900 dark:text-white tabular-nums break-all">
-              {(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </p>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight truncate">Shares</p>
-          </div>
+          <Metric
+            size="mobile-strip"
+            value={(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            label="Shares"
+          />
         )}
       </div>
 
-      {/* Desktop grid — full detail from sm+ */}
+      {/* Desktop grid */}
       <div className={`hidden sm:grid gap-3 sm:gap-4 ${isSui ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'}`}>
-        <div className="text-center min-w-0">
-          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{totalValueDisplay}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{totalValueSubtext}</p>
-          {isStale && (
-            <span
-              className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[10px] font-medium"
-              title="Live SUI RPC returned $0 — showing the last recorded on-chain snapshot from the DB. Pool is unaffected; this is an RPC-level issue."
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              {staleAgeLabel ? `snapshot · ${staleAgeLabel} old` : 'snapshot'}
-            </span>
-          )}
-        </div>
+        <Metric size="desktop" value={totalValueDisplay} label={totalValueSubtext} chip={staleChip} />
         {isSui && profit && (
-          <div className="text-center min-w-0">
-            <p className={`text-xl md:text-2xl font-bold tabular-nums ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Return</p>
-            {athChip}
-          </div>
+          <Metric
+            size="desktop"
+            value={signedPct(profit.returnPct)}
+            label="Total Return"
+            valueColorClass={pnlColor(profit.returnPct)}
+            chip={athChip}
+          />
         )}
         {isSui && profit && profit.profitUsd !== null && (
-          <div className="text-center min-w-0">
-            <p className={`text-xl md:text-2xl font-bold tabular-nums break-all ${pnlColor(profit.profitUsd)}`}>{signedUsd(profit.profitUsd)}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Profit (USDC)</p>
-          </div>
+          <Metric
+            size="desktop"
+            value={signedUsd(profit.profitUsd)}
+            label="Total Profit (USDC)"
+            valueColorClass={pnlColor(profit.profitUsd)}
+          />
         )}
-        <div className="text-center min-w-0">
-          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{Number(poolData.memberCount).toLocaleString()}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">{poolData.memberCount === 1 ? 'Pool Member' : 'Pool Members'}</p>
-        </div>
-        <div className="text-center min-w-0">
-          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">{sharePriceDisplay}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2 leading-tight">{sharePriceSubtext}</p>
-        </div>
-        <div className="text-center min-w-0">
-          <p className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white tabular-nums break-all">
-            {(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Shares</p>
-        </div>
+        <Metric
+          size="desktop"
+          value={Number(poolData.memberCount).toLocaleString()}
+          label={poolData.memberCount === 1 ? 'Pool Member' : 'Pool Members'}
+        />
+        <Metric size="desktop" value={sharePriceDisplay} label={sharePriceSubtext} />
+        <Metric
+          size="desktop"
+          value={(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+          label="Total Shares"
+        />
       </div>
     </div>
   );
