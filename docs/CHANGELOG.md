@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-31 — Full autonomy on, DB slimmed, monster methods cracked
+
+### Autonomy — defense gates now default ON
+16-day trader idle streak (2026-07-15 → 2026-07-31) exposed several gaps between "gates exist" and "gates fire". Fixed end-to-end and verified with a real SOL trade opening + closing on venue.
+
+- **envFlagOnByDefault helper** (`lib/utils/env-flag.ts`) — new companion to `envFlag`; returns true unless env is explicitly `0|false|no|off`. Applied to `PORTFOLIO_DRIVER_EXECUTE`, `STALE_HEDGE_AUTO_CLOSE`, `ALERT_RESPONSE_EXECUTE` at every execution + observability site (health/production, platform/risk-overview, admin/config-manifest). `ALERT_RESPONSE_EXECUTE_HALT` stays default OFF per rollout order.
+- **Trader exposure cap decoupled** (`app/api/cron/polymarket-edge-trader/route.ts:1315`) — was counting ALL BlueFin positions (including SUI pool dual-leg) toward its own cap. Now measures only the trader's own contribution via KEY_ACTIVE re-read. Pool positions remain visible to BlueFin liquidation math but no longer freeze the trader.
+- **Trader exposure cap raised** — default 30 → 60% (`lib/services/trading/trade-quality-gates.ts`) + prod env `TRADE_MAX_TOTAL_NOTIONAL_PCT=250`. Trader leverage raised to `POLYMARKET_EDGE_LEVERAGE=5` (max cap).
+- **Autohedge phantom-zero halt guard** (`lib/services/sui/cron/step-8-auto-hedge.ts:101`) — the drawdown-halt no longer trips on `navUsd <= 0`. 2026-07-30 incident: dead SUI public RPC → `computeUsdcNav` returned 0 → halt logic saw "100% below peak $36.27" and paused autohedge for the full UTC day.
+- **Phantom-rate detector excludes reconstructed_*** (`app/api/health/production/route.ts` + `alert-response-loop/route.ts`) — `bluefin-db-reconcile` adopts real BlueFin fills with `realized_pnl=0` (legitimately — no fill data at close time). Was flagging real trades as phantom. Now filters `order_id NOT LIKE 'reconstructed_%'`.
+
+### Dashboard — honest UI
+- **Always-visible ATH drawdown chip** (`components/dashboard/community-pool/PoolStats.tsx`) — amber ≤-5%, red ≤-15%. Was hidden in 10px subtext on desktop only; mobile users never saw drawdown at all.
+- **Normalized stale chip wording** across mobile + desktop breakpoints (was two different strings).
+- **Deduplicated card layouts** — extracted `Metric` component; mobile-hero, mobile-strip, desktop grid all render through it.
+- **Removed silent SUI 100% fallback** (`components/dashboard/community-pool/mappers.ts`) — was lying when the server didn't return allocations. Now returns all-zeros so callers can render "unavailable" honestly.
+- **Honest hedge-count sub-label** — "Active hedges" now says `≥ $1 notional, all sources` (was silently excluding micro-hedges without saying so).
+
+### DB — cleanup + auto-prune
+Audit surfaced 32,259 orphaned rows in `cron_state` (13 MB table, mostly stale `poly-momentum:history:*` entries from markets that resolved months ago). One-shot cleanup + code to prevent recurrence.
+
+- **poly-momentum:history:* rows older than 7 days auto-pruned** each poly-discover tick (`lib/services/market-data/poly-discover-tick.ts`). Cleaned 27,399 stale rows one-shot.
+- **poly-discover:seenBroadSlugs capped at 2000 items** — was unbounded (1.2 MB blob parsed on every discover tick). Cap = ~10 days of new-market memory.
+- **`cron_state` table size 13 MB → 12 MB** post-vacuum (heap freed for reuse).
+
+### Refactor — monster methods cracked
+Extractions preserve behavior 1:1; typecheck clean, bulletproof drawdown test stayed 10/10 green throughout.
+
+- **BluefinService** 1632 → 975 LOC (-40%). `openHedge` (435 LOC method) → `bluefin/open-hedge-impl.ts` + `closeHedge` (273 LOC method) → `bluefin/close-hedge-impl.ts`. Both take a `Context` bundle matching the pattern from `bluefin/dry-run-hedge.ts`.
+- **llm-provider** 1223 → 1074 LOC. `generateFallbackResponse` (161-LOC keyword switch → canned responses) → `lib/ai/fallback-responses.ts`.
+- **polymarket-edge-trader** 1680 → 1638 LOC. `riskGate` lifted to `lib/services/trading/trade-quality-gates.ts` (natural home alongside `exposureCap`, `fundingEdge`, `regretBasedHalt`); now pure — takes leverage/minQty as args.
+
+### Skipped (audit was wrong)
+- **HedgingAgent** — my ponytail-audit reported "839-LOC method" but that was a *range* between two grep markers, not a single function. Actual: 10 methods averaging 100 LOC each. Splitting = theater.
+- **AutoHedgingService** — audit reported "assessPortfolioRisk 757 LOC"; actual is 101 LOC. Biggest is `assessCommunityPoolRisk` at 332 LOC (one coherent per-chain assessment — long but linear).
+
+### Deferred
+- **useCommunityPool 627-LOC handleDeposit callback** — genuine monster, but React state + chain-switching + permit-signing across 4 wallets. Needs a dedicated PR with manual UI testing.
+
+### Deploys this session
+- `6217104c` defense stack + gates default ON
+- `4c4dd5e3` trader exposure cap decoupled
+- `6148ab9f` dashboard honest allocations + Metric + DB prune
+- `b947a06b` phantom-rate false positive fix
+- `42cc5173` riskGate extraction
+- `e2e5bd4d` BluefinService open/close extraction
+- `67ae070e` llm-provider fallback extraction
+
 ## [0.3.0] - 2026-07-15
 
 ### Added — 8-gate autonomy defense system
