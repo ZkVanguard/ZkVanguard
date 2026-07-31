@@ -1308,20 +1308,30 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       }
     }
 
-    // Exposure cap (2026-07-15): reject when total notional would exceed
-    // TRADE_MAX_TOTAL_NOTIONAL_PCT of the trader's effective capital
-    // (free + sum(position margins)). Prevents concentration bleed like
-    // the 2026-07-15 case where a single ETH SHORT was 48% of NAV.
+    // Exposure cap (2026-07-15): reject when TRADER-OWNED notional would
+    // exceed TRADE_MAX_TOTAL_NOTIONAL_PCT of shared BlueFin capital.
+    // Counts only the trader's own position (tracked via KEY_ACTIVE) —
+    // pool dual-leg positions live on the same account but have their own
+    // sizing logic and don't consume trader headroom. Prevents the
+    // 2026-07-15 concentration bleed (single ETH SHORT 48% of NAV) without
+    // letting pool positions permanently freeze the trader (2026-07-15 →
+    // 2026-07-31 idle streak: pool held $18 dual-leg, old cap counted it
+    // against the trader, 60% still wasn't enough at 101% of $20 NAV).
     if ((process.env.TRADER_EXPOSURE_CAP_DISABLE ?? '') !== '1') {
       try {
-        const currentTotalNotional = positionsPre.reduce(
-          (s, p) => s + Math.abs(Number(p.size ?? 0) * Number((p as { markPrice?: number }).markPrice ?? refPrice ?? 0)),
-          0,
-        );
+        // At this point in the pipeline `active` has been narrowed to null
+        // (open-new path only reached when no in-flight trade). Re-read from
+        // cron_state as belt-and-suspenders — if a future refactor changes
+        // the narrowing invariant we still count trader's own contribution
+        // correctly, not zero.
+        const activeNow = await getCronStateOr<ActiveTrade | null>(KEY_ACTIVE, null);
+        const traderOwnNotional = activeNow
+          ? Math.abs(Number(activeNow.size) * Number(activeNow.entryPrice))
+          : 0;
         const traderNav = free + positionsPre.reduce((s, p) => s + Number(p.margin ?? 0), 0);
         const capDecision = exposureCap({
           navUsd: traderNav,
-          currentTotalNotionalUsd: currentTotalNotional,
+          currentTotalNotionalUsd: traderOwnNotional,
           proposedTradeNotionalUsd: notionalUsd,
         });
         if (!capDecision.ok) {
