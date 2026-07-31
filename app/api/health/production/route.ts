@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/utils/logger';
 import { readLimiter } from '@/lib/security/rate-limiter';
 import { query } from '@/lib/db/postgres';
-import { envFlag } from '@/lib/utils/env-flag';
+import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
@@ -386,9 +386,9 @@ export async function GET(req: NextRequest) {
     // in prod?" without hitting Vercel env dashboard. INFO/TRADE logs
     // don't ring-buffer, so DB inspection can't tell. This does.
     gates: {
-      portfolioDriverExecute: envFlag('PORTFOLIO_DRIVER_EXECUTE'),
-      staleHedgeAutoClose: envFlag('STALE_HEDGE_AUTO_CLOSE'),
-      alertResponseExecute: envFlag('ALERT_RESPONSE_EXECUTE'),
+      portfolioDriverExecute: envFlagOnByDefault('PORTFOLIO_DRIVER_EXECUTE'),
+      staleHedgeAutoClose: envFlagOnByDefault('STALE_HEDGE_AUTO_CLOSE'),
+      alertResponseExecute: envFlagOnByDefault('ALERT_RESPONSE_EXECUTE'),
       alertResponseExecuteHalt: envFlag('ALERT_RESPONSE_EXECUTE_HALT'),
       regretTrackerDisable: envFlag('REGRET_TRACKER_DISABLE'),
       suiAutoHedgeDisable: envFlag('SUI_AUTO_HEDGE_DISABLE'),

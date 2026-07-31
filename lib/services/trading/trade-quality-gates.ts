@@ -79,7 +79,11 @@ export function exposureCap(args: {
   maxPct?: number;
 }): ExposureCapResult {
   const envMax = Number(process.env.TRADE_MAX_TOTAL_NOTIONAL_PCT);
-  const maxPct = args.maxPct ?? (Number.isFinite(envMax) ? envMax : 30);
+  // ponytail: default 60 (was 30). Full-autonomy stance: SUI pool's dual-leg
+  // hedge shares the BlueFin account; at 30 a single $18 pool hedge blocks
+  // the trader entirely. 60 lets both engines coexist; kill via env if
+  // concentration bleeds again.
+  const maxPct = args.maxPct ?? (Number.isFinite(envMax) ? envMax : 60);
   const postTotal = args.currentTotalNotionalUsd + args.proposedTradeNotionalUsd;
   const postPct = args.navUsd > 0 ? (postTotal / args.navUsd) * 100 : 0;
   const ok = postPct <= maxPct;

@@ -26,7 +26,7 @@ import { tryClaimCronRun, setCronState, setCronHalt, CronKeys } from '@/lib/db/c
 import { logger } from '@/lib/utils/logger';
 import { notifyDiscord, readAlertLog } from '@/lib/utils/discord-notify';
 import { evaluateAutoResponse } from '@/lib/services/alerting/alert-response-loop';
-import { envFlag } from '@/lib/utils/env-flag';
+import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -103,7 +103,7 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: true, responses: 0 });
     }
 
-    const execute = envFlag('ALERT_RESPONSE_EXECUTE');
+    const execute = envFlagOnByDefault('ALERT_RESPONSE_EXECUTE');
     logger.warn('[AlertResponseLoop] auto-response(s) fired', {
       execute, count: responses.length, responses,
     });

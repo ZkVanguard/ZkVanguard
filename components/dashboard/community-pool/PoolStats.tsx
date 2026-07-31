@@ -73,6 +73,28 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
   const pnlColor = (v: number) =>
     v >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 
+  // Always-visible ATH drawdown chip. Severity by depth so a -50% pool doesn't
+  // look the same as -1%. Only rendered when off peak (offAthPct < 0).
+  const athChip = useMemo(() => {
+    if (!isSui || !profit || profit.offAthPct == null || profit.offAthPct >= 0) return null;
+    const dd = profit.offAthPct;
+    const tone =
+      dd <= -15
+        ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
+        : dd <= -5
+          ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
+          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300';
+    const ath = Number(poolData.allTimeHighNav) || 0;
+    return (
+      <span
+        className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${tone}`}
+        title={`Currently ${dd.toFixed(2)}% below ATH share price of $${ath.toFixed(4)}`}
+      >
+        {dd.toFixed(1)}% off ATH
+      </span>
+    );
+  }, [isSui, profit, poolData.allTimeHighNav]);
+
   // Mobile: 2 hero cards + compact 3-metric strip below.
   // Desktop: full grid (3 or 5 cols depending on chain).
   return (
@@ -96,6 +118,7 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
           <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
             <p className={`text-lg font-bold tabular-nums break-all ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Return</p>
+            {athChip}
           </div>
         ) : (
           <div className="text-center min-w-0 rounded-2xl bg-gray-50 dark:bg-gray-700/40 p-3">
@@ -151,14 +174,8 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
         {isSui && profit && (
           <div className="text-center min-w-0">
             <p className={`text-xl md:text-2xl font-bold tabular-nums ${pnlColor(profit.returnPct)}`}>{signedPct(profit.returnPct)}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">
-              Total Return
-              {profit.offAthPct !== null && profit.offAthPct < -0.01 && (
-                <span className="block text-[10px] text-gray-400 dark:text-gray-500">
-                  {profit.offAthPct.toFixed(1)}% off ATH
-                </span>
-              )}
-            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Total Return</p>
+            {athChip}
           </div>
         )}
         {isSui && profit && profit.profitUsd !== null && (

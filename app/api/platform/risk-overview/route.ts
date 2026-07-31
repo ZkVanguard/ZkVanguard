@@ -395,7 +395,7 @@ async function getDefenseSection(): Promise<RiskOverviewResponse['defense']> {
     dustFlagsCount: 0, activeHaltsCount: 0, integrityDriftCount: 0,
   };
   try {
-    const [{ envFlag }, { getCronStateByPrefix }, { getActiveHedges }, { findIntegrityViolations }] = await Promise.all([
+    const [{ envFlag, envFlagOnByDefault }, { getCronStateByPrefix }, { getActiveHedges }, { findIntegrityViolations }] = await Promise.all([
       import('@/lib/utils/env-flag'),
       import('@/lib/db/cron-state'),
       import('@/lib/db/hedges'),
@@ -419,9 +419,9 @@ async function getDefenseSection(): Promise<RiskOverviewResponse['defense']> {
     ];
     return {
       gates: {
-        portfolioDriverExecute: envFlag('PORTFOLIO_DRIVER_EXECUTE'),
-        staleHedgeAutoClose: envFlag('STALE_HEDGE_AUTO_CLOSE'),
-        alertResponseExecute: envFlag('ALERT_RESPONSE_EXECUTE'),
+        portfolioDriverExecute: envFlagOnByDefault('PORTFOLIO_DRIVER_EXECUTE'),
+        staleHedgeAutoClose: envFlagOnByDefault('STALE_HEDGE_AUTO_CLOSE'),
+        alertResponseExecute: envFlagOnByDefault('ALERT_RESPONSE_EXECUTE'),
         alertResponseExecuteHalt: envFlag('ALERT_RESPONSE_EXECUTE_HALT'),
         profitLockDisable: envFlag('PROFIT_LOCK_DISABLE'),
         suiAutoHedgeDisable: envFlag('SUI_AUTO_HEDGE_DISABLE'),

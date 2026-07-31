@@ -21,7 +21,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyCronRequest } from '@/lib/qstash';
-import { envFlag } from '@/lib/utils/env-flag';
+import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
 import {
   SUI_STATS_TTL_MS, SUI_MEMBER_TTL_MS, SUI_MEMBERS_TTL_MS,
   SUI_RPC_TIMEOUT_MS, SUI_RPC_MAX_RETRIES, suiRpcCircuitBreaker,
@@ -55,9 +55,9 @@ export async function GET(req: NextRequest) {
 
     // v0.3.0 defense gates (envFlag-parsed)
     gates: {
-      portfolioDriverExecute: envFlag('PORTFOLIO_DRIVER_EXECUTE'),
-      staleHedgeAutoClose: envFlag('STALE_HEDGE_AUTO_CLOSE'),
-      alertResponseExecute: envFlag('ALERT_RESPONSE_EXECUTE'),
+      portfolioDriverExecute: envFlagOnByDefault('PORTFOLIO_DRIVER_EXECUTE'),
+      staleHedgeAutoClose: envFlagOnByDefault('STALE_HEDGE_AUTO_CLOSE'),
+      alertResponseExecute: envFlagOnByDefault('ALERT_RESPONSE_EXECUTE'),
       alertResponseExecuteHalt: envFlag('ALERT_RESPONSE_EXECUTE_HALT'),
       regretTrackerDisable: envFlag('REGRET_TRACKER_DISABLE'),
       suiAutoHedgeDisable: envFlag('SUI_AUTO_HEDGE_DISABLE'),
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     staleHedge: {
       ageDays: envNum('STALE_HEDGE_AGE_DAYS', 7),
       minFlips: envNum('STALE_HEDGE_MIN_FLIPS', 2),
-      autoClose: envFlag('STALE_HEDGE_AUTO_CLOSE'),
+      autoClose: envFlagOnByDefault('STALE_HEDGE_AUTO_CLOSE'),
     },
 
     // SUI RPC infrastructure

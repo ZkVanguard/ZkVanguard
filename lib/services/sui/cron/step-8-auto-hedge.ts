@@ -96,6 +96,12 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
     if (existingHalt) {
       drawdownHalted = true;
       logger.warn('[SUI Cron] Auto-hedge halt active', { until: new Date(existingHalt.untilMs).toISOString(), reason: existingHalt.reason });
+    } else if (navUsd <= 0) {
+      // ponytail: navUsd=0 is an oracle/RPC read failure, not a real 100%
+      // drawdown (2026-07-30 incident: SUI public RPC died → navUsd came in
+      // as 0 → halt tripped for the whole UTC day). Skip the check and log
+      // loudly so bad reads don't disappear silently.
+      logger.warn('[SUI Cron] Drawdown halt SKIPPED — navUsd non-positive (oracle/RPC read failure suspected)', { navUsd });
     } else {
       const peakNav = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
       if (peakNav > 0 && navUsd < peakNav) {
