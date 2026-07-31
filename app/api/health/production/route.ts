@@ -129,11 +129,17 @@ async function checkPhantomRate(): Promise<Component & { ratePct?: number; total
     //      ANY in-flight phantom should trip the trader halt.
     const [closedRow, openRow] = await Promise.all([
       query<{ total: string; phantoms: string }>(
+        // ponytail: exclude reconstructed_* orders. bluefin-db-reconcile writes
+        // these when it adopts real BlueFin trades the trader/pool cron didn't
+        // register — realized_pnl is legitimately 0 because reconciler lacks
+        // fill data at close time. NOT phantom fills. 2026-07-31 incident:
+        // 1 real SOL trade tripped 100% phantom rate + status=down.
         `SELECT COUNT(*)::text as total,
                 SUM(CASE WHEN COALESCE(realized_pnl, 0) = 0 THEN 1 ELSE 0 END)::text as phantoms
          FROM hedges
          WHERE chain='sui' AND status='closed' AND notional_value >= 1
-           AND created_at > NOW() - INTERVAL '1 hour'`,
+           AND created_at > NOW() - INTERVAL '1 hour'
+           AND (order_id IS NULL OR order_id NOT LIKE 'reconstructed_%')`,
       ),
       query<{ open_phantoms: string }>(
         `SELECT COUNT(*)::text as open_phantoms

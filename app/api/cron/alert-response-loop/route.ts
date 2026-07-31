@@ -63,11 +63,15 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       const { query } = await import('@/lib/db/postgres');
       const [closedRow, openRow] = await Promise.all([
         query<{ total: string; phantoms: string }>(
+          // Mirror health/production checkPhantomRate: reconstructed_* orders
+          // are real trades adopted by bluefin-db-reconcile with legit $0
+          // realized_pnl. Not phantom fills.
           `SELECT COUNT(*)::text as total,
                   SUM(CASE WHEN COALESCE(realized_pnl, 0) = 0 THEN 1 ELSE 0 END)::text as phantoms
            FROM hedges
            WHERE chain='sui' AND status='closed' AND notional_value >= 1
-             AND created_at > NOW() - INTERVAL '1 hour'`
+             AND created_at > NOW() - INTERVAL '1 hour'
+             AND (order_id IS NULL OR order_id NOT LIKE 'reconstructed_%')`
         ),
         query<{ open_phantoms: string }>(
           `SELECT COUNT(*)::text as open_phantoms
