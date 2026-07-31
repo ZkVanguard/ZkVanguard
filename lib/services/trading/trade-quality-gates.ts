@@ -132,3 +132,43 @@ export function regretBasedHalt(args: {
       : `regret ${args.regretScore.toFixed(3)} ≥ ${threshold} — trader active`,
   };
 }
+
+/**
+ * In-process risk gate for polymarket-edge-trader — mirrors RiskAgent's
+ * invariants without needing an LLM round-trip on the cron hot-path.
+ * Refusing here is conservative:
+ *   • leverage ≤ 5
+ *   • notional ≤ POLYMARKET_EDGE_RISK_GATE_PCT (default 99%) of free × leverage
+ *   • size ≥ minQty
+ *   • refPrice > 0
+ *
+ * Kept pure — pass leverage/minQty as args, no import-time coupling to
+ * trader route constants. Env fallback preserved for POLYMARKET_EDGE_RISK_GATE_PCT.
+ */
+export function riskGate(args: {
+  leverage: number;
+  minQty: number;
+  sizeQty: number;
+  notionalUsd: number;
+  free: number;
+  refPrice: number;
+}): { ok: true } | { ok: false; reason: string } {
+  if (args.leverage > 5) return { ok: false, reason: `leverage ${args.leverage} > 5x cap` };
+  if (args.sizeQty < args.minQty) {
+    return { ok: false, reason: `size ${args.sizeQty} < ${args.minQty}` };
+  }
+  if (args.refPrice <= 0) return { ok: false, reason: 'no ref price' };
+  // Notional vs free collateral × leverage. Greedy mode 2026-07-14: cap
+  // 50% → 90% → 0.99 (env). ETH minQty at $14 free needs $42 notional =
+  // ~100% of $42 capacity — 90% cap blocks. 0.99 lets ETH clear; trailing
+  // stop bounds any adverse move regardless.
+  const maxNotional = args.free * args.leverage;
+  const notionalCapPct = Number(process.env.POLYMARKET_EDGE_RISK_GATE_PCT || 0.99);
+  if (args.notionalUsd > maxNotional * notionalCapPct) {
+    return {
+      ok: false,
+      reason: `notional $${args.notionalUsd.toFixed(2)} > ${(notionalCapPct * 100).toFixed(0)}% of capacity $${maxNotional.toFixed(2)}`,
+    };
+  }
+  return { ok: true };
+}

@@ -68,7 +68,7 @@ import { getCronStateOr, setCronState, CronKeys } from '@/lib/db/cron-state';
 // Previously loaded via 8 await import() sites; tree-sitter drops those.
 import { query } from '@/lib/db/postgres';
 import { computeSizeMultiplier, computeRegretScore } from '@/lib/services/ai/regret-tracker';
-import { regretBasedHalt, fundingEdge, exposureCap } from '@/lib/services/trading/trade-quality-gates';
+import { regretBasedHalt, fundingEdge, exposureCap, riskGate } from '@/lib/services/trading/trade-quality-gates';
 import { checkBeforeTrade, completeTrade, getPriceAlertedSymbols } from '@/lib/services/agents/agent-trade-guard';
 import {
   SUPPORTED_ASSETS,
@@ -299,47 +299,6 @@ function isActionable(rec: AggregatedPrediction['recommendation']): boolean {
 
 function utcDayKey(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
-}
-
-/**
- * In-process risk gate (mirrors RiskAgent's invariants without needing
- * an LLM round-trip on the cron hot-path). Refusing here is conservative:
- *   • leverage ≤ 5
- *   • notional ≤ 10% of free collateral × leverage
- *   • size > min step
- *   • symbol in supported set
- *   • not entering with stale market data (md.price within ±10% of last 24h)
- */
-function riskGate(args: {
-  symbol: string;
-  asset: SupportedAsset;
-  side: 'LONG' | 'SHORT';
-  sizeQty: number;
-  notionalUsd: number;
-  free: number;
-  refPrice: number;
-}): { ok: true } | { ok: false; reason: string } {
-  if (LEVERAGE > 5) return { ok: false, reason: `leverage ${LEVERAGE} > 5x cap` };
-  if (args.sizeQty < ASSET_MIN_QTY[args.asset]) {
-    return { ok: false, reason: `size ${args.sizeQty} < ${ASSET_MIN_QTY[args.asset]}` };
-  }
-  if (args.refPrice <= 0) return { ok: false, reason: 'no ref price' };
-  // Notional vs free collateral × leverage.
-  //
-  // Greedy mode 2026-07-14: cap raised 50% → 90% → 0.99 (env-configurable).
-  // ETH's minQty at $14 free requires $42 notional = 99.9% of $42
-  // capacity — even 90% cap blocks. Push to 0.99 so ETH clears (fills
-  // may briefly exceed 100% if BlueFin's fill price differs; trailing
-  // stop still bounds any adverse move at -20 bps regardless).
-  const maxNotional = args.free * LEVERAGE;
-  const notionalCapPct = Number(process.env.POLYMARKET_EDGE_RISK_GATE_PCT || 0.99);
-  if (args.notionalUsd > maxNotional * notionalCapPct) {
-    return {
-      ok: false,
-      reason: `notional $${args.notionalUsd.toFixed(2)} > ${(notionalCapPct * 100).toFixed(0)}% of capacity $${maxNotional.toFixed(2)}`,
-    };
-  }
-  return { ok: true };
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
@@ -1193,9 +1152,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
 
     // Risk gate (mirrors RiskAgent invariants without an LLM round-trip).
     const risk = riskGate({
-      symbol,
-      asset,
-      side,
+      leverage: LEVERAGE,
+      minQty: ASSET_MIN_QTY[asset],
       sizeQty,
       notionalUsd,
       free,
