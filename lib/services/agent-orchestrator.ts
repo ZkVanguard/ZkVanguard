@@ -901,164 +901,17 @@ export class AgentOrchestrator {
       const hedgeData = (report.hedgingStrategy ?? null) as null | { needsRebalance?: boolean; positions?: unknown[]; recommendations?: unknown[] };
       const settlementData = (report.settlement ?? null) as null | { settled?: number; pending?: number };
 
-      // ── Per-asset agent directives ──────────────────────────────────────
-      // TWO-LAYER FUSION (2026-07-02 upgrade — closes HedgingAgent gap):
-      //   Layer 1 (base): PredictionAggregatorService gives per-asset raw
-      //     signal — direction + confidence from Polymarket + Delphi +
-      //     tickers + funding + cross-asset alignment.
-      //   Layer 2 (override): HedgingAgent has already run inside the
-      //     LeadAgent cycle above. Its report.hedgingStrategy.recommendations
-      //     are LLM-reasoned per-asset decisions — when present, they
-      //     override the raw signal so the trade guard consumes the AGENT'S
-      //     interpretation, not just the signal aggregation.
-      //
-      // Before this fix HedgingAgent's output was purely observational —
-      // ran every 30 min, produced recommendations, was shown to nobody
-      // who trades. The audit script `scripts/audit-agent-impact.ts`
-      // flagged this as DECORATIVE. Now:
-      //   - HedgingAgent-derived directives carry source='hedging-agent'
-      //   - PredictionAggregator-derived directives carry source='signal-aggregator'
-      //   - The trade guard reads whichever the orchestrator picked
-      try {
-        const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
-        // Single source of truth for the agent universe (pool + trader + dynamic).
-        // See lib/config/agent-universe.ts for composition rules.
-        const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
-        const assetUniverse = await resolveAgentUniverse();
-        const perAsset = await PredictionAggregatorService.getPerAssetPredictions(assetUniverse);
-        const { publishDirectives } = await import('@/lib/services/agents/agent-trade-guard');
-        const byAsset: Record<string, {
-          asset: string;
-          recommendedSide: 'LONG' | 'SHORT' | null;
-          confidence: number;
-          shouldHedge: boolean;
-          reason: string;
-          riskScore: number;
-          computedAt: number;
-          source?: 'hedging-agent' | 'signal-aggregator';
-        }> = {};
-        const overallRisk = Math.round(riskData?.totalRisk ?? 50);
-
-        // ── Layer 1: seed byAsset from PredictionAggregator ────────────
-        for (const [asset, pred] of Object.entries(perAsset)) {
-          const dir = pred.direction;
-          let side: 'LONG' | 'SHORT' | null = null;
-          if (pred.recommendation.endsWith('LONG')) side = 'LONG';
-          else if (pred.recommendation.endsWith('SHORT')) side = 'SHORT';
-          else if (dir === 'UP') side = 'LONG';
-          else if (dir === 'DOWN') side = 'SHORT';
-          const shouldHedge = pred.recommendation !== 'WAIT' || dir !== 'NEUTRAL';
-          byAsset[asset.toUpperCase()] = {
-            asset: asset.toUpperCase(),
-            recommendedSide: side,
-            confidence: Math.round(pred.confidence ?? 0),
-            shouldHedge,
-            reason: `${pred.recommendation} (dir=${dir}, conf=${Math.round(pred.confidence ?? 0)}%, cons=${Math.round(pred.consensus ?? 0)}%)`,
-            riskScore: overallRisk,
-            computedAt: Date.now(),
-            source: 'signal-aggregator',
-          };
-        }
-
-        // ── Layer 2: overlay HedgingAgent's LLM-reasoned recommendations ──
-        // Shape (SUI): SuiHedgeRecommendation[] with {asset, side, confidence:0-1, reason}
-        // Shape (Cronos/generic): may be different. We defensively coerce.
-        const hedgeRecs = (hedgeData?.recommendations ?? []) as Array<{
-          asset?: string;
-          pair?: string;
-          side?: string;
-          confidence?: number;         // 0-1 on SUI, 0-100 on generic — normalize below
-          reason?: string;
-          suggestedSize?: number;
-          action?: string;             // e.g. 'OPEN' | 'HOLD'
-        }>;
-        let hedgingAgentOverrides = 0;
-        for (const rec of hedgeRecs) {
-          if (!rec || typeof rec !== 'object') continue;
-          const asset = String(rec.asset ?? rec.pair ?? '').toUpperCase().replace(/-PERP$|USD.*$/, '');
-          if (!asset) continue;
-          const sideRaw = String(rec.side ?? '').toUpperCase();
-          const side: 'LONG' | 'SHORT' | null =
-            sideRaw === 'LONG' ? 'LONG' :
-            sideRaw === 'SHORT' ? 'SHORT' : null;
-
-          // Normalize confidence to 0-100 scale. If ≤ 1.0 we assume 0-1;
-          // if > 1.0 and ≤ 100 we assume 0-100.
-          const rawConf = Number(rec.confidence ?? 0);
-          const confidence = rawConf <= 1
-            ? Math.round(rawConf * 100)
-            : Math.min(100, Math.round(rawConf));
-
-          const shouldHedge = rec.action !== 'HOLD' && (side !== null);
-
-          const prior = byAsset[asset];
-          byAsset[asset] = {
-            asset,
-            recommendedSide: side,
-            confidence,
-            shouldHedge,
-            reason: prior
-              ? `HedgingAgent: ${String(rec.reason ?? 'no reason').slice(0, 120)} · (raw signal: ${prior.reason.slice(0, 60)})`
-              : `HedgingAgent: ${String(rec.reason ?? 'no reason').slice(0, 120)}`,
-            riskScore: overallRisk,
-            computedAt: Date.now(),
-            source: 'hedging-agent',
-          };
-          hedgingAgentOverrides++;
-        }
-
-        await publishDirectives({
-          ranAt: Date.now(),
-          chain,
-          riskScore: overallRisk,
-          riskLevel: riskData?.riskLevel ?? 'MEDIUM',
-          byAsset,
-        });
-        logger.info('[Orchestrator] Per-asset directives published', {
-          chain, overallRisk,
-          hedgingAgentOverrides,
-          totalAssets: Object.keys(byAsset).length,
-          summary: Object.values(byAsset).map((d) =>
-            `${d.asset}=${d.recommendedSide ?? '?'}/${d.confidence}%${d.shouldHedge ? '' : '/HOLD'}[${d.source === 'hedging-agent' ? 'HA' : 'PA'}]`,
-          ).join(', '),
-        });
-      } catch (dirErr) {
-        logger.warn('[Orchestrator] Per-asset directive computation failed', {
-          error: dirErr instanceof Error ? dirErr.message : String(dirErr),
-        });
-      }
+      // Two-layer directive fusion + cycle-attestation write. Extracted to
+      // keep runAutonomousCycle focused on the lead-cycle orchestration.
+      // See publishDirectivesAndAttest for the Layer 1/2 semantics.
+      await this.publishDirectivesAndAttest({
+        chain, riskData, hedgeData, report, priceMonitorTick,
+      });
 
       const summary = report.aiSummary ?? `Lead cycle: ${chain} portfolio ${portfolioId}, ` +
         `risk=${riskData?.totalRisk ?? '?'} ` +
         `hedge-recs=${hedgeData?.recommendations?.length ?? 0} ` +
         `settlements=${settlementData?.settled ?? 0}`;
-
-      // Publish cycle attestation so the AgentTradeGuard can consult PriceMonitor
-      // + Reporting output when gating trades. Two new gates:
-      //   - PRICE_ALERT_GATE: alertsTriggered > 0 in the last cycle → tighten
-      //     drift-close cadence + reject open trades on the alerted symbol
-      //     until the next cycle clears it
-      //   - REPORTING_ZK_ATTEST_GATE: for large trades, require the most
-      //     recent cycle to have produced ≥ 1 ZK proof (ReportingAgent)
-      try {
-        const { setCronState } = await import('@/lib/db/cron-state');
-        await setCronState('cycle-attestation:last', {
-          ranAt: Date.now(),
-          chain,
-          zkProofsCount: report.zkProofs?.length ?? 0,
-          priceAlerts: {
-            alertsTriggered: priceMonitorTick?.alertsTriggered ?? 0,
-            symbolsAlerted: priceMonitorTick?.symbols ?? [],
-            fiveMinProcessed: priceMonitorTick?.fiveMinProcessed ?? false,
-          },
-          reportingSummary: (report.aiSummary ?? '').slice(0, 300),
-          success: report.status === 'success',
-        });
-      } catch (attErr) {
-        logger.warn('[Orchestrator] cycle-attestation write failed', {
-          error: attErr instanceof Error ? attErr.message : String(attErr),
-        });
-      }
 
       return {
         success: report.status === 'success',
@@ -1108,6 +961,154 @@ export class AgentOrchestrator {
       timestamp: snapshot.timestamp,
       source: snapshot.source,
     });
+  }
+
+  /**
+   * TWO-LAYER FUSION per-asset directive publisher + cycle-attestation write.
+   * Extracted from runAutonomousCycle so the parent method stays focused on
+   * lead-cycle orchestration.
+   *
+   *   Layer 1 (base): PredictionAggregatorService per-asset raw signal —
+   *     direction + confidence from Polymarket + Delphi + tickers + funding
+   *     + cross-asset alignment.
+   *   Layer 2 (override): HedgingAgent's LLM-reasoned recommendations
+   *     (already computed inside the LeadAgent cycle above). When present,
+   *     they override the raw signal so the trade guard consumes the
+   *     AGENT'S interpretation, not just signal aggregation.
+   *
+   * Before the 2026-07-02 fusion upgrade, HedgingAgent output was purely
+   * observational — `scripts/audit-agent-impact.ts` flagged it as
+   * DECORATIVE. Now HedgingAgent-derived directives carry
+   * source='hedging-agent'; PredictionAggregator-derived carry
+   * source='signal-aggregator'; trade guard reads whichever won.
+   *
+   * Also writes `cycle-attestation:last` so the AgentTradeGuard can gate
+   * on PriceMonitor alerts (PRICE_ALERT_GATE) and require ZK proofs for
+   * large trades (REPORTING_ZK_ATTEST_GATE). All failures logged + swallowed.
+   */
+  private async publishDirectivesAndAttest(input: {
+    chain: string;
+    riskData: null | { totalRisk?: number; riskLevel?: string };
+    hedgeData: null | { needsRebalance?: boolean; positions?: unknown[]; recommendations?: unknown[] };
+    report: { aiSummary?: string; zkProofs?: unknown[]; status?: string };
+    priceMonitorTick: { alertsTriggered?: number; symbols?: string[]; fiveMinProcessed?: boolean } | null;
+  }): Promise<void> {
+    const { chain, riskData, hedgeData, report, priceMonitorTick } = input;
+
+    try {
+      const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
+      const { resolveAgentUniverse } = await import('@/lib/config/agent-universe');
+      const assetUniverse = await resolveAgentUniverse();
+      const perAsset = await PredictionAggregatorService.getPerAssetPredictions(assetUniverse);
+      const { publishDirectives } = await import('@/lib/services/agents/agent-trade-guard');
+      const byAsset: Record<string, {
+        asset: string;
+        recommendedSide: 'LONG' | 'SHORT' | null;
+        confidence: number;
+        shouldHedge: boolean;
+        reason: string;
+        riskScore: number;
+        computedAt: number;
+        source?: 'hedging-agent' | 'signal-aggregator';
+      }> = {};
+      const overallRisk = Math.round(riskData?.totalRisk ?? 50);
+
+      // Layer 1: seed byAsset from PredictionAggregator
+      for (const [asset, pred] of Object.entries(perAsset)) {
+        const dir = pred.direction;
+        let side: 'LONG' | 'SHORT' | null = null;
+        if (pred.recommendation.endsWith('LONG')) side = 'LONG';
+        else if (pred.recommendation.endsWith('SHORT')) side = 'SHORT';
+        else if (dir === 'UP') side = 'LONG';
+        else if (dir === 'DOWN') side = 'SHORT';
+        const shouldHedge = pred.recommendation !== 'WAIT' || dir !== 'NEUTRAL';
+        byAsset[asset.toUpperCase()] = {
+          asset: asset.toUpperCase(),
+          recommendedSide: side,
+          confidence: Math.round(pred.confidence ?? 0),
+          shouldHedge,
+          reason: `${pred.recommendation} (dir=${dir}, conf=${Math.round(pred.confidence ?? 0)}%, cons=${Math.round(pred.consensus ?? 0)}%)`,
+          riskScore: overallRisk,
+          computedAt: Date.now(),
+          source: 'signal-aggregator',
+        };
+      }
+
+      // Layer 2: overlay HedgingAgent's LLM-reasoned recommendations.
+      // Shape (SUI): SuiHedgeRecommendation[] with confidence 0-1; (generic): 0-100. Coerce below.
+      const hedgeRecs = (hedgeData?.recommendations ?? []) as Array<{
+        asset?: string; pair?: string; side?: string;
+        confidence?: number; reason?: string;
+        suggestedSize?: number; action?: string;
+      }>;
+      let hedgingAgentOverrides = 0;
+      for (const rec of hedgeRecs) {
+        if (!rec || typeof rec !== 'object') continue;
+        const asset = String(rec.asset ?? rec.pair ?? '').toUpperCase().replace(/-PERP$|USD.*$/, '');
+        if (!asset) continue;
+        const sideRaw = String(rec.side ?? '').toUpperCase();
+        const side: 'LONG' | 'SHORT' | null =
+          sideRaw === 'LONG' ? 'LONG' :
+          sideRaw === 'SHORT' ? 'SHORT' : null;
+        const rawConf = Number(rec.confidence ?? 0);
+        const confidence = rawConf <= 1 ? Math.round(rawConf * 100) : Math.min(100, Math.round(rawConf));
+        const shouldHedge = rec.action !== 'HOLD' && (side !== null);
+        const prior = byAsset[asset];
+        byAsset[asset] = {
+          asset,
+          recommendedSide: side,
+          confidence,
+          shouldHedge,
+          reason: prior
+            ? `HedgingAgent: ${String(rec.reason ?? 'no reason').slice(0, 120)} · (raw signal: ${prior.reason.slice(0, 60)})`
+            : `HedgingAgent: ${String(rec.reason ?? 'no reason').slice(0, 120)}`,
+          riskScore: overallRisk,
+          computedAt: Date.now(),
+          source: 'hedging-agent',
+        };
+        hedgingAgentOverrides++;
+      }
+
+      await publishDirectives({
+        ranAt: Date.now(),
+        chain,
+        riskScore: overallRisk,
+        riskLevel: riskData?.riskLevel ?? 'MEDIUM',
+        byAsset,
+      });
+      logger.info('[Orchestrator] Per-asset directives published', {
+        chain, overallRisk, hedgingAgentOverrides,
+        totalAssets: Object.keys(byAsset).length,
+        summary: Object.values(byAsset).map((d) =>
+          `${d.asset}=${d.recommendedSide ?? '?'}/${d.confidence}%${d.shouldHedge ? '' : '/HOLD'}[${d.source === 'hedging-agent' ? 'HA' : 'PA'}]`,
+        ).join(', '),
+      });
+    } catch (dirErr) {
+      logger.warn('[Orchestrator] Per-asset directive computation failed', {
+        error: dirErr instanceof Error ? dirErr.message : String(dirErr),
+      });
+    }
+
+    // Cycle attestation write (best-effort; gate consumers tolerate missing key).
+    try {
+      const { setCronState } = await import('@/lib/db/cron-state');
+      await setCronState('cycle-attestation:last', {
+        ranAt: Date.now(),
+        chain,
+        zkProofsCount: report.zkProofs?.length ?? 0,
+        priceAlerts: {
+          alertsTriggered: priceMonitorTick?.alertsTriggered ?? 0,
+          symbolsAlerted: priceMonitorTick?.symbols ?? [],
+          fiveMinProcessed: priceMonitorTick?.fiveMinProcessed ?? false,
+        },
+        reportingSummary: (report.aiSummary ?? '').slice(0, 300),
+        success: report.status === 'success',
+      });
+    } catch (attErr) {
+      logger.warn('[Orchestrator] cycle-attestation write failed', {
+        error: attErr instanceof Error ? attErr.message : String(attErr),
+      });
+    }
   }
 
   /**

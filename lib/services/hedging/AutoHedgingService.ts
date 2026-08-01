@@ -844,60 +844,16 @@ class AutoHedgingService {
         recommendations: recommendations.length,
       });
 
-      // Get AI agent analysis via orchestrator for enhanced risk assessment
-      // This engages RiskAgent, HedgingAgent, and other specialized agents
-      try {
-        const orchestrator = getAgentOrchestrator();
-
-        // Run parallel agent analysis for comprehensive pool management
-        const [riskAnalysis, hedgeAnalysis] = await Promise.all([
-          orchestrator.assessRisk({
-            address: COMMUNITY_POOL_ADDRESS, // Use constant from @/lib/constants
-            portfolioData: {
-              portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
-              type: 'community_pool',
-              positions,
-              allocations: allocationPercentages,
-              totalValue: marketNAV,
-              drawdownPercent,
-              volatility,
-            },
-          }),
-          orchestrator.generateHedgeRecommendations({
-            portfolioId: String(COMMUNITY_POOL_PORTFOLIO_ID),
-            assetSymbol: positions[0]?.symbol || 'BTC',
-            notionalValue: marketNAV,
-          }),
-        ]);
-
-        // Log agent results
-        logger.info('[AutoHedging] CommunityPool AI agents analysis complete', {
-          riskAgentSuccess: riskAnalysis.success,
-          hedgeAgentSuccess: hedgeAnalysis.success,
-          riskAgentTime: `${riskAnalysis.executionTime}ms`,
-          hedgeAgentTime: `${hedgeAnalysis.executionTime}ms`,
-        });
-
-        // Enhance recommendations with agent insights if available
-        if (hedgeAnalysis.success && hedgeAnalysis.data) {
-          const agentHedgeData = hedgeAnalysis.data as {
-            recommendations?: Array<{ asset: string; action: string; confidence: number }>;
-          };
-          if (agentHedgeData.recommendations?.length) {
-            logger.info('[AutoHedging] HedgingAgent provided recommendations for pool', {
-              count: agentHedgeData.recommendations.length,
-            });
-          }
-        }
-      } catch (agentError) {
-        // Non-critical: manual analysis still valid, agents are enhancement
-        logger.warn(
-          '[AutoHedging] Agent orchestrator analysis failed (continuing with manual assessment)',
-          {
-            error: agentError instanceof Error ? agentError.message : String(agentError),
-          }
-        );
-      }
+      // Best-effort AI agent analysis for enhanced risk assessment.
+      // Engages RiskAgent + HedgingAgent in parallel; failures are logged
+      // and swallowed — manual assessment above is the authoritative signal.
+      await this.runCommunityPoolAgentAnalysis({
+        positions,
+        allocationPercentages,
+        marketNAV,
+        drawdownPercent,
+        volatility,
+      });
 
       return {
         portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
@@ -940,6 +896,68 @@ class AutoHedgingService {
         recommendations: [],
         timestamp: Date.now(),
       };
+    }
+  }
+
+  /**
+   * Fire the RiskAgent + HedgingAgent orchestrator pass for the community
+   * pool. Extracted from assessCommunityPoolRisk to keep the parent method
+   * focused on the risk math. Failures are logged and swallowed so a
+   * broken agent orchestrator never breaks the risk assessment.
+   */
+  private async runCommunityPoolAgentAnalysis(input: {
+    positions: unknown[];
+    allocationPercentages: Record<string, number>;
+    marketNAV: number;
+    drawdownPercent: number;
+    volatility: number;
+  }): Promise<void> {
+    try {
+      const orchestrator = getAgentOrchestrator();
+      const [riskAnalysis, hedgeAnalysis] = await Promise.all([
+        orchestrator.assessRisk({
+          address: COMMUNITY_POOL_ADDRESS,
+          portfolioData: {
+            portfolioId: COMMUNITY_POOL_PORTFOLIO_ID,
+            type: 'community_pool',
+            positions: input.positions,
+            allocations: input.allocationPercentages,
+            totalValue: input.marketNAV,
+            drawdownPercent: input.drawdownPercent,
+            volatility: input.volatility,
+          },
+        }),
+        orchestrator.generateHedgeRecommendations({
+          portfolioId: String(COMMUNITY_POOL_PORTFOLIO_ID),
+          assetSymbol: (input.positions[0] as { symbol?: string })?.symbol || 'BTC',
+          notionalValue: input.marketNAV,
+        }),
+      ]);
+
+      logger.info('[AutoHedging] CommunityPool AI agents analysis complete', {
+        riskAgentSuccess: riskAnalysis.success,
+        hedgeAgentSuccess: hedgeAnalysis.success,
+        riskAgentTime: `${riskAnalysis.executionTime}ms`,
+        hedgeAgentTime: `${hedgeAnalysis.executionTime}ms`,
+      });
+
+      if (hedgeAnalysis.success && hedgeAnalysis.data) {
+        const agentHedgeData = hedgeAnalysis.data as {
+          recommendations?: Array<{ asset: string; action: string; confidence: number }>;
+        };
+        if (agentHedgeData.recommendations?.length) {
+          logger.info('[AutoHedging] HedgingAgent provided recommendations for pool', {
+            count: agentHedgeData.recommendations.length,
+          });
+        }
+      }
+    } catch (agentError) {
+      logger.warn(
+        '[AutoHedging] Agent orchestrator analysis failed (continuing with manual assessment)',
+        {
+          error: agentError instanceof Error ? agentError.message : String(agentError),
+        }
+      );
     }
   }
 
