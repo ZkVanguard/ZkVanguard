@@ -29,6 +29,7 @@
 import { logger } from '@/lib/utils/logger';
 import { recordAgentDecision } from '@/lib/db/agent-decisions';
 import { getCronState, setCronState } from '@/lib/db/cron-state';
+import { envFlag } from '@/lib/utils/env-flag';
 
 const CACHE_KEY = 'agent-directives:by-asset';
 const RISK_GATE_DEFAULT = 80;
@@ -246,7 +247,7 @@ async function attestLargeTradeOrFail(
   params: CheckParams,
 ): Promise<{ attested: boolean; proofHash: string | null; reason: string }> {
   const url = (process.env.ZK_PYTHON_API_URL || '').trim();
-  const strict = (process.env.ZK_ATTEST_STRICT ?? '').trim() === '1';
+  const strict = envFlag('ZK_ATTEST_STRICT');
   if (!url) {
     return {
       attested: false, proofHash: null,
@@ -444,7 +445,7 @@ export async function checkBeforeTrade(params: CheckParams): Promise<GuardDecisi
     // ZK_ATTEST_STRICT != 1.
     if (params.notionalUsd >= REPORTING_ZK_REQUIRED_USD) {
       const zkCount = attestation?.zkProofsCount ?? 0;
-      if (zkCount === 0 && (process.env.ZK_ATTEST_STRICT ?? '').trim() === '1') {
+      if (zkCount === 0 && envFlag('ZK_ATTEST_STRICT')) {
         await recordAgentDecision({
           chain: params.chain, agent: 'reporting-agent', asset: assetUpper,
           intendedSide: params.intendedSide, agentApproved: false,
@@ -503,7 +504,7 @@ export async function checkBeforeTrade(params: CheckParams): Promise<GuardDecisi
       const attest = await attestLargeTradeOrFail(params);
       if (attest.attested) {
         zkProofHash = attest.proofHash;
-      } else if ((process.env.ZK_ATTEST_STRICT ?? '').trim() === '1') {
+      } else if (envFlag('ZK_ATTEST_STRICT')) {
         await recordAgentDecision({
           chain: params.chain, agent: 'zk-attestor', asset: assetUpper,
           intendedSide: params.intendedSide, agentApproved: false,

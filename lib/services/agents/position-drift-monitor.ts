@@ -26,6 +26,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { envFlag } from '@/lib/utils/env-flag';
 
 export interface DriftCheckResult {
   checked: number;
@@ -82,7 +83,7 @@ export async function checkAndCloseDrifts(
     checked: 0, drifted: 0, closed: 0, skipped: 0, errors: 0, actions: [],
   };
 
-  if ((process.env.HEDGE_DRIFT_AUTO_CLOSE_DISABLE ?? '').trim() === '1') {
+  if (envFlag('HEDGE_DRIFT_AUTO_CLOSE_DISABLE')) {
     logger.info('[DriftMonitor] disabled via HEDGE_DRIFT_AUTO_CLOSE_DISABLE=1');
     return result;
   }

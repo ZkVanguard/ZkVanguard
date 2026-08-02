@@ -46,7 +46,7 @@ const nextConfig = {
     optimizePackageImports: [
       'viem', 'lucide-react', '@heroicons/react', 'framer-motion',
       'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui',
-      'date-fns', 'ethers', 'zod', 'eventemitter3', 'uuid',
+      'ethers', 'zod', 'eventemitter3', 'uuid',
     ],
     // Reduce page data sent to browser
     optimizeCss: true,

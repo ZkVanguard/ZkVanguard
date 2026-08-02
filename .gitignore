@@ -97,6 +97,10 @@ bun-debug.log*
 # All check-* and analyze-* diagnostics under scripts/ are local tools
 scripts/check-*
 scripts/analyze-*
+# Underscore-prefix scripts (scripts/_foo.ts, scripts/_local/**) are scratch/ephemeral, never commit
+scripts/_*
+# MemSearch plugin state (per-machine, never commit)
+.memsearch/
 # Root-level one-off helpers
 check-old-contracts.js
 check-db.js

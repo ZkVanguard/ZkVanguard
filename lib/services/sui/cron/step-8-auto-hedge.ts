@@ -75,7 +75,7 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
 
   let autoHedgeResult: Step8Result = { triggered: false };
   const MIN_HEDGE_NAV_USD = Number(process.env.HEDGE_MIN_NAV_USD) || 20;
-  const HEDGE_DISABLED = process.env.SUI_AUTO_HEDGE_DISABLE === '1';
+  const HEDGE_DISABLED = envFlag('SUI_AUTO_HEDGE_DISABLE');
 
   // ── Drawdown auto-halt ─────────────────────────────────────────
   // The cron auto-opens positions every 30min but has no global
