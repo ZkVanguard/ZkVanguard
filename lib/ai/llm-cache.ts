@@ -1,93 +1,46 @@
 /**
- * LLM Response Cache - Reduces redundant AI calls for similar queries
+ * LLM Response Cache — reduces redundant AI calls for similar queries.
+ *
+ * Storage layer is the shared CacheManager in lib/utils/cache — this file
+ * only owns the LLM-specific concerns: prompt hashing (deterministic key
+ * generation) and the skip-list keywords that mark a query as too
+ * time-sensitive to cache.
  */
 
-import { logger } from '../utils/logger';
+import { cache } from '../utils/cache';
 import type { LLMResponse } from './llm-types';
 
-interface CachedLLMResponse {
-  response: LLMResponse;
-  timestamp: number;
-  promptHash: string;
-}
+const LLM_CACHE_TTL = 120_000; // 2 min
 
-const LLM_CACHE_TTL = 120000; // 2 minutes TTL for LLM responses
-const llmResponseCache = new Map<string, CachedLLMResponse>();
-
-// Keywords that indicate the query should NOT be cached (requires fresh data)
+// Queries containing these words request fresh data or trigger side effects —
+// never serve a cached answer for them.
 const NO_CACHE_KEYWORDS = [
   'execute', 'swap', 'trade', 'buy', 'sell', 'deposit', 'withdraw',
-  'rebalance', 'current', 'now', 'latest', 'live', 'real-time'
+  'rebalance', 'current', 'now', 'latest', 'live', 'real-time',
 ];
 
 export function hashPrompt(message: string): string {
-  // Simple hash function for prompt comparison
+  // djb2 — deterministic key derivation only, not a security hash.
+  // Changing the algorithm would invalidate every warm cache entry across
+  // running instances, so it's frozen.
   let hash = 0;
   const normalized = message.toLowerCase().trim().replace(/\s+/g, ' ');
   for (let i = 0; i < normalized.length; i++) {
-    const char = normalized.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
+    hash = hash & hash;
   }
   return hash.toString(16);
 }
 
 export function shouldCacheQuery(message: string): boolean {
   const lower = message.toLowerCase();
-  // Don't cache queries that request realtime data or execute actions
   return !NO_CACHE_KEYWORDS.some(keyword => lower.includes(keyword));
 }
 
 export function getCachedLLMResponse(promptHash: string): LLMResponse | null {
-  const cached = llmResponseCache.get(promptHash);
-  if (!cached) return null;
-  
-  // Check if expired
-  if (Date.now() - cached.timestamp > LLM_CACHE_TTL) {
-    llmResponseCache.delete(promptHash);
-    return null;
-  }
-  
-  logger.debug(`[LLM] Cache HIT for prompt (age: ${Date.now() - cached.timestamp}ms)`);
-  // Update timestamp on hit for LRU eviction
-  cached.timestamp = Date.now();
-  return cached.response;
+  return cache.get<LLMResponse>(`llm:${promptHash}`, LLM_CACHE_TTL);
 }
 
 export function setCachedLLMResponse(promptHash: string, response: LLMResponse): void {
-  llmResponseCache.set(promptHash, {
-    response,
-    timestamp: Date.now(),
-    promptHash,
-  });
-  
-  // Cleanup: limit cache size to prevent memory leaks (LRU eviction)
-  if (llmResponseCache.size > 50) {
-    let oldestKey: string | undefined;
-    let oldestTime = Infinity;
-    for (const [key, entry] of llmResponseCache.entries()) {
-      if (entry.timestamp < oldestTime) {
-        oldestTime = entry.timestamp;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey) llmResponseCache.delete(oldestKey);
-  }
-}
-
-// Periodic cache cleanup (every 5 minutes)
-let _cacheCleanupTimer: ReturnType<typeof setInterval> | null = null;
-if (typeof setInterval !== 'undefined') {
-  _cacheCleanupTimer = setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of llmResponseCache.entries()) {
-      if (now - entry.timestamp > LLM_CACHE_TTL) {
-        llmResponseCache.delete(key);
-      }
-    }
-  }, 300000);
-  // Allow Node.js to exit even if timer is running
-  if (_cacheCleanupTimer && typeof _cacheCleanupTimer.unref === 'function') {
-    _cacheCleanupTimer.unref();
-  }
+  cache.set(`llm:${promptHash}`, response, LLM_CACHE_TTL);
 }
