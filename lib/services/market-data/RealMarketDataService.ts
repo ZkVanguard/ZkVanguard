@@ -18,10 +18,6 @@ export interface MarketPrice {
   source: string;
 }
 
-/**
- * Extended market data with full 24h stats
- * Used by AI decisions, risk analysis, and volatility calculations
- */
 export interface ExtendedMarketData {
   symbol: string;
   price: number;
@@ -33,7 +29,10 @@ export interface ExtendedMarketData {
   source: string;
 }
 
-export interface TokenBalance {
+// TokenBalance + PortfolioData are internal — no external consumer imports
+// them as types. Notably PortfolioData collided with shared/types/portfolio.ts's
+// PortfolioData; un-exporting removes that ambiguity at import sites.
+interface TokenBalance {
   token: string;
   symbol: string;
   balance: string;
@@ -41,7 +40,7 @@ export interface TokenBalance {
   usdValue: number;
 }
 
-export interface PortfolioData {
+interface PortfolioData {
   address: string;
   totalValue: number;
   tokens: TokenBalance[];
