@@ -44,7 +44,10 @@ export interface RiskAssessment {
   }>;
 }
 
-export interface HedgeRecommendation {
+// Internal-only: the exported HedgeRecommendation shape lives in
+// lib/services/ai-decisions.ts (UI decision store). This one is the Crypto.com
+// SDK response shape and is not part of the module's public surface.
+interface HedgeRecommendation {
   strategy: string;
   confidence: number;
   expectedReduction: number;
