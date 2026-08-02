@@ -30,15 +30,28 @@ describe('evaluateKillSwitch', () => {
     expect(d.halted).toBe(false);
   });
 
-  it('trips on 5 consecutive losses', () => {
+  it('trips on 5 consecutive losses when peak is meaningful', () => {
+    // Peak $25 >= floor $20 → losses trip fires.
     const d = evaluateKillSwitch(
-      { totalPnlUsd: -20, peakPnlUsd: 15, consecutiveLosses: 5 },
+      { totalPnlUsd: -20, peakPnlUsd: 25, consecutiveLosses: 5 },
       { pnlUsd: -8 },
       0, CFG,
     );
     expect(d.trip).toBe(true);
     expect(d.reason).toBe('consecutive-losses');
     expect(d.untilMs).toBe(NOW + CFG.haltDurationMs);
+  });
+
+  it('does NOT trip on 5 consecutive losses when peak is below floor (2026-08-01 regression)', () => {
+    // 5 losses of $0.10 each: consecutiveLosses=5, totalPnl=-$0.50, peak=$0.58
+    // Peak $0.58 < floor $20 → no trip (statistical noise, not broken strategy).
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: -0.50, peakPnlUsd: 0.58, consecutiveLosses: 5 },
+      { pnlUsd: -0.50 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(false);
+    expect(d.peakMeaningful).toBe(false);
   });
 
   it('trips on 30% drawdown when peak is meaningful (>= 4×BASE_STAKE)', () => {

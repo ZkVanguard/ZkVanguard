@@ -73,16 +73,22 @@ export function evaluateKillSwitch(
   const drawdownPct =
     stats.peakPnlUsd > 0 ? (stats.peakPnlUsd - stats.totalPnlUsd) / stats.peakPnlUsd : 0;
 
-  // Absolute-$ floor for the drawdown check. Otherwise a $0.10 win
-  // followed by a $0.10 loss reads as "100% drawdown from peak" and
-  // trips the kill switch — even though absolute dollars are trivial.
-  // Observed 2026-07-13: trader made $0.10 on first SOL trade, gave
-  // $0.10 back on next, killed itself for 22h while SOL was showing
-  // STRONG_HEDGE_LONG 88/100. Floor at max(4×BASE_STAKE, $10).
+  // Absolute-$ floor. At penny-level P&L, every trip condition is dominated
+  // by noise: 3 losses of $0.10 each is "MAX_CONSECUTIVE_LOSSES tripped"
+  // even though the strategy is fine; $0.10 win then $0.10 loss reads as
+  // "100% drawdown". Peak of at least max(4×BASE_STAKE, $10) means we've
+  // accumulated real money before the halt logic takes over — below that,
+  // the trader is still bootstrapping and short streaks are pure variance.
+  //
+  // Applied to consecutiveLosses + drawdown. dailyLossCap stays absolute-$
+  // (unaffected by peak) since it IS the absolute-$ safety.
+  //
+  // Observed 2026-07-13 (drawdown false trip on $0.10 pullback) and
+  // 2026-08-01 (consecutiveLosses=3 trip on 3 tiny penny losses).
   const peakFloor = Math.max(config.baseStakeUsd * 4, 10);
   const peakMeaningful = stats.peakPnlUsd >= peakFloor;
 
-  const tripLosses = stats.consecutiveLosses >= config.maxConsecutiveLosses;
+  const tripLosses = stats.consecutiveLosses >= config.maxConsecutiveLosses && peakMeaningful;
   const tripDrawdown = drawdownPct >= config.maxDrawdownPct && peakMeaningful;
   const tripDaily = daily.pnlUsd <= config.dailyLossCapUsd;
 
