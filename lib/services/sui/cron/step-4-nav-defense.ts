@@ -308,7 +308,7 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
             });
             await notifyDiscord(
               `🎯 PortfolioDriver: ${actions.length} corrective action(s) [${execute ? 'EXECUTING' : 'log-only'}]. ${actions.map(a => `${a.type}:${a.asset} $${a.amountUsd}`).join(', ')}`,
-              execute ? 'TRADE' : 'INFO',
+              'WARN',
               { actions, execute },
             ).catch(() => {});
 
@@ -390,7 +390,7 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
               });
               await notifyDiscord(
                 `🎯 PortfolioDriver EXECUTED ${executionResults.filter(r => r.ok).length}/${executionResults.length} action(s)${deferredCount > 0 ? ` (${deferredCount} deferred to Step 7)` : ''}`,
-                'TRADE',
+                'WARN',
                 { executionResults, deferredCount },
               ).catch(() => {});
             }
