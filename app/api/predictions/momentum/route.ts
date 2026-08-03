@@ -96,5 +96,9 @@ export async function GET(): Promise<NextResponse> {
     hotMovers,
     topByRelevance,
     themes,
+  }, {
+    // Momentum reads a cron snapshot updated at 15-min cadence; edge
+    // cache 60s + SWR 120s so browser polling collapses in-region.
+    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
   });
 }
