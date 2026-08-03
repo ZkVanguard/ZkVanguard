@@ -166,9 +166,14 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
       });
       
       // OPTIMIZATION: Fire-and-forget portfolio history POST to eliminate waterfall
-      // PnL metrics are fetched async without blocking the main positions render
+      // PnL metrics are fetched async without blocking the main positions render.
+      // Server route can take >10s under BlueFin+DB load — abort at 10s so the
+      // browser doesn't hold a dying connection until Vercel's 30s gateway
+      // timeout returns 504 (which shows as a red error in DevTools even
+      // though the caller doesn't await it).
       if (data.totalValue > 0) {
-        // Non-blocking snapshot + PnL fetch
+        const historyController = new AbortController();
+        const historyTimeout = setTimeout(() => historyController.abort(), 10_000);
         fetch('/api/portfolio/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -177,7 +182,9 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
             totalValue: data.totalValue,
             positions: data.positions || [],
           }),
+          signal: historyController.signal,
         }).then(snapshotRes => {
+          clearTimeout(historyTimeout);
           if (snapshotRes.ok) {
             return snapshotRes.json();
           }
@@ -205,7 +212,11 @@ export function PositionsProvider({ children }: { children: React.ReactNode }) {
             });
           }
         }).catch(historyError => {
-          logger.warn('Failed to record portfolio snapshot', { error: String(historyError) });
+          clearTimeout(historyTimeout);
+          // AbortError at 10s is expected under load — don't warn on it.
+          if (historyError?.name !== 'AbortError') {
+            logger.warn('Failed to record portfolio snapshot', { error: String(historyError) });
+          }
         });
       }
       
