@@ -1,6 +1,7 @@
 'use client';
 
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@/i18n/routing';
 import {
   ArrowRightIcon, ShieldCheckIcon, BoltIcon, ChartBarIcon,
@@ -70,60 +71,50 @@ function formatCount(n: number, singular: string, plural: string): string {
   return `${rounded} ${rounded === 1 ? singular : plural}`;
 }
 
-export const SuiPoolLanding = memo(function SuiPoolLanding() {
-  const [pool, setPool] = useState<PoolSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const r = await fetch('/api/sui/community-pool?network=mainnet');
-        const j = await r.json();
-        if (!cancelled && j?.success && j?.data) {
-          const d = j.data;
-          // Overlay DB-verified ATH on top of the on-chain phantom.
-          // See useCommunityPool.ts for the full rationale: Move's ATH
-          // is a monotonic ratchet, so a single pre-stabilizer jitter
-          // spike locked in a peak that never actually persisted. The
-          // volatility endpoint returns the honest ATH computed from
-          // non-clamped DB snapshots. If it's higher-than-zero AND
-          // lower-than-on-chain (i.e. the on-chain value is inflated),
-          // use it. Otherwise trust the on-chain value.
-          const onChainAth = Number(d.allTimeHighNav ?? 1);
-          let honestAth = onChainAth;
-          try {
-            const vr = await fetch('/api/sui/community-pool?action=volatility&network=mainnet');
-            const vj = await vr.json();
-            const verifiedAth = Number(vj?.data?.verifiedAth?.sharePrice ?? 0);
-            if (verifiedAth > 0 && verifiedAth < onChainAth) {
-              honestAth = verifiedAth;
-            }
-          } catch {
-            /* non-critical — fall back to on-chain value */
-          }
-          setPool({
-            totalNAV: Number(d.totalNAV ?? 0),
-            sharePrice: Number(d.sharePrice ?? 1),
-            allTimeHighNav: honestAth,
-            totalDeposited: Number(d.totalDeposited ?? 0),
-            totalWithdrawn: Number(d.totalWithdrawn ?? 0),
-            memberCount: Number(d.memberCount ?? 0),
-            totalShares: Number(d.totalShares ?? 0),
-            allocation: d.allocation ?? {},
-            paused: !!d.paused,
-          });
-        }
-      } catch {
-        /* silent — show fallback */
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+async function fetchPoolSummary(): Promise<PoolSummary | null> {
+  const r = await fetch('/api/sui/community-pool?network=mainnet');
+  const j = await r.json();
+  if (!j?.success || !j?.data) return null;
+  const d = j.data;
+  // Overlay DB-verified ATH on top of the on-chain phantom.
+  // See useCommunityPool.ts for the full rationale: Move's ATH is a
+  // monotonic ratchet, so a single pre-stabilizer jitter spike locked
+  // in a peak that never actually persisted. The volatility endpoint
+  // returns the honest ATH computed from non-clamped DB snapshots. If
+  // it's higher-than-zero AND lower-than-on-chain (i.e. on-chain is
+  // inflated), use it. Otherwise trust the on-chain value.
+  const onChainAth = Number(d.allTimeHighNav ?? 1);
+  let honestAth = onChainAth;
+  try {
+    const vr = await fetch('/api/sui/community-pool?action=volatility&network=mainnet');
+    const vj = await vr.json();
+    const verifiedAth = Number(vj?.data?.verifiedAth?.sharePrice ?? 0);
+    if (verifiedAth > 0 && verifiedAth < onChainAth) {
+      honestAth = verifiedAth;
     }
-    load();
-    const id = setInterval(load, 30000); // refresh every 30s
-    return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  } catch {
+    /* non-critical — fall back to on-chain value */
+  }
+  return {
+    totalNAV: Number(d.totalNAV ?? 0),
+    sharePrice: Number(d.sharePrice ?? 1),
+    allTimeHighNav: honestAth,
+    totalDeposited: Number(d.totalDeposited ?? 0),
+    totalWithdrawn: Number(d.totalWithdrawn ?? 0),
+    memberCount: Number(d.memberCount ?? 0),
+    totalShares: Number(d.totalShares ?? 0),
+    allocation: d.allocation ?? {},
+    paused: !!d.paused,
+  };
+}
+
+export const SuiPoolLanding = memo(function SuiPoolLanding() {
+  const { data: pool, isPending: loading } = useQuery({
+    queryKey: ['sui-pool-landing'],
+    queryFn: fetchPoolSummary,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+  });
 
   const returnPct = pool ? ((pool.sharePrice - 1) / 1) * 100 : 0;
   // Net capital = lifetime deposits − withdrawals. Unrealised gain compares
