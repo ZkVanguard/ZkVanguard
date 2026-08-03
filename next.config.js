@@ -166,7 +166,10 @@ const nextConfig = {
 
   // Image optimization
   images: {
-    domains: ['localhost'],
+    // Next 16: images.domains deprecated in favor of remotePatterns
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+    ],
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 86400, // 24h image caching
     deviceSizes: [640, 750, 828, 1080, 1200], // Fewer sizes = fewer variants to cache
