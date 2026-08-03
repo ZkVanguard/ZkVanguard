@@ -32,10 +32,7 @@ export const AIInsightsModal = memo(function AIInsightsModal({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-            className="relative bg-white dark:bg-gray-800 shadow-2xl w-full max-w-2xl
-                       rounded-t-[24px] sm:rounded-2xl
-                       max-h-[92vh] sm:max-h-[80vh] overflow-auto
-                       pb-safe sm:pb-0"
+            className="relative bg-white dark:bg-gray-800 shadow-2xl w-full max-w-2xl rounded-t-[24px] sm:rounded-2xl max-h-[92vh] sm:max-h-[80vh] overflow-auto pb-safe sm:pb-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Sheet-handle indicator on mobile — sits on the gradient header */}

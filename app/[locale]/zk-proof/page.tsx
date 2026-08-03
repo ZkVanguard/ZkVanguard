@@ -1,5 +1,6 @@
 import { redirect } from '@/i18n/routing';
 
-export default function Page({ params }: { params: { locale: string } }) {
+export default async function Page(props: { params: Promise<{ locale: string }> }) {
+  const params = await props.params;
   redirect({ href: '/zk/proof', locale: params.locale });
 }

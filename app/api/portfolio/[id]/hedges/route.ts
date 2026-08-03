@@ -12,10 +12,8 @@ import { readLimiter } from '@/lib/security/rate-limiter';
 export const runtime = 'nodejs';
 
 export const maxDuration = 30;
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const limited = readLimiter.check(request);
   if (limited) return limited;
 

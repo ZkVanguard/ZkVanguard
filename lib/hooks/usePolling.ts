@@ -21,7 +21,7 @@ export function usePolling(
   enabled: boolean = true
 ): void {
   const savedCallback = useRef(callback);
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [visible, setVisible] = useState(true);
 
   // Update callback ref on each render
@@ -46,7 +46,7 @@ export function usePolling(
       // Clear interval if polling is disabled or tab is hidden
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
-        intervalRef.current = undefined;
+        intervalRef.current = null;
       }
       return;
     }

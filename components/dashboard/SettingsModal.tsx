@@ -102,10 +102,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
       {/* Modal — iOS bottom-sheet on mobile (slides up from bottom, rounded
           top only, full-width, safe-area padded); centered card on tablet+. */}
-      <div className="relative bg-white w-full max-w-2xl overflow-hidden shadow-2xl
-                      rounded-t-[24px] sm:rounded-[24px] sm:mx-4
-                      max-h-[92vh] sm:max-h-[85vh]
-                      pb-safe sm:pb-0">
+      <div className="relative bg-white w-full max-w-2xl overflow-hidden shadow-2xl rounded-t-[24px] sm:rounded-[24px] sm:mx-4 max-h-[92vh] sm:max-h-[85vh] pb-safe sm:pb-0">
         {/* Sheet-handle indicator on mobile */}
         <div className="sm:hidden flex justify-center pt-2 pb-1">
           <div className="w-9 h-1 rounded-full bg-black/15" />
