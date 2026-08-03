@@ -16,7 +16,6 @@ import {
   useWallets,
 } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getSuiContractAddresses, type NetworkType } from '../lib/contracts/addresses';
 import '@mysten/dapp-kit/dist/index.css';
 
@@ -34,16 +33,6 @@ const { networkConfig } = createNetworkConfig({
   mainnet: { url: '/api/rpc/sui' },
 });
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 3,
-      staleTime: 60_000,
-      gcTime: 300_000,
-    },
-  },
-});
 
 // ============================================
 // SUI CONTEXT TYPES
@@ -504,8 +493,6 @@ function SuiContextProvider({
 interface SuiWalletProvidersProps {
   children: ReactNode;
   defaultNetwork?: NetworkType;
-  /** Set to true when already inside a QueryClientProvider */
-  skipQueryProvider?: boolean;
 }
 
 // Get default network from environment variable
@@ -517,16 +504,18 @@ const getDefaultSuiNetwork = (): NetworkType => {
   return 'mainnet';
 };
 
-export function SuiWalletProviders({ 
+export function SuiWalletProviders({
   children,
   defaultNetwork = getDefaultSuiNetwork(),
-  skipQueryProvider = false,
 }: SuiWalletProvidersProps) {
   const [network, setNetwork] = useState<NetworkType>(defaultNetwork);
 
   const suiNetwork = network === 'mainnet' ? 'mainnet' : network === 'devnet' ? 'devnet' : 'testnet';
 
-  const content = (
+  // The parent <Providers> already supplies the QueryClientProvider that
+  // @mysten/dapp-kit needs. Rendering our own here would nest a second
+  // client + break useQuery cache sharing across the app.
+  return (
     <SuiClientProvider networks={networkConfig} defaultNetwork={suiNetwork}>
       <WalletProvider autoConnect>
         <SuiContextProvider network={network} setNetwork={setNetwork}>
@@ -534,16 +523,6 @@ export function SuiWalletProviders({
         </SuiContextProvider>
       </WalletProvider>
     </SuiClientProvider>
-  );
-
-  if (skipQueryProvider) {
-    return content;
-  }
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      {content}
-    </QueryClientProvider>
   );
 }
 
