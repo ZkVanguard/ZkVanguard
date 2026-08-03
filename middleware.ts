@@ -196,12 +196,8 @@ export function middleware(request: NextRequest) {
  * Supports multiple CDN providers
  */
 function getCountryFromRequest(request: NextRequest): string | null {
-  // Vercel Edge Network
-  if (request.geo?.country) {
-    return request.geo.country;
-  }
-  
-  // Vercel header fallback
+  // Vercel Edge Network (request.geo was removed in Next 15;
+  // the x-vercel-ip-country header remains the authoritative source)
   const vercelCountry = request.headers.get('x-vercel-ip-country');
   if (vercelCountry) {
     return vercelCountry;
