@@ -1,10 +1,23 @@
 {
   "compilerOptions": {
     "target": "ES2021",
-    "lib": ["dom", "dom.iterable", "ES2021"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2021"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
-    "types": ["node", "jest", "react", "react-dom", "ws", "eventsource", "chai", "mocha"],
+    "types": [
+      "node",
+      "jest",
+      "react",
+      "react-dom",
+      "ws",
+      "eventsource",
+      "chai",
+      "mocha"
+    ],
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
@@ -13,7 +26,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "baseUrl": ".",
     "plugins": [
@@ -22,22 +35,41 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@contracts/*": ["contracts/*"],
-      "@agents/*": ["agents/*"],
-      "@integrations/*": ["integrations/*"],
-      "@zk/*": ["zk/*"],
-      "@simulator/*": ["simulator/*"],
-      "@frontend/*": ["frontend/src/*"],
-      "@shared/*": ["shared/*"],
-      "@test/*": ["test/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@contracts/*": [
+        "contracts/*"
+      ],
+      "@agents/*": [
+        "agents/*"
+      ],
+      "@integrations/*": [
+        "integrations/*"
+      ],
+      "@zk/*": [
+        "zk/*"
+      ],
+      "@simulator/*": [
+        "simulator/*"
+      ],
+      "@frontend/*": [
+        "frontend/src/*"
+      ],
+      "@shared/*": [
+        "shared/*"
+      ],
+      "@test/*": [
+        "test/*"
+      ]
     }
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
