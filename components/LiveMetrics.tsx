@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, memo } from 'react';
+import { memo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
 interface PoolMetrics {
@@ -75,30 +76,16 @@ async function fetchPoolMetrics(): Promise<PoolMetrics | null> {
 
 export const LiveMetrics = memo(function LiveMetrics() {
   const t = useTranslations('liveMetrics');
-  const [mounted, setMounted] = useState(false);
-  const [metrics, setMetrics] = useState<PoolMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Shared react-query cache — any other component on the page mounting
+  // ['landing-pool-metrics'] gets the same in-flight promise + result.
+  const { data: metrics, isPending } = useQuery({
+    queryKey: ['landing-pool-metrics'],
+    queryFn: fetchPoolMetrics,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+  });
 
-  const refreshMetrics = useCallback(async () => {
-    const data = await fetchPoolMetrics();
-    if (data) {
-      setMetrics(data);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    refreshMetrics();
-    const interval = setInterval(refreshMetrics, 30000);
-    return () => clearInterval(interval);
-  }, [mounted, refreshMetrics]);
-
-  if (!mounted || loading) {
+  if (isPending) {
     return <StaticMetricsContent t={t} />;
   }
 

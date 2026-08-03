@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 interface TreasuryStatus {
   address: string;
@@ -24,35 +24,21 @@ interface WdkTreasuryStatusProps {
   showBalance?: boolean;
 }
 
+async function fetchTreasuryStatus(): Promise<TreasuryStatus> {
+  const res = await fetch('/api/community-pool/treasury/status');
+  if (!res.ok) throw new Error('Treasury service unavailable');
+  return res.json();
+}
+
 export function WdkWalletConnect({ className = '', showBalance = false }: WdkTreasuryStatusProps) {
-  const [status, setStatus] = useState<TreasuryStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchTreasuryStatus = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/community-pool/treasury/status');
-      if (!res.ok) {
-        throw new Error('Treasury service unavailable');
-      }
-      const data = await res.json();
-      setStatus(data);
-      setError(null);
-    } catch (err) {
-      setError('Treasury offline');
-      setStatus(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchTreasuryStatus();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchTreasuryStatus, 30000);
-    return () => clearInterval(interval);
-  }, [fetchTreasuryStatus]);
+  const { data: status, isPending: loading, isError } = useQuery({
+    queryKey: ['treasury-status'],
+    queryFn: fetchTreasuryStatus,
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const error = isError ? 'Treasury offline' : null;
 
   if (loading) {
     return (
