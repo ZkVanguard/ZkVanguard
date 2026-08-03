@@ -44,6 +44,7 @@ const nextConfig = {
       'viem', 'lucide-react', '@heroicons/react', 'framer-motion',
       'chart.js', 'react-chartjs-2', '@mysten/dapp-kit', '@mysten/sui',
       'ethers', 'zod', 'eventemitter3', 'uuid',
+      '@tanstack/react-query', 'react-markdown', 'remark-gfm',
     ],
     // Reduce page data sent to browser
     optimizeCss: true,
