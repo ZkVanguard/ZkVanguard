@@ -846,6 +846,10 @@ export async function GET(request: NextRequest) {
       },
       allHedges: hedgeDetails,
       protocolStats,
+    }, {
+      // On-chain reads paired with derived stats; cost is the RPC hop.
+      // 15s edge cache is safe — hedges lifecycle is minutes+.
+      headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45' },
     });
   } catch (error) {
     logger.error('On-chain hedge fetch error', { error: error instanceof Error ? error.message : String(error) });

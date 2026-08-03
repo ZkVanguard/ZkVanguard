@@ -31,6 +31,10 @@ export async function GET() {
         cuda_enabled: data.cuda_enabled || false,
         system_info: data.system_info || {},
         timestamp: Date.now(),
+      }, {
+        // Backend health rarely flips minute-to-minute; 30s cache
+        // is safe and saves the external fetch per request.
+        headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
       });
     }
     

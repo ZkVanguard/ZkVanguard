@@ -76,5 +76,9 @@ export async function GET(): Promise<NextResponse> {
       summary: broadSummary,
       sampleByHorizon,
     },
+  }, {
+    // Discovery cron runs at 30-min cadence; edge cache 60s + SWR 120s
+    // to collapse browser polling.
+    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
   });
 }

@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
       chain: 'oasis-sapphire',
       data: result,
       timestamp: new Date().toISOString(),
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
     });
   } catch (error) {
     logger.error('[OasisHedgingAPI] Error', { error: String(error) });

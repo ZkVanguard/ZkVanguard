@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
       network: process.env.NEXT_PUBLIC_OASIS_NETWORK || 'testnet',
       data: result,
       timestamp: new Date().toISOString(),
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
     });
   } catch (error) {
     logger.error('[OasisCommunityPoolAPI] Error', { error: String(error) });

@@ -662,7 +662,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<RiskOvervi
       hedgeHistory,
     };
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      // Investor-facing aggregation; underlying cron writes NAV every
+      // 30min. 30s edge cache is comfortable for LP dashboards.
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
+    });
   } catch (error: unknown) {
     return safeErrorResponse(error, 'Platform risk overview') as NextResponse<RiskOverviewResponse | { error: string }>;
   }
