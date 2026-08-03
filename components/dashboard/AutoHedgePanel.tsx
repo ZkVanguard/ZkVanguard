@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logger } from '@/lib/utils/logger';
 import { 
   Shield, 
@@ -104,93 +105,86 @@ interface AutoHedgePanelProps {
 }
 
 export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
-  const [data, setData] = useState<AutoHedgeData | null>(null);
   // Expanded by default on desktop, collapsed on mobile — reduces the pool
   // page's vertical noise. Set client-side after mount to avoid SSR jump.
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setExpanded(!window.matchMedia('(max-width: 639px)').matches);
   }, []);
-  const [updating, setUpdating] = useState(false);
-  const [gasStatus, setGasStatus] = useState<{
+  const queryClient = useQueryClient();
+
+  const autoHedgeKey = ['auto-hedge', chain ?? 'default'];
+
+  // react-query pauses refetchInterval when the tab is hidden by default,
+  // so we get the old visibility-based pause behavior for free.
+  const {
+    data,
+    isPending: loading,
+    error: queryError,
+  } = useQuery<AutoHedgeData>({
+    queryKey: autoHedgeKey,
+    queryFn: async () => {
+      const params = chain ? `?chain=${chain}` : '';
+      const res = await fetch(`/api/community-pool/auto-hedge${params}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed to fetch');
+      return json as AutoHedgeData;
+    },
+    refetchInterval: 30_000,
+    staleTime: 30_000,
+  });
+  const error = queryError ? (queryError instanceof Error ? queryError.message : 'Network error') : null;
+
+  // Poll operator gas status (SUI only) so the UI can warn when the cron
+  // has paused trading due to a low operator balance.
+  const { data: gasStatus } = useQuery<{
     configured: boolean;
     address?: string;
     suiBalance?: string;
     hasGas: boolean;
     gasFloorSui?: number;
-  } | null>(null);
-
-  const fetchData = useCallback(async () => {
-    try {
-      const params = chain ? `?chain=${chain}` : '';
-      const res = await fetch(`/api/community-pool/auto-hedge${params}`);
+  }>({
+    queryKey: ['sui-admin-wallet'],
+    queryFn: async () => {
+      const res = await fetch('/api/sui/community-pool?action=admin-wallet');
       const json = await res.json();
-      if (json.success) {
-        setData(json);
-        setError(null);
-      } else {
-        setError(json.error || 'Failed to fetch');
-      }
-    } catch (err) {
-      setError('Network error');
-    } finally {
-      setLoading(false);
-    }
-  }, [chain]);
+      if (!json?.success || !json?.data) throw new Error('gas status unavailable');
+      return json.data;
+    },
+    enabled: chain === 'sui',
+    refetchInterval: 60_000,
+    staleTime: 60_000,
+  });
 
-  useEffect(() => {
-    fetchData();
-    let interval: ReturnType<typeof setInterval> | null = null;
-    const start = () => { if (!interval) interval = setInterval(fetchData, 30000); };
-    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
-    const onVis = () => document.hidden ? stop() : start();
-    document.addEventListener('visibilitychange', onVis);
-    if (!document.hidden) start();
-    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
-  }, [fetchData]);
-
-  // Poll operator gas status (SUI only) so the UI can warn when the cron
-  // has paused trading due to a low operator balance.
-  useEffect(() => {
-    if (chain !== 'sui') return;
-    let cancelled = false;
-    const fetchGas = async () => {
-      try {
-        const res = await fetch('/api/sui/community-pool?action=admin-wallet');
-        const json = await res.json();
-        if (!cancelled && json?.success && json?.data) {
-          setGasStatus(json.data);
-        }
-      } catch {
-        // ignore — gas status is informational
-      }
-    };
-    fetchGas();
-    const id = setInterval(fetchGas, 60000);
-    return () => { cancelled = true; clearInterval(id); };
-  }, [chain]);
-
-  const toggleAutoHedge = async () => {
-    if (!data) return;
-    setUpdating(true);
-    try {
+  const toggleMutation = useMutation({
+    mutationFn: async (nextEnabled: boolean) => {
       const res = await fetch('/api/community-pool/auto-hedge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !data.enabled }),
+        body: JSON.stringify({ enabled: nextEnabled }),
       });
       const json = await res.json();
-      if (json.success) {
-        setData(prev => prev ? { ...prev, enabled: json.config.enabled } : null);
-      }
-    } catch (err) {
+      if (!json.success) throw new Error(json.error || 'toggle failed');
+      return json;
+    },
+    onSuccess: (json) => {
+      // Optimistic-adjacent: patch cache directly so the UI flips without
+      // waiting for the refetch; invalidate to reconcile with server truth.
+      queryClient.setQueryData<AutoHedgeData>(autoHedgeKey, (prev) =>
+        prev ? { ...prev, enabled: json.config.enabled } : prev
+      );
+      queryClient.invalidateQueries({ queryKey: autoHedgeKey });
+    },
+    onError: (err) => {
       logger.error('Failed to toggle auto-hedge', err instanceof Error ? err : undefined);
-    } finally {
-      setUpdating(false);
-    }
+    },
+  });
+  const updating = toggleMutation.isPending;
+
+  const toggleAutoHedge = () => {
+    if (!data) return;
+    toggleMutation.mutate(!data.enabled);
   };
 
   if (loading) {
@@ -248,7 +242,7 @@ export function AutoHedgePanel({ chain }: AutoHedgePanelProps = {}) {
         </div>
         <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); fetchData(); }}
+            onClick={(e) => { e.stopPropagation(); queryClient.invalidateQueries({ queryKey: autoHedgeKey }); }}
             className="p-1.5 sm:p-2 hover:bg-slate-700/50 rounded-lg transition-colors active:scale-[0.96]"
             aria-label="Refresh"
           >
