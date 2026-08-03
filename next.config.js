@@ -48,6 +48,14 @@ const nextConfig = {
     ],
     // Reduce page data sent to browser
     optimizeCss: true,
+    // React 19 auto-memoization — no manual useMemo/useCallback needed
+    // for most components. Turbopack has native compiler support in Next 16.
+    reactCompiler: true,
+    // NOTE: experimental.cacheComponents (Partial Prerendering) is NOT
+    // enabled — it is incompatible with `export const dynamic = 'force-dynamic'`
+    // and `export const runtime = 'nodejs'` on ~120 API routes here. Flipping
+    // it on requires rewriting each affected route to use the `'use cache'`
+    // directive with cacheLife/cacheTag. Ship as a per-route migration.
   },
 
   // Reduce serverless function size (moved from experimental in Next 15)
