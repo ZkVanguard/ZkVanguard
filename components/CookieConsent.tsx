@@ -76,12 +76,7 @@ export function CookieConsent() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-[100]
-                 px-3 pt-3 pb-safe sm:p-4 sm:pb-safe-4
-                 bg-white/95 backdrop-blur-xl border-t border-black/10 shadow-2xl
-                 rounded-t-[24px] sm:rounded-none
-                 max-h-[92vh] overflow-y-auto
-                 animate-slide-up"
+      className="fixed bottom-0 left-0 right-0 z-[100] px-3 pt-3 pb-safe sm:p-4 sm:pb-safe-4 bg-white/95 backdrop-blur-xl border-t border-black/10 shadow-2xl rounded-t-[24px] sm:rounded-none max-h-[92vh] overflow-y-auto animate-slide-up"
     >
       {/* Sheet-handle indicator on mobile — signals dismiss/interact affordance */}
       <div className="sm:hidden flex justify-center pb-2 -mt-1">

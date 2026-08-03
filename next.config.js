@@ -50,15 +50,16 @@ const nextConfig = {
     ],
     // Reduce page data sent to browser
     optimizeCss: true,
-    // Reduce serverless function size
-    outputFileTracingExcludes: {
-      '*': [
-        'node_modules/@swc/core-linux-x64-gnu',
-        'node_modules/@swc/core-linux-x64-musl',
-        'node_modules/@esbuild',
-        'node_modules/sharp',
-      ],
-    },
+  },
+
+  // Reduce serverless function size (moved from experimental in Next 15)
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/@swc/core-linux-x64-gnu',
+      'node_modules/@swc/core-linux-x64-musl',
+      'node_modules/@esbuild',
+      'node_modules/sharp',
+    ],
   },
   
   // Compiler optimizations

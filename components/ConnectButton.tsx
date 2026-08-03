@@ -180,12 +180,7 @@ export function ConnectButton() {
           <div className="absolute inset-0 bg-gradient-to-b from-[#4DA2FF]/10 via-black/50 to-black/60 backdrop-blur-md" />
 
           <div
-            className="relative w-full sm:max-w-[420px] mx-auto sm:mx-4 bg-white dark:bg-[#1c1c1e]
-                       rounded-t-[28px] sm:rounded-[24px]
-                       shadow-2xl shadow-[#4DA2FF]/10
-                       pb-safe sm:pb-0
-                       min-w-0 overflow-hidden
-                       animate-slide-up"
+            className="relative w-full sm:max-w-[420px] mx-auto sm:mx-4 bg-white dark:bg-[#1c1c1e] rounded-t-[28px] sm:rounded-[24px] shadow-2xl shadow-[#4DA2FF]/10 pb-safe sm:pb-0 min-w-0 overflow-hidden animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Sheet-handle indicator on mobile */}
@@ -310,12 +305,7 @@ export function ConnectButton() {
                     setShowMobileWallets(false);
                     setPendingMobileWallet(null);
                   }}
-                  className="h-11 sm:h-auto px-4 py-2 text-sm font-medium
-                             text-[#1D1D1F] dark:text-white
-                             bg-[#F5F5F7] dark:bg-[#2c2c2e]
-                             hover:bg-[#E5E5EA] dark:hover:bg-[#3c3c3e]
-                             active:scale-[0.98]
-                             rounded-xl transition-all"
+                  className="h-11 sm:h-auto px-4 py-2 text-sm font-medium text-[#1D1D1F] dark:text-white bg-[#F5F5F7] dark:bg-[#2c2c2e] hover:bg-[#E5E5EA] dark:hover:bg-[#3c3c3e] active:scale-[0.98] rounded-xl transition-all"
                 >
                   Cancel
                 </button>
@@ -323,12 +313,7 @@ export function ConnectButton() {
                   href={SUI_MOBILE_WALLETS[0].installUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 h-11 sm:h-auto px-4 py-2 text-sm font-medium text-center
-                             text-[#4DA2FF]
-                             bg-[#4DA2FF]/10 hover:bg-[#4DA2FF]/15
-                             active:scale-[0.98]
-                             rounded-xl transition-all
-                             inline-flex items-center justify-center gap-1"
+                  className="flex-1 h-11 sm:h-auto px-4 py-2 text-sm font-medium text-center text-[#4DA2FF] bg-[#4DA2FF]/10 hover:bg-[#4DA2FF]/15 active:scale-[0.98] rounded-xl transition-all inline-flex items-center justify-center gap-1"
                 >
                   Don&apos;t have Slush?
                   <span className="opacity-80">Install →</span>
