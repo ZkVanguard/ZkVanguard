@@ -60,12 +60,15 @@ export async function GET(request: NextRequest) {
 
     // Two-tier cache check (memory → DB)
     // Tier 1: In-memory per-user cache
+    // Per-wallet URL → edge cache is safe (keys on ?address=X).
+    const CACHE_HEADERS = { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' };
+
     const memCached = listCache.get(address.toLowerCase());
     if (memCached && Date.now() - memCached.timestamp < CACHE_TTL) {
       logger.info(`[Portfolio List API] Memory cache HIT for ${address}`);
-      return NextResponse.json(memCached.data);
+      return NextResponse.json(memCached.data, { headers: CACHE_HEADERS });
     }
-    
+
     // Tier 2: DB cache (survives cold starts)
     const dbCached = await getDbCachedList(address);
     if (dbCached) {
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
       listCache.delete(key);
       listCache.set(key, { data: dbCached, timestamp: Date.now() });
       logger.info(`[Portfolio List API] DB cache HIT (cold start recovery) for ${address}`);
-      return NextResponse.json(dbCached);
+      return NextResponse.json(dbCached, { headers: CACHE_HEADERS });
     }
 
     logger.info(`[Portfolio List API] Fetching portfolios for ${address}`);
@@ -94,7 +97,7 @@ export async function GET(request: NextRequest) {
     if (count === 0) {
       const response = { portfolios: [], count: 0 };
       await setAllListCaches(address, response);
-      return NextResponse.json(response);
+      return NextResponse.json(response, { headers: CACHE_HEADERS });
     }
 
     // Fetch all portfolios in parallel
@@ -177,7 +180,7 @@ export async function GET(request: NextRequest) {
 
     logger.info(`[Portfolio List API] Found ${portfoliosWithTx.length}/${count} portfolios for ${address} in ${Date.now() - startTime}ms`);
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, { headers: CACHE_HEADERS });
   } catch (error) {
     logger.error('[Portfolio List API] Error', error);
     return safeErrorResponse(error, 'Portfolio list');

@@ -192,6 +192,10 @@ export async function GET(_request: NextRequest) {
         proof_generation_working: testProof?.generated || false,
         average_proof_time: testProof?.generation_time || 'N/A'
       }
+    }, {
+      // ZK attestation shape is stable; 60s cache is safe and saves
+      // the test proof round-trip.
+      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' },
     });
 
   } catch (error: unknown) {

@@ -165,6 +165,10 @@ export async function GET(): Promise<NextResponse> {
         ageMs: snap.ageMs,
         warning: snap.warning,
       },
+    }, {
+      // Venue snapshot updates on BlueFin cadence + DB writes on cron;
+      // 15s edge cache is safe for dashboard polling.
+      headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45' },
     });
   }
 }

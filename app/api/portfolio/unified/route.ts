@@ -441,7 +441,11 @@ export async function GET(request: NextRequest): Promise<NextResponse<UnifiedPor
         allocation,
         warnings,
       };
-      return NextResponse.json(response);
+      return NextResponse.json(response, {
+        // Per-wallet URL — edge cache keys on ?wallet=X, so cross-user
+        // isolation is preserved; repeat views collapse in 15s window.
+        headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45' },
+      });
     }
 
     // EVM path: hit existing portfolio list as the data source
@@ -503,7 +507,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<UnifiedPor
       allocation,
       warnings,
     };
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45' },
+    });
   } catch (error: unknown) {
     return safeErrorResponse(error, 'Unified portfolio') as NextResponse<UnifiedPortfolioResponse | { error: string }>;
   }

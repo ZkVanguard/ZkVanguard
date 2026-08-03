@@ -71,6 +71,10 @@ export async function GET(request: NextRequest) {
       hedges,
       count: hedges.length,
       stats,
+    }, {
+      // DB rows updated by cron; 15s edge cache with 45s SWR collapses
+      // dashboard tab polling.
+      headers: { 'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=45' },
     });
 
   } catch (error) {

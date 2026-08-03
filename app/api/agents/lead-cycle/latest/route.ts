@@ -62,5 +62,8 @@ export async function GET(): Promise<NextResponse> {
       isStale,
       heartbeatAgeMs: heartbeat ? now - heartbeat : null,
     },
+  }, {
+    // LeadAgent runs every 30min at most; 30s cache is comfortable.
+    headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
   });
 }
