@@ -24,11 +24,14 @@ import '@mysten/dapp-kit/dist/index.css';
 // SUI NETWORK CONFIGURATION
 // ============================================
 
+// Route browser SUI RPC through our same-origin proxy — fullnode.mainnet.sui.io
+// killed JSON-RPC 2026-07 AND never sent CORS headers. Proxy applies the same
+// BlockVision → publicnode → nodeinfra failover the server uses.
 const { networkConfig } = createNetworkConfig({
   localnet: { url: getFullnodeUrl('localnet') },
   devnet: { url: getFullnodeUrl('devnet') },
-  testnet: { url: getFullnodeUrl('testnet') },
-  mainnet: { url: getFullnodeUrl('mainnet') },
+  testnet: { url: '/api/rpc/sui-testnet' },
+  mainnet: { url: '/api/rpc/sui' },
 });
 
 const queryClient = new QueryClient({
