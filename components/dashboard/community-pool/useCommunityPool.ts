@@ -1591,13 +1591,13 @@ export function useCommunityPool(propAddress?: string) {
         return;
       }
 
-      // Step 2: Fetch the user's USDC coin objects on-chain
-      const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+      // Step 2: Fetch the user's USDC coin objects on-chain via same-origin
+      // proxy. fullnode.mainnet.sui.io killed JSON-RPC 2026-07 AND has no
+      // CORS headers — every direct browser hit fails 'net::ERR_FAILED'.
+      // /api/rpc/sui applies the same BlockVision failover the server uses.
+      const { SuiClient } = await import('@mysten/sui/client');
       const { Transaction } = await import('@mysten/sui/transactions');
-      const rpcUrl =
-        suiNetwork === 'mainnet' || suiNetwork === 'testnet'
-          ? getFullnodeUrl(suiNetwork)
-          : getFullnodeUrl('mainnet');
+      const rpcUrl = suiNetwork === 'testnet' ? '/api/rpc/sui-testnet' : '/api/rpc/sui';
       const client = new SuiClient({ url: rpcUrl });
 
       const usdcCoins = await client.getCoins({ owner: suiAddress, coinType: usdcType });

@@ -91,8 +91,10 @@ const badRpcImports = [];
 
 for (const file of files) {
   const src = fs.readFileSync(file, 'utf-8');
-  const head = src.slice(0, 200);
-  const isClient = /^\s*['"]use client['"]\s*;?/m.test(head);
+  // Scan the whole file for 'use client' — some hooks put JSDoc + imports
+  // before the pragma (see components/dashboard/community-pool/useCommunityPool.ts
+  // where 'use client' sits on line 17 behind a long header).
+  const isClient = /^\s*['"]use client['"]\s*;?/m.test(src);
   if (!isClient) continue;
   // Local/devnet use is fine — those resolve to localhost or dev endpoints.
   // Only mainnet + testnet are the dead-JSON-RPC + no-CORS endpoints.
