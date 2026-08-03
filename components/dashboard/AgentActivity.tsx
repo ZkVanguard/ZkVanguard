@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useCallback, memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query';
 import { logger } from '@/lib/utils/logger';
 import { Activity, CheckCircle, Clock, XCircle, Shield, Brain, Zap, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ZKBadgeInline, type ZKProofData } from '@/components/ZKVerificationBadge';
 import { getAgentActivity, type AgentTask } from '@/lib/api/agents';
-import { usePolling, useLoading, useToggle } from '@/lib/hooks';
+import { useToggle } from '@/lib/hooks';
 import { usePositions } from '@/contexts/PositionsContext';
 
 interface AgentActivityProps {
@@ -64,10 +65,9 @@ async function generateTaskProof(task: AgentTask): Promise<ZKProofData> {
 
 export const AgentActivity = memo(function AgentActivity({ address, onTaskComplete: _onTaskComplete }: AgentActivityProps) {
   const { positionsData, derived } = usePositions();
-  const [tasks, setTasks] = useState<(AgentTask & { zkProof?: ZKProofData; impact?: { metric: string; before: string | number; after: string | number } })[]>([]);
-  const { isLoading: loading, error, setError, stopLoading } = useLoading(true);
   const [autoRefresh, toggleAutoRefresh] = useToggle(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const activityKey = ['agent-activity', address || '0x0000000000000000000000000000000000000000'];
 
   // Calculate real portfolio analysis from context
   const _portfolioAnalysis = useMemo(() => {
@@ -154,34 +154,51 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
     };
   }, [positionsData, derived]);
 
-  const fetchActivity = useCallback(async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) setIsRefreshing(true);
-    
-    try {
-      const activity = await getAgentActivity(address || '0x0000000000000000000000000000000000000000');
-      
-      const tasksWithProofs = await Promise.all(
-        activity.slice(0, 15).map(async (task) => {
-          if (task.status === 'completed') {
-            const zkProof = await generateTaskProof(task);
-            return { ...task, zkProof };
-          }
-          return task;
-        })
-      );
-      
-      setTasks(tasksWithProofs);
-      stopLoading();
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      setTasks([]);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [address, setError]);
+  const {
+    data: activity,
+    isPending: loading,
+    isFetching: isRefreshing,
+    error: queryError,
+  } = useQuery({
+    queryKey: activityKey,
+    queryFn: () => getAgentActivity(address || '0x0000000000000000000000000000000000000000'),
+    refetchInterval: autoRefresh ? 5000 : false,
+    staleTime: 5000,
+  });
+  const error = queryError
+    ? (queryError instanceof Error ? queryError.message : 'Unknown error')
+    : null;
 
-  usePolling(fetchActivity, 5000, autoRefresh);
+  const trimmedActivity = useMemo(() => (activity ?? []).slice(0, 15), [activity]);
+  const completedTasks = useMemo(
+    () => trimmedActivity.filter((t) => t.status === 'completed'),
+    [trimmedActivity]
+  );
+
+  // Per-task proof cache — a completed task's proof is immutable, so
+  // staleTime: Infinity means every completed task generates its proof
+  // exactly ONCE per tab session. Prior code regenerated every 5s.
+  const proofQueries = useQueries({
+    queries: completedTasks.map((task) => ({
+      queryKey: ['zk-proof-agent-task', task.id],
+      queryFn: () => generateTaskProof(task),
+      staleTime: Infinity,
+      gcTime: Infinity,
+      retry: 1,
+    })),
+  });
+
+  const tasks = useMemo(() => {
+    const proofByTaskId = new Map<string, ZKProofData>();
+    completedTasks.forEach((task, i) => {
+      const proof = proofQueries[i]?.data;
+      if (proof) proofByTaskId.set(task.id, proof);
+    });
+    return trimmedActivity.map((t) => ({
+      ...t,
+      zkProof: proofByTaskId.get(t.id),
+    })) as (AgentTask & { zkProof?: ZKProofData; impact?: { metric: string; before: string | number; after: string | number } })[];
+  }, [trimmedActivity, completedTasks, proofQueries]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -253,7 +270,7 @@ export const AgentActivity = memo(function AgentActivity({ address, onTaskComple
             Auto {autoRefresh ? 'ON' : 'OFF'}
           </button>
           <button
-            onClick={() => fetchActivity(true)}
+            onClick={() => queryClient.invalidateQueries({ queryKey: activityKey })}
             disabled={isRefreshing}
             className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg transition-colors disabled:opacity-50"
           >

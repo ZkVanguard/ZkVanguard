@@ -8,7 +8,8 @@
  * peak annotation. Deliberately minimal — no interactions beyond
  * hovering; window buttons are single-click state changes.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -49,24 +50,24 @@ const WINDOWS: Array<{ label: string; value: '7d' | '30d' | '60d' | 'all'; bucke
 ];
 
 export function NavHistoryChart() {
-  const [data, setData] = useState<NavHistoryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [window, setWindow] = useState<typeof WINDOWS[number]>(WINDOWS[1]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch(`/api/platform/nav-history?window=${window.value}&bucket=${window.bucket}`)
-      .then((r) => r.json())
-      .then((json) => { if (!cancelled) setData(json as NavHistoryResponse); })
-      .catch((e: unknown) => {
-        logger.warn('[NavHistoryChart] fetch failed', {
-          error: e instanceof Error ? e.message : String(e),
-        });
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [window]);
+  // Keyed on window so switching back to a previously-seen range is
+  // instant from cache. Backing route carries s-maxage=60 (see
+  // /api/platform/nav-history), so Vercel edge collapses across users.
+  const { data, isPending: loading, error } = useQuery({
+    queryKey: ['platform-nav-history', window.value, window.bucket],
+    queryFn: async (): Promise<NavHistoryResponse> => {
+      const r = await fetch(`/api/platform/nav-history?window=${window.value}&bucket=${window.bucket}`);
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+  if (error) {
+    logger.warn('[NavHistoryChart] fetch failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const chart = useMemo(() => {
     if (!data || data.points.length === 0) return null;

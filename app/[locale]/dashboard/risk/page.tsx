@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Activity, Shield, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, Clock, Layers, Database, Zap, Eye,
@@ -386,31 +386,25 @@ function HedgePositionRow({ h }: { h: HedgeRow }) {
   );
 }
 
-export default function PlatformRiskPage() {
-  const [data, setData] = useState<RiskOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+async function fetchRiskOverview(): Promise<RiskOverview> {
+  const r = await fetch('/api/platform/risk-overview');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = () => {
-      fetch('/api/platform/risk-overview')
-        .then(async (r) => {
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          return r.json();
-        })
-        .then((json) => { if (!cancelled) setData(json as RiskOverview); })
-        .catch((e: unknown) => {
-          const msg = e instanceof Error ? e.message : String(e);
-          logger.error('[RiskPage] fetch failed', { error: msg });
-          if (!cancelled) setError(msg);
-        })
-        .finally(() => { if (!cancelled) setLoading(false); });
-    };
-    load();
-    const interval = setInterval(load, 60_000); // refresh every 60s
-    return () => { cancelled = true; clearInterval(interval); };
-  }, []);
+export default function PlatformRiskPage() {
+  const { data, isPending: loading, error: queryError } = useQuery({
+    queryKey: ['platform-risk-overview'],
+    queryFn: fetchRiskOverview,
+    refetchInterval: 60_000,
+    staleTime: 60_000,
+  });
+  const error = queryError
+    ? (queryError instanceof Error ? queryError.message : String(queryError))
+    : null;
+  if (queryError) {
+    logger.error('[RiskPage] fetch failed', { error });
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-8 md:py-10 space-y-3 sm:space-y-6 min-w-0">
