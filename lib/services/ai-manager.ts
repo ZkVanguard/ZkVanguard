@@ -294,8 +294,11 @@ class AIManagerService {
         }
       };
 
-      this.websocket.onerror = (error) => {
-        logger.error('[AIManager] WebSocket error', error instanceof Error ? error : undefined);
+      this.websocket.onerror = () => {
+        // Event has no useful detail (browser redacts for security) and
+        // onclose fires next with the actual close code + drives reconnect
+        // and REST fallback. Just mark disconnected — no log to avoid
+        // "WebSocket error {error: undefined}" noise on every bfcache exit.
         this.state.websocketConnected = false;
       };
 
