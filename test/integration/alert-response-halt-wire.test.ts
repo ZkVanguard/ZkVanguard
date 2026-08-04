@@ -22,7 +22,10 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 // ─── Mock cron_state — capture writes ──────────────────────────────────────
 const setCronStateSpy = jest.fn(async (_key: string, _value: unknown) => {});
 const setCronHaltSpy = jest.fn(async (_cronId: string, _untilMs: number, _reason: string) => {});
-const tryClaimCronRunSpy = jest.fn(async () => true);
+// Real signature: { claimed, lastRunMs, reason? }. Prior mock returned
+// `true` (boolean), which masked a bug where callers did `if (!claim)`
+// on the truthy object → debounce never fired. Match real shape.
+const tryClaimCronRunSpy = jest.fn(async () => ({ claimed: true, lastRunMs: 0 } as { claimed: boolean; lastRunMs: number; reason?: string }));
 
 jest.mock('@/lib/db/cron-state', () => ({
   setCronState: setCronStateSpy,
@@ -83,7 +86,7 @@ describe('alert-response-loop route — HALT wire', () => {
     setCronStateSpy.mockClear();
     setCronHaltSpy.mockClear();
     tryClaimCronRunSpy.mockClear();
-    tryClaimCronRunSpy.mockImplementation(async () => true);
+    tryClaimCronRunSpy.mockImplementation(async () => ({ claimed: true, lastRunMs: 0 } as { claimed: boolean; lastRunMs: number; reason?: string }));
     // Restore env
     for (const k of Object.keys(process.env)) delete process.env[k];
     Object.assign(process.env, ORIGINAL_ENV);
