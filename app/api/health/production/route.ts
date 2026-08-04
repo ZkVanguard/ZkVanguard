@@ -27,7 +27,27 @@ import { notifyDiscord } from '@/lib/utils/discord-notify';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 20;
+// Was 20s; 8 sequential DB checks each with 20s query_timeout + 7s pool-
+// exhaustion retry backoff can single-handedly eat the entire budget on
+// a degraded DB → FUNCTION_INVOCATION_TIMEOUT. 30s + per-check race
+// timeout (see withCheckTimeout) leaves comfortable headroom.
+export const maxDuration = 30;
+
+// Per-check race timeout. When Aiven is congested a single query can
+// hang for its 20s query_timeout + 7s retry backoff. Wrap each health
+// check so one slow component can't starve the rest and cascade the
+// whole endpoint into a timeout.
+const CHECK_TIMEOUT_MS = 3000;
+async function withCheckTimeout<T extends Component>(check: Promise<T>, name: string): Promise<T> {
+  const timeoutFallback: Component = {
+    status: 'warn',
+    detail: `${name}: check exceeded ${CHECK_TIMEOUT_MS}ms budget`,
+  };
+  return Promise.race([
+    check,
+    new Promise<T>((resolve) => setTimeout(() => resolve(timeoutFallback as T), CHECK_TIMEOUT_MS)),
+  ]);
+}
 
 type CompStatus = 'ok' | 'warn' | 'down';
 interface Component {
@@ -335,9 +355,9 @@ export async function GET(req: NextRequest) {
   const start = Date.now();
   // External HTTP checks fire in parallel — they don't touch the DB pool.
   const [polymarket, suiRpc, bluefin] = await Promise.all([
-    checkPolymarket(),
-    checkSuiRpc(),
-    checkBluefin(),
+    withCheckTimeout(checkPolymarket(), 'polymarket'),
+    withCheckTimeout(checkSuiRpc(), 'suiRpc'),
+    withCheckTimeout(checkBluefin(), 'bluefin'),
   ]);
 
   // DB-touching checks run sequentially. Aiven's plan-wide connection_limit=20
@@ -345,29 +365,31 @@ export async function GET(req: NextRequest) {
   // queries can saturate the pool and tip the endpoint into the same
   // `remaining connection slots are reserved...` error it's meant to diagnose.
   // Six fast queries serialized cost ~600ms total — acceptable for a health probe.
+  // Each is race-wrapped so a stuck query fails fast instead of eating the
+  // whole 30s budget.
   //
   // Heartbeat keys written by each cron's tryClaimCronRun or explicit
   // setCronState, NOT the bare route names. The trader writes
   // polymarket-edge:* only on trade state changes; an idle WAIT tick writes
   // nothing, so we fall back to its daily stats key which updates on every
   // realized trade.
-  const db = await checkDb();
-  const navFreshness = await checkNavFreshness();
-  const suiPoolCron = await checkCronAge('cron:lastRun:sui-community-pool', 45, 90);
+  const db = await withCheckTimeout(checkDb(), 'db');
+  const navFreshness = await withCheckTimeout(checkNavFreshness(), 'navFreshness');
+  const suiPoolCron = await withCheckTimeout(checkCronAge('cron:lastRun:sui-community-pool', 45, 90), 'suiPoolCron');
   // FIX 2026-06-22: was reading 'polymarket-edge:daily' (a stats key only
   // written on actual trade execution), so cron 'no entry yet' even though
   // the trader was firing every 5 min. Use the real heartbeat key the
   // trader route writes at the top of every invocation.
-  const traderCron = await checkCronAge('cron:lastRun:polymarket-edge-trader', 15, 30);
-  const hedgeReconcileCron = await checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240);
-  const bluefinHealthCron = await checkCronAge('bluefin-health:consecutiveDegraded', 15, 30);
-  const bluefinDbReconcileCron = await checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60);
+  const traderCron = await withCheckTimeout(checkCronAge('cron:lastRun:polymarket-edge-trader', 15, 30), 'traderCron');
+  const hedgeReconcileCron = await withCheckTimeout(checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240), 'hedgeReconcileCron');
+  const bluefinHealthCron = await withCheckTimeout(checkCronAge('bluefin-health:consecutiveDegraded', 15, 30), 'bluefinHealthCron');
+  const bluefinDbReconcileCron = await withCheckTimeout(checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60), 'bluefinDbReconcileCron');
 
   // v0.3.0 defense: phantom hedge rate over last hour. Proxies via closed
   // hedges with $0 realized_pnl and notional ≥ $1 — the same query the
   // bulletproof drawdown test uses as its meta-invariant. > 1% warns;
   // > 5% is down (exchange fills unreliable → auto-halt trader gate).
-  const phantomRate = await checkPhantomRate();
+  const phantomRate = await withCheckTimeout(checkPhantomRate(), 'phantomRate');
 
   const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate };
   const overall = worstStatus(Object.values(components));

@@ -102,8 +102,24 @@ export function getPool(): Pool {
     });
 
     pool.on('connect', (client: PoolClient) => {
-      // Set per-connection statement timeout as a safety net
-      client.query('SET statement_timeout = 15000').catch(() => {});
+      // Statement timeout: kill hung queries.
+      // idle_session_timeout (PG14+): SERVER-side reap for connections that
+      // sit idle. Client-side idleTimeoutMillis fails on Vercel because the
+      // Lambda hibernates and setTimeout doesn't fire — 2026-08-04 obs
+      // showed 6 idle conns pinned for 500+s and Aiven's 20-slot budget
+      // saturated. Server-side timeout works even when the client is frozen.
+      // idle_in_transaction_session_timeout guards against stuck transactions
+      // that hold row locks + a connection slot indefinitely.
+      // Application_name makes leaks visible in pg_stat_activity.
+      const appName = (process.env.VERCEL_ENV
+        ? `zkv-${process.env.VERCEL_ENV}`
+        : 'zkv-local').slice(0, 63);
+      client.query(`
+        SET statement_timeout = 15000;
+        SET idle_in_transaction_session_timeout = 10000;
+        SET idle_session_timeout = 30000;
+        SET application_name = '${appName.replace(/[^a-zA-Z0-9_-]/g, '')}';
+      `).catch(() => {});
     });
   }
 
