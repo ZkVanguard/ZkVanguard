@@ -12,29 +12,8 @@ export const metadata: Metadata = {
 export default async function PricingPage() {
   return (
     <div className="min-h-screen bg-[#fbfbfd]">
-      {/* Navbar — collapses to compact on mobile (link labels shorten) */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-black/5 pt-safe pl-safe pr-safe">
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2 min-w-0">
-          <Link href="/" className="text-base sm:text-[20px] font-semibold text-[#1d1d1f] truncate">
-            ZkVanguard
-          </Link>
-          <div className="flex items-center gap-2 sm:gap-6 flex-shrink-0">
-            <Link href="/developers" className="text-[13px] sm:text-[14px] text-[#86868b] hover:text-[#1d1d1f] hidden xs:inline">
-              API
-            </Link>
-            <Link href="/dashboard" className="text-[13px] sm:text-[14px] text-[#86868b] hover:text-[#1d1d1f] hidden sm:inline">
-              Dashboard
-            </Link>
-            <Link
-              href="/dashboard"
-              className="bg-[#007AFF] text-white h-9 sm:h-auto px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-[14px] font-medium hover:bg-[#0066d6] active:scale-[0.98] transition-all"
-            >
-              Get started
-            </Link>
-          </div>
-        </div>
-      </nav>
-
+      {/* Global <Navbar /> renders in app/[locale]/layout.tsx — don't
+          double-render one here (used to cover the real nav at z-50). */}
       <main className="max-w-7xl mx-auto px-3 sm:px-4 pt-20 sm:pt-24 pb-12 sm:pb-16 min-w-0">
         {/* Hero */}
         <header className="text-center max-w-3xl mx-auto mb-8 sm:mb-12 min-w-0">
