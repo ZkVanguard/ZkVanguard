@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-04 — Pool wash-trade bleed stopped
+
+### Autonomy — sample-rate + hysteresis
+
+The pool kept bleeding after 3afc3085 shipped the per-asset stale-hedge fix. Deep-dive on the prod ring buffer found two execution-level chop loops. Signal quality wasn't the issue — sample-rate aliasing was.
+
+- **agent-signal-tick confidence gate** (`app/api/cron/agent-signal-tick/route.ts:74`) — was firing `checkAndCloseDrifts` on every direction change including 39%-conf coin-flips. New env `SIGNAL_FLIP_MIN_CONF` (default 55) requires the NEW signal to meet confidence before treating the change as an actionable flip. State write is suppressed on suppressed flips so a noise flip doesn't rewrite the baseline and hide the next real one.
+- **agent-signal-tick claim debounce 90s → 15 min** — `Polymarket5MinService` is a 5-minute binary market ("BTC up or down in 5 min"); sampling it every 90s produced 125 flips in 3h ring buffer with 48 at ≥85% conf. Not signal quality — sample-rate aliasing on a coin-flip market. New env `SIGNAL_TICK_INTERVAL_MS` (default 900_000). Matches the effective persistence of the underlying feed. QStash schedule (every 2 min) stays put; excess triggers no-op via claim debounce.
+- **Profit-lock zero-risk hysteresis** (`lib/services/sui/cron/profit-lock-guard.ts:120`) — NAV oscillating around the 20% DD threshold triggered a wash-trade loop: sell all spot to USDC at 20% DD, buy back at 19% DD, sell again next tick (~4-6× per day at ~30-50 bps per round-trip). New env `PROFIT_LOCK_HYSTERESIS_PCT` (default 5); once in zero-risk, require drawdown to recover past `PROFIT_LOCK_ZERO_RISK_AT - PROFIT_LOCK_HYSTERESIS_PCT` before easing. `applyProfitLock` accepts `wasInZeroRisk` via existing `profit-lock:zero-since` cron_state key — no new state.
+- **Test coverage** — 4 new unit tests in `test/unit/profit-lock-recovery.test.ts` covering enter/exit/no-hold/env-override cases. Bulletproof drawdown stays 10/10.
+
+### Known structural (not code) limits
+- At $29 pool NAV, BTC-PERP minQty (0.001 → $73 notional) and ETH-PERP minQty (0.01 → $30 notional) prevent proper hedging. Spot BTC/ETH sit naked-long → any market drop bleeds. Signal accuracy doesn't help when the venue's minQty prevents acting on it. Unblock is lifting the $10K TVL cap so deposits can grow the pool past the minQty gap.
+
 ## [0.4.0] - 2026-07-31 — Full autonomy on, DB slimmed, monster methods cracked
 
 ### Autonomy — defense gates now default ON

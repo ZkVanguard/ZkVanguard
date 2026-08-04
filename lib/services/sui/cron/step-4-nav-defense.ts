@@ -169,11 +169,16 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
         if (Number.isFinite(parsed) && parsed >= 0) drawdownPct7dAgo = parsed;
       } catch { /* best-effort */ }
 
+      // Pass in-zero-risk-streak flag so applyProfitLock can hysteresis-hold
+      // us in zero-risk until drawdown truly recovers (see PROFIT_LOCK_HYSTERESIS_PCT
+      // in profit-lock-guard). Reused key: `profit-lock:zero-since` is already
+      // tracked below for alert-response 24h UNWIND_ALL_SPOT.
+      const priorZeroSince = await getCronStateOr<number | null>('profit-lock:zero-since', null);
       const lockDecision = applyProfitLock(
         aiResult.allocations as Record<string, number>,
         navUsd,
         peakNavForLock,
-        { drawdownPct7dAgo },
+        { drawdownPct7dAgo, wasInZeroRisk: priorZeroSince !== null },
       );
       if (lockDecision.active) {
         logger.warn('[SUI Cron] Profit-lock guard capped risk allocation', {

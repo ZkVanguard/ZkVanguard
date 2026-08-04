@@ -39,7 +39,13 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
 const CRON_KEY = 'agent-signal-tick';
-const TICK_INTERVAL_MS = 90 * 1000;        // claim debounce — 90s
+// Claim debounce. QStash fires every 2 min; the debounce is what actually
+// gates cron work. Was 90s (near-continuous polling of the 5-min binary
+// market). Prod ring buffer 2026-08-04 showed 125 flips, median gap 4 min,
+// 48 at ≥85% conf — that's not signal quality, it's polling faster than
+// the underlying signal-to-noise permits. 15 min matches the effective
+// persistence of the 5-min-window feed. Env override for tuning.
+const TICK_INTERVAL_MS = Number(process.env.SIGNAL_TICK_INTERVAL_MS) || 15 * 60 * 1000;
 const STATE_KEY = `${CRON_KEY}:last-signal`;
 const HEARTBEAT_KEY = `cron:lastRun:${CRON_KEY}`;
 
@@ -69,7 +75,15 @@ async function handle(request: NextRequest): Promise<NextResponse> {
 
     const last = await getCronState<LastSignalState>(STATE_KEY);
 
-    const directionFlipped = !!last && last.direction !== current.direction;
+    // Signal-flip confidence gate. In prod 2026-08-04 the 5-min ticker
+    // flipped direction 24x in 3h, many at 39% conf (essentially coin-flip).
+    // Every flip fired checkAndCloseDrifts → closed the perp → next flip
+    // 2-4 min later re-opened it. Wash-trade engine on perp side.
+    // Ignore low-conf flips AND suppress the state write so a noise flip
+    // doesn't rewrite the baseline and hide the NEXT real flip.
+    const MIN_FLIP_CONFIDENCE = Number(process.env.SIGNAL_FLIP_MIN_CONF) || 55;
+    const wouldFlip = !!last && last.direction !== current.direction;
+    const directionFlipped = wouldFlip && current.confidence >= MIN_FLIP_CONFIDENCE;
     const strongEmerged = current.confidence >= 75 && (!last || last.confidence < 60);
 
     const newState: LastSignalState = {
@@ -78,7 +92,13 @@ async function handle(request: NextRequest): Promise<NextResponse> {
       windowLabel: current.windowLabel,
       observedAt: now,
     };
-    await setCronState(STATE_KEY, newState).catch(() => {});
+    if (wouldFlip && !directionFlipped) {
+      logger.debug('[AgentSignalTick] suppressed noise-flip', {
+        lastDir: last?.direction, currentDir: current.direction, conf: current.confidence,
+      });
+    } else {
+      await setCronState(STATE_KEY, newState).catch(() => {});
+    }
 
     // No actionable change → done in ~50ms
     if (!directionFlipped && !strongEmerged) {
