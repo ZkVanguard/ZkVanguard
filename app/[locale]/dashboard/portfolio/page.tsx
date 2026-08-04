@@ -235,10 +235,7 @@ export default function DashboardOverviewPage() {
   }
 
   return (
-    // pt-[52px] clears the fixed global Navbar (same pattern as
-    // app/[locale]/dashboard/page.tsx:524). Without it, header text
-    // renders underneath the navbar on this standalone sub-page.
-    <div className="pt-[52px] min-h-screen">
+    // Navbar clearance + horizontal tab strip live in dashboard/layout.tsx.
     <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-10 space-y-3 sm:space-y-6 min-w-0">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
         <div className="min-w-0">
@@ -340,7 +337,6 @@ export default function DashboardOverviewPage() {
           )}
         </>
       )}
-    </div>
     </div>
   );
 }
