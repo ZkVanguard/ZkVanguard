@@ -94,7 +94,57 @@
     "totalValue": "Gesamter Portfolio-Wert",
     "riskScore": "Risikobewertung",
     "activePositions": "Aktive Positionen",
-    "monthlyReturn": "Monatliche Rendite"
+    "monthlyReturn": "Monatliche Rendite",
+    "settingsModal": {
+      "title": "Einstellungen",
+      "subtitle": "Dashboard-Einstellungen konfigurieren",
+      "close": "Schließen",
+      "saving": "Speichern…",
+      "save": "Änderungen speichern",
+      "cancel": "Abbrechen",
+      "tabs": {
+        "general": "Allgemein",
+        "hedging": "Hedging",
+        "alerts": "Warnungen",
+        "privacy": "Datenschutz"
+      },
+      "general": {
+        "display": "Anzeige",
+        "darkMode": "Dunkelmodus",
+        "darkModeDesc": "Zwischen hellem und dunklem Design wechseln",
+        "compactView": "Kompaktansicht",
+        "compactViewDesc": "Mehr Daten auf weniger Raum anzeigen",
+        "wallet": "Wallet",
+        "walletDesc": "Wallet-Einstellungen werden über Ihren verbundenen Wallet-Anbieter verwaltet (MetaMask, WalletConnect usw.)"
+      },
+      "hedging": {
+        "autoApproval": "Automatische Freigabe",
+        "autoApprovalDesc": "Hedges unter dem Schwellenwert automatisch genehmigen",
+        "threshold": "Schwellenwert: ${amount}",
+        "riskLimits": "Risikolimits",
+        "maxLeverage": "Max. Hebel: {n}x",
+        "stopLoss": "Standard-Stop-Loss: {n}%",
+        "takeProfit": "Standard-Take-Profit: {n}%"
+      },
+      "alerts": {
+        "title": "Benachrichtigungseinstellungen",
+        "price": "Preiswarnungen",
+        "priceDesc": "Benachrichtigungen bei signifikanten Preisbewegungen erhalten",
+        "hedge": "Hedge-Warnungen",
+        "hedgeDesc": "Benachrichtigungen zu Hedge-Ausführungen und Liquidationen",
+        "agent": "KI-Agent-Warnungen",
+        "agentDesc": "Updates und Empfehlungen von KI-Agenten"
+      },
+      "privacy": {
+        "title": "Datenschutzfunktionen",
+        "private": "Privater Modus",
+        "privateDesc": "Transaktionsdetails mit Stealth-Adressen ausblenden",
+        "zk": "ZK-STARK-Beweise",
+        "zkDesc": "Zero-Knowledge-Beweise für Abrechnungen erzeugen",
+        "protected": "Ihre Privatsphäre ist geschützt",
+        "protectedDesc": "Alle sensiblen Daten sind verschlüsselt. ZK-Beweise stellen sicher, dass Ihre Positionen privat bleiben und dennoch on-chain überprüfbar sind."
+      }
+    }
   },
   "agents": {
     "title": "KI-Agenten-Netzwerk",

@@ -94,7 +94,57 @@
     "totalValue": "Valor Total de Cartera",
     "riskScore": "Puntuación de Riesgo",
     "activePositions": "Posiciones Activas",
-    "monthlyReturn": "Retorno Mensual"
+    "monthlyReturn": "Retorno Mensual",
+    "settingsModal": {
+      "title": "Ajustes",
+      "subtitle": "Configura las preferencias del panel",
+      "close": "Cerrar",
+      "saving": "Guardando…",
+      "save": "Guardar cambios",
+      "cancel": "Cancelar",
+      "tabs": {
+        "general": "General",
+        "hedging": "Cobertura",
+        "alerts": "Alertas",
+        "privacy": "Privacidad"
+      },
+      "general": {
+        "display": "Pantalla",
+        "darkMode": "Modo oscuro",
+        "darkModeDesc": "Cambia entre temas claro y oscuro",
+        "compactView": "Vista compacta",
+        "compactViewDesc": "Muestra más datos en menos espacio",
+        "wallet": "Cartera",
+        "walletDesc": "Los ajustes de cartera se gestionan a través del proveedor de tu cartera conectada (MetaMask, WalletConnect, etc.)"
+      },
+      "hedging": {
+        "autoApproval": "Aprobación automática",
+        "autoApprovalDesc": "Aprueba automáticamente coberturas por debajo del umbral",
+        "threshold": "Umbral: ${amount}",
+        "riskLimits": "Límites de riesgo",
+        "maxLeverage": "Apalancamiento máx.: {n}x",
+        "stopLoss": "Stop-loss por defecto: {n}%",
+        "takeProfit": "Take-profit por defecto: {n}%"
+      },
+      "alerts": {
+        "title": "Preferencias de alertas",
+        "price": "Alertas de precio",
+        "priceDesc": "Recibe notificaciones sobre movimientos de precio significativos",
+        "hedge": "Alertas de cobertura",
+        "hedgeDesc": "Notificaciones de ejecución de coberturas y liquidaciones",
+        "agent": "Alertas de agente IA",
+        "agentDesc": "Actualizaciones de los agentes de IA y recomendaciones"
+      },
+      "privacy": {
+        "title": "Funciones de privacidad",
+        "private": "Modo privado",
+        "privateDesc": "Oculta los detalles de la transacción con direcciones sigilosas",
+        "zk": "Pruebas ZK-STARK",
+        "zkDesc": "Genera pruebas de conocimiento cero para las liquidaciones",
+        "protected": "Tu privacidad está protegida",
+        "protectedDesc": "Todos los datos sensibles están cifrados. Las pruebas ZK aseguran que tus posiciones sigan siendo privadas y verificables en cadena."
+      }
+    }
   },
   "agents": {
     "title": "Red de agentes IA",

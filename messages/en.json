@@ -94,7 +94,57 @@
     "totalValue": "Total Portfolio Value",
     "riskScore": "Risk Score",
     "activePositions": "Active Positions",
-    "monthlyReturn": "Monthly Return"
+    "monthlyReturn": "Monthly Return",
+    "settingsModal": {
+      "title": "Settings",
+      "subtitle": "Configure your dashboard preferences",
+      "close": "Close",
+      "saving": "Saving…",
+      "save": "Save Changes",
+      "cancel": "Cancel",
+      "tabs": {
+        "general": "General",
+        "hedging": "Hedging",
+        "alerts": "Alerts",
+        "privacy": "Privacy"
+      },
+      "general": {
+        "display": "Display",
+        "darkMode": "Dark Mode",
+        "darkModeDesc": "Switch between light and dark themes",
+        "compactView": "Compact View",
+        "compactViewDesc": "Show more data in less space",
+        "wallet": "Wallet",
+        "walletDesc": "Wallet settings are managed through your connected wallet provider (MetaMask, WalletConnect, etc.)"
+      },
+      "hedging": {
+        "autoApproval": "Auto-Approval",
+        "autoApprovalDesc": "Automatically approve hedges below threshold",
+        "threshold": "Threshold: ${amount}",
+        "riskLimits": "Risk Limits",
+        "maxLeverage": "Max Leverage: {n}x",
+        "stopLoss": "Default Stop Loss: {n}%",
+        "takeProfit": "Default Take Profit: {n}%"
+      },
+      "alerts": {
+        "title": "Alert Preferences",
+        "price": "Price Alerts",
+        "priceDesc": "Get notified on significant price movements",
+        "hedge": "Hedge Alerts",
+        "hedgeDesc": "Notifications for hedge execution & liquidations",
+        "agent": "AI Agent Alerts",
+        "agentDesc": "Updates from AI agents and recommendations"
+      },
+      "privacy": {
+        "title": "Privacy Features",
+        "private": "Private Mode",
+        "privateDesc": "Hide transaction details with stealth addresses",
+        "zk": "ZK-STARK Proofs",
+        "zkDesc": "Generate zero-knowledge proofs for settlements",
+        "protected": "Your Privacy is Protected",
+        "protectedDesc": "All sensitive data is encrypted. ZK proofs ensure your positions remain private while still being verifiable on-chain."
+      }
+    }
   },
   "agents": {
     "title": "AI Agent Network",

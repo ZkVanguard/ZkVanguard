@@ -94,7 +94,57 @@
     "totalValue": "Valor total do portfólio",
     "riskScore": "Pontuação de risco",
     "activePositions": "Posições ativas",
-    "monthlyReturn": "Retorno mensal"
+    "monthlyReturn": "Retorno mensal",
+    "settingsModal": {
+      "title": "Configurações",
+      "subtitle": "Configure as preferências do painel",
+      "close": "Fechar",
+      "saving": "Salvando…",
+      "save": "Salvar alterações",
+      "cancel": "Cancelar",
+      "tabs": {
+        "general": "Geral",
+        "hedging": "Cobertura",
+        "alerts": "Alertas",
+        "privacy": "Privacidade"
+      },
+      "general": {
+        "display": "Exibição",
+        "darkMode": "Modo escuro",
+        "darkModeDesc": "Alternar entre os temas claro e escuro",
+        "compactView": "Visualização compacta",
+        "compactViewDesc": "Mostrar mais dados em menos espaço",
+        "wallet": "Carteira",
+        "walletDesc": "As configurações da carteira são gerenciadas pelo seu provedor de carteira conectado (MetaMask, WalletConnect, etc.)"
+      },
+      "hedging": {
+        "autoApproval": "Aprovação automática",
+        "autoApprovalDesc": "Aprove automaticamente coberturas abaixo do limite",
+        "threshold": "Limite: ${amount}",
+        "riskLimits": "Limites de risco",
+        "maxLeverage": "Alavancagem máx.: {n}x",
+        "stopLoss": "Stop-loss padrão: {n}%",
+        "takeProfit": "Take-profit padrão: {n}%"
+      },
+      "alerts": {
+        "title": "Preferências de alerta",
+        "price": "Alertas de preço",
+        "priceDesc": "Receba notificações sobre movimentos significativos de preço",
+        "hedge": "Alertas de cobertura",
+        "hedgeDesc": "Notificações de execução de coberturas e liquidações",
+        "agent": "Alertas de agente IA",
+        "agentDesc": "Atualizações dos agentes de IA e recomendações"
+      },
+      "privacy": {
+        "title": "Recursos de privacidade",
+        "private": "Modo privado",
+        "privateDesc": "Ocultar detalhes de transação com endereços stealth",
+        "zk": "Provas ZK-STARK",
+        "zkDesc": "Gere provas de conhecimento zero para liquidações",
+        "protected": "Sua privacidade está protegida",
+        "protectedDesc": "Todos os dados sensíveis são criptografados. As provas ZK garantem que suas posições permaneçam privadas e ainda assim verificáveis on-chain."
+      }
+    }
   },
   "agents": {
     "title": "Rede de agentes de IA",

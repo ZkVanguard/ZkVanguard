@@ -94,7 +94,57 @@
     "totalValue": "Valeur totale du portefeuille",
     "riskScore": "Score de risque",
     "activePositions": "Positions actives",
-    "monthlyReturn": "Rendement mensuel"
+    "monthlyReturn": "Rendement mensuel",
+    "settingsModal": {
+      "title": "Paramètres",
+      "subtitle": "Configurer les préférences du tableau de bord",
+      "close": "Fermer",
+      "saving": "Enregistrement…",
+      "save": "Enregistrer les modifications",
+      "cancel": "Annuler",
+      "tabs": {
+        "general": "Général",
+        "hedging": "Couverture",
+        "alerts": "Alertes",
+        "privacy": "Confidentialité"
+      },
+      "general": {
+        "display": "Affichage",
+        "darkMode": "Mode sombre",
+        "darkModeDesc": "Basculer entre les thèmes clair et sombre",
+        "compactView": "Vue compacte",
+        "compactViewDesc": "Afficher plus de données dans moins d'espace",
+        "wallet": "Portefeuille",
+        "walletDesc": "Les paramètres du portefeuille sont gérés par votre fournisseur de portefeuille connecté (MetaMask, WalletConnect, etc.)"
+      },
+      "hedging": {
+        "autoApproval": "Approbation automatique",
+        "autoApprovalDesc": "Approuver automatiquement les couvertures en dessous du seuil",
+        "threshold": "Seuil : ${amount}",
+        "riskLimits": "Limites de risque",
+        "maxLeverage": "Effet de levier max : {n}x",
+        "stopLoss": "Stop-loss par défaut : {n}%",
+        "takeProfit": "Take-profit par défaut : {n}%"
+      },
+      "alerts": {
+        "title": "Préférences d'alerte",
+        "price": "Alertes de prix",
+        "priceDesc": "Recevoir des notifications sur les mouvements de prix significatifs",
+        "hedge": "Alertes de couverture",
+        "hedgeDesc": "Notifications d'exécution de couverture et de liquidation",
+        "agent": "Alertes d'agent IA",
+        "agentDesc": "Mises à jour des agents IA et recommandations"
+      },
+      "privacy": {
+        "title": "Fonctionnalités de confidentialité",
+        "private": "Mode privé",
+        "privateDesc": "Masquer les détails des transactions avec des adresses furtives",
+        "zk": "Preuves ZK-STARK",
+        "zkDesc": "Générer des preuves à divulgation nulle pour les règlements",
+        "protected": "Votre vie privée est protégée",
+        "protectedDesc": "Toutes les données sensibles sont chiffrées. Les preuves ZK garantissent que vos positions restent privées tout en étant vérifiables sur la chaîne."
+      }
+    }
   },
   "agents": {
     "title": "Réseau d'agents IA",
