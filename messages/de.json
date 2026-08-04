@@ -209,7 +209,10 @@
     },
     "conclusion": {
       "title": "Fazit",
-      "text": "ZkVanguard repräsentiert einen fundamentalen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte. Durch die Kombination von prädiktiver KI-Intelligenz mit post-quanten kryptographischer Privatsphäre und gasfreier Ausführung adressieren wir die drei kritischen Barrieren, die die institutionelle Adoption verhindern."
+      "text": "ZkVanguard repräsentiert einen fundamentalen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte. Durch die Kombination von prädiktiver KI-Intelligenz mit post-quanten kryptographischer Privatsphäre und gasfreier Ausführung adressieren wir die drei kritischen Barrieren, die die institutionelle Adoption verhindern.",
+      "p1": "ZkVanguard verbindet Multi-Agent-KI-Orchestrierung, Prediction-Market-Intelligenz, ZK-STARK-Privatsphäre und gaslose Ausführung, um Risikomanagement auf institutionellem Niveau zugänglich und privat zu machen.",
+      "p2": "Der Stack läuft live auf dem SUI Mainnet mit einem echten Kapitalpool, cron-gesteuerter Autonomie und acht Verteidigungstoren, die vor Drawdowns, Phantom-Fills und veralteten Hedges schützen.",
+      "p3": "Dieses Whitepaper beschreibt das System, wie es heute läuft, nicht eine Roadmap für die Zukunft."
     },
     "solution": {
       "title": "Unsere Lösung: Vorhersagende Intelligenz",

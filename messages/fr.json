@@ -209,7 +209,10 @@
     },
     "conclusion": {
       "title": "Conclusion",
-      "text": "ZkVanguard représente un changement de paradigme fondamental dans la gestion des risques des actifs numériques institutionnels. En combinant l'intelligence IA prédictive avec la confidentialité cryptographique post-quantique et l'exécution sans gas, nous abordons les trois barrières critiques empêchant l'adoption institutionnelle."
+      "text": "ZkVanguard représente un changement de paradigme fondamental dans la gestion des risques des actifs numériques institutionnels. En combinant l'intelligence IA prédictive avec la confidentialité cryptographique post-quantique et l'exécution sans gas, nous abordons les trois barrières critiques empêchant l'adoption institutionnelle.",
+      "p1": "ZkVanguard combine l'orchestration d'IA multi-agents, l'intelligence des marchés de prédiction, la confidentialité ZK-STARK et l'exécution sans gaz pour rendre la gestion des risques de qualité institutionnelle accessible et privée.",
+      "p2": "La pile est en production sur le mainnet SUI avec un pool de capital réel, une autonomie pilotée par cron et huit portes de défense protégeant contre les drawdowns, les exécutions fantômes et les couvertures obsolètes.",
+      "p3": "Ce whitepaper décrit le système tel qu'il fonctionne aujourd'hui, non pas une feuille de route pour l'avenir."
     },
     "solution": {
       "title": "Notre Solution : Intelligence Prédicative",

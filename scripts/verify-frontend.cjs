@@ -86,6 +86,36 @@ for (const file of files) {
   }
 }
 
+// ---------------- locale-parity check ----------------
+// Would have caught 2026-08-04 whitepaper.conclusion.p1/p2/p3 missing
+// from 11 non-en locales (silent MISSING_MESSAGE fallback in prod).
+const LOCALE_DIR = path.join(ROOT, 'messages');
+const localeGaps = [];
+try {
+  const enFlat = flattenKeys(en);
+  const files = fs.readdirSync(LOCALE_DIR).filter(f => f.endsWith('.json') && f !== 'en.json');
+  for (const file of files) {
+    const locale = path.basename(file, '.json');
+    let data;
+    try { data = JSON.parse(fs.readFileSync(path.join(LOCALE_DIR, file), 'utf-8')); }
+    catch { localeGaps.push({ locale, error: 'unparseable' }); continue; }
+    const localeFlat = flattenKeys(data);
+    const missing = enFlat.filter(k => !localeFlat.includes(k));
+    if (missing.length > 0) localeGaps.push({ locale, missing });
+  }
+} catch (err) {
+  console.error(`✗ locale-parity check failed: ${err.message}`);
+}
+function flattenKeys(obj, prefix = '') {
+  const keys = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === 'object' && !Array.isArray(v)) keys.push(...flattenKeys(v, key));
+    else keys.push(key);
+  }
+  return keys;
+}
+
 // ---------------- client-side SUI RPC ban ----------------
 const badRpcImports = [];
 
@@ -130,6 +160,19 @@ if (badRpcImports.length > 0) {
   console.error('  Route browser SUI RPC through /api/rpc/sui instead (see app/sui-providers.tsx).');
 }
 
+if (localeGaps.length > 0) {
+  failed = true;
+  const totalMissing = localeGaps.reduce((s, g) => s + (g.missing?.length || 0), 0);
+  console.error(`✗ locale parity: ${localeGaps.length} locale(s) missing ${totalMissing} key(s) present in en.json:`);
+  for (const g of localeGaps) {
+    if (g.error) { console.error(`    ${g.locale}: ${g.error}`); continue; }
+    const preview = g.missing.slice(0, 5).join(', ');
+    const more = g.missing.length > 5 ? ` (+${g.missing.length - 5} more)` : '';
+    console.error(`    ${g.locale}: ${g.missing.length} missing — ${preview}${more}`);
+  }
+  console.error('  Add missing keys to each non-en locale in messages/. next-intl throws MISSING_MESSAGE otherwise.');
+}
+
 if (failed) process.exit(1);
 
-console.log(`✓ frontend verify clean (${files.length} files scanned, i18n + client RPC)`);
+console.log(`✓ frontend verify clean (${files.length} files scanned, i18n + locale parity + client RPC)`);
