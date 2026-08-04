@@ -205,6 +205,9 @@ export default function CustodyProofsPage() {
   }
 
   return (
+    // pt-[52px] clears the fixed global Navbar (see comment in
+    // dashboard/portfolio/page.tsx).
+    <div className="pt-[52px] min-h-screen">
     <div className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-10 space-y-3 sm:space-y-6 min-w-0">
       <header className="min-w-0">
         <div className="text-[11px] sm:text-[12px] text-[#86868b] uppercase tracking-wide font-medium mb-1">
@@ -319,6 +322,7 @@ export default function CustodyProofsPage() {
         Asset lists stay off-chain · ed25519 + SHA-256 canonical encoding ·
         Auditable by any counterparty without revealing portfolio composition.
       </footer>
+    </div>
     </div>
   );
 }

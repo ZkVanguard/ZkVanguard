@@ -407,6 +407,10 @@ export default function PlatformRiskPage() {
   }
 
   return (
+    // pt-[52px] clears the fixed global Navbar (see comment in
+    // dashboard/portfolio/page.tsx). Without it, the header text is
+    // hidden underneath the navbar on this standalone route.
+    <div className="pt-[52px] min-h-screen">
     <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-8 md:py-10 space-y-3 sm:space-y-6 min-w-0">
       <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
         <div className="min-w-0">
@@ -617,6 +621,7 @@ export default function PlatformRiskPage() {
           </footer>
         </>
       )}
+    </div>
     </div>
   );
 }
