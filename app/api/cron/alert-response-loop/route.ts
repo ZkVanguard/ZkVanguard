@@ -41,9 +41,12 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   if (auth !== true) return auth;
 
   const now = Date.now();
-  const claimed = await tryClaimCronRun(CRON_KEY, TICK_INTERVAL_MS, now);
-  if (!claimed) {
-    return NextResponse.json({ skipped: true, reason: 'tick claim debounce' });
+  // tryClaimCronRun returns { claimed, lastRunMs, reason? } — an object,
+  // so `!claim` was always false. Debounce never triggered. Same bug as
+  // agent-signal-tick; sui-community-pool uses the correct `claim.claimed`.
+  const claim = await tryClaimCronRun(CRON_KEY, TICK_INTERVAL_MS, now);
+  if (!claim.claimed) {
+    return NextResponse.json({ skipped: true, reason: claim.reason ?? 'tick claim debounce' });
   }
   await setCronState(HEARTBEAT_KEY, now).catch(() => {});
 
