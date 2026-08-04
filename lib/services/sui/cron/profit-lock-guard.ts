@@ -96,7 +96,7 @@ export function applyProfitLock(
   allocations: Record<string, number>,
   currentNav: number,
   peakNav: number,
-  navHistory?: { drawdownPct7dAgo?: number },
+  navHistory?: { drawdownPct7dAgo?: number; wasInZeroRisk?: boolean },
 ): ProfitLockDecision {
   const orig = { ...allocations };
 
@@ -116,7 +116,23 @@ export function applyProfitLock(
   }
 
   const drawdownPct = Math.max(0, ((peakNav - currentNav) / peakNav) * 100);
-  const baseRiskCap = computeRiskCap(drawdownPct);
+  let baseRiskCap = computeRiskCap(drawdownPct);
+
+  // Zero-risk exit hysteresis (2026-08-04). NAV oscillating around the
+  // zeroAt threshold triggered a wash-trade loop: sell all spot to USDC
+  // at 20% DD, buy back at 19% DD when NAV wobbled up, sell again next
+  // tick. Prod ran this cycle 4-6x/day, each round-trip costing ~30-50 bps
+  // in swap fees. Once already in zero-risk, require drawdown to recover
+  // past `zeroAt - hysteresisPct` before easing.
+  let hysteresisHold = false;
+  if (navHistory?.wasInZeroRisk) {
+    const zeroAt = Number(process.env.PROFIT_LOCK_ZERO_RISK_AT) || 20;
+    const hysteresisPct = Number(process.env.PROFIT_LOCK_HYSTERESIS_PCT) || 5;
+    if (drawdownPct >= (zeroAt - hysteresisPct)) {
+      baseRiskCap = 0;
+      hysteresisHold = true;
+    }
+  }
 
   // Recovery re-engagement (2026-07-15): if drawdown IMPROVED vs 7 days
   // ago by >= 5 ppts, add a momentum bonus to the risk cap so we don't
@@ -185,6 +201,6 @@ export function applyProfitLock(
     active: true, drawdownPct, peakNav, currentNav,
     originalAllocations: orig, cappedAllocations: capped,
     riskAllocationCap: riskCap,
-    reason: `drawdown ${drawdownPct.toFixed(2)}% ≥ threshold — risk capped at ${riskCap}%${recoveryReason}, ${usdcAlloc}% held in USDC`,
+    reason: `drawdown ${drawdownPct.toFixed(2)}% ≥ threshold — risk capped at ${riskCap}%${recoveryReason}${hysteresisHold ? ' [hysteresis-hold]' : ''}, ${usdcAlloc}% held in USDC`,
   };
 }
