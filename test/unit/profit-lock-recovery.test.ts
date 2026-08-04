@@ -122,3 +122,51 @@ describe('recovery bonus does not compromise defense', () => {
     expect(decision.riskAllocationCap).toBe(0);
   });
 });
+
+describe('zero-risk exit hysteresis (2026-08-04)', () => {
+  it('holds zero-risk when in-streak and drawdown within hysteresis of zeroAt', () => {
+    // wasInZeroRisk=true, drawdown 18% (< 20% zeroAt but >= 20-5=15%) → HELD
+    const decision = applyProfitLock(
+      { BTC: 40, ETH: 30, SUI: 30, USDC: 0 },
+      82, 100,
+      { wasInZeroRisk: true },
+    );
+    expect(decision.riskAllocationCap).toBe(0);
+    expect(decision.reason).toMatch(/hysteresis-hold/);
+    expect(decision.cappedAllocations.USDC).toBe(100);
+  });
+
+  it('exits zero-risk once drawdown recovers past hysteresis threshold', () => {
+    // wasInZeroRisk=true, drawdown 14% (< 20-5=15%) → EASE
+    const decision = applyProfitLock(
+      { BTC: 40, ETH: 30, SUI: 30, USDC: 0 },
+      86, 100,
+      { wasInZeroRisk: true },
+    );
+    // At 14% dd we're in the 10-15% tier (~ interpolated cap ~48%)
+    expect(decision.riskAllocationCap).toBeGreaterThan(0);
+    expect(decision.reason).not.toMatch(/hysteresis-hold/);
+  });
+
+  it('does not force zero-risk when NOT in-streak (first entry uses base threshold)', () => {
+    // wasInZeroRisk=false, drawdown 18% → normal tier calc (not zero)
+    const decision = applyProfitLock(
+      { BTC: 40, ETH: 30, SUI: 30, USDC: 0 },
+      82, 100,
+      { wasInZeroRisk: false },
+    );
+    expect(decision.riskAllocationCap).toBeGreaterThan(0);
+  });
+
+  it('respects PROFIT_LOCK_HYSTERESIS_PCT env override', () => {
+    process.env.PROFIT_LOCK_HYSTERESIS_PCT = '10';
+    // wasInZeroRisk=true, drawdown 12% (< 20% but >= 20-10=10%) → HELD
+    const decision = applyProfitLock(
+      { BTC: 40, ETH: 30, SUI: 30, USDC: 0 },
+      88, 100,
+      { wasInZeroRisk: true },
+    );
+    expect(decision.riskAllocationCap).toBe(0);
+    delete process.env.PROFIT_LOCK_HYSTERESIS_PCT;
+  });
+});
