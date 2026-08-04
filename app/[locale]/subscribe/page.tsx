@@ -66,15 +66,9 @@ export default function SubscribePage() {
 
   return (
     <div className="min-h-screen bg-[#fbfbfd]">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-black/5">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="text-[20px] font-semibold text-[#1d1d1f]">
-            ZkVanguard
-          </Link>
-        </div>
-      </nav>
-
-      <main className="max-w-lg mx-auto px-4 pt-32 pb-16">
+      {/* Global <Navbar /> renders in app/[locale]/layout.tsx — don't
+          double-render one here (used to cover the real nav at z-50). */}
+      <main className="max-w-lg mx-auto px-4 pt-24 sm:pt-28 pb-16">
         <div className="bg-white rounded-[20px] p-8 border border-black/5 shadow-lg">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-[#34C759]/10 rounded-full flex items-center justify-center mx-auto mb-4">
