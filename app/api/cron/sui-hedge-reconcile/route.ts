@@ -178,11 +178,42 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
           const ageDays = (Date.now() - h.openedAt.getTime()) / (86_400_000);
           flipsPerAsset[h.asset] = Math.max(0, Math.floor(ageDays * (3 / 7)));
         }
-        const currentSignal = await Polymarket5MinService.getLatest5MinSignal().catch(() => null);
+        // Per-asset signals via PredictionAggregatorService — previous code
+        // called getLatest5MinSignal() (BTC-only) and applied that direction
+        // to EVERY asset's contradicts check. Result: ETH SHORT #190 sat
+        // for 52 days because on ticks where BTC was DOWN, the stale check
+        // saw "ETH signal = DOWN" → aligned with SHORT → skipped. Fixed by
+        // asking PredictionAggregator for each asset's own signal.
         const currentSignals: Record<string, { direction: 'UP' | 'DOWN'; confidence: number }> = {};
-        if (currentSignal) {
-          for (const h of activeHedges) {
-            currentSignals[h.asset] = { direction: currentSignal.direction, confidence: currentSignal.confidence };
+        try {
+          const uniqueAssets = Array.from(new Set(activeHedges.map((h) => h.asset)));
+          if (uniqueAssets.length > 0) {
+            const { PredictionAggregatorService } = await import('@/lib/services/market-data/PredictionAggregatorService');
+            const perAsset = await PredictionAggregatorService.getPerAssetPredictions(uniqueAssets);
+            for (const asset of uniqueAssets) {
+              const p = perAsset[asset];
+              if (!p) continue;
+              // PredictionAggregator returns direction in the union
+              // 'UP' | 'DOWN' | 'NEUTRAL'; only UP/DOWN are actionable
+              // signals for stale-close (NEUTRAL doesn't contradict either
+              // side, so we leave the hedge alone).
+              if (p.direction === 'UP' || p.direction === 'DOWN') {
+                currentSignals[asset] = { direction: p.direction, confidence: p.confidence };
+              }
+            }
+          }
+        } catch (sigErr) {
+          logger.warn('[SuiHedgeReconcile] per-asset signal fetch failed — falling back to Polymarket BTC-only signal', {
+            error: sigErr instanceof Error ? sigErr.message : String(sigErr),
+          });
+          // Fallback preserves prior behavior on outage (BTC-signal-for-all,
+          // known false negatives) instead of silently disabling stale-close
+          // entirely.
+          const btc = await Polymarket5MinService.getLatest5MinSignal().catch(() => null);
+          if (btc) {
+            for (const h of activeHedges) {
+              currentSignals[h.asset] = { direction: btc.direction, confidence: btc.confidence };
+            }
           }
         }
         const stale = await detectStaleHedges({
