@@ -34,7 +34,7 @@ export function OldPoolWithdraw() {
   const fetchOldPool = useCallback(async () => {
     setLoading(true);
     try {
-      const rpc = await fetch('https://fullnode.mainnet.sui.io:443', {
+      const rpc = await fetch('/api/rpc/sui', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,7 +66,7 @@ export function OldPoolWithdraw() {
       let memberAddress: string | null = null;
       if (walletAddress && fields.members?.fields?.id?.id) {
         const membersTableId = fields.members.fields.id.id;
-        const memberRpc = await fetch('https://fullnode.mainnet.sui.io:443', {
+        const memberRpc = await fetch('/api/rpc/sui', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -144,7 +144,7 @@ export function OldPoolWithdraw() {
       });
 
       // Check if wallet has SUI for gas — if not, use admin-sponsored execution
-      const gasRes = await fetch('https://fullnode.mainnet.sui.io:443', {
+      const gasRes = await fetch('/api/rpc/sui', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -100,6 +100,13 @@ for (const file of files) {
   // Only mainnet + testnet are the dead-JSON-RPC + no-CORS endpoints.
   if (/getFullnodeUrl\(\s*['"](?:mainnet|testnet)['"]/.test(src)) {
     badRpcImports.push(path.relative(ROOT, file));
+    continue;
+  }
+  // Also catch raw fetch()/URL strings to fullnode.mainnet.sui.io — some
+  // hooks (e.g. OldPoolWithdraw.tsx) POST directly with a hardcoded URL.
+  // The dot in the regex is literal to avoid matching unrelated strings.
+  if (/['"`]https:\/\/fullnode\.(?:mainnet|testnet)\.sui\.io/.test(src)) {
+    badRpcImports.push(path.relative(ROOT, file));
   }
 }
 
