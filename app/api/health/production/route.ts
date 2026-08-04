@@ -38,15 +38,18 @@ export const maxDuration = 30;
 // check so one slow component can't starve the rest and cascade the
 // whole endpoint into a timeout.
 const CHECK_TIMEOUT_MS = 3000;
-async function withCheckTimeout<T extends Component>(check: Promise<T>, name: string): Promise<T> {
-  const timeoutFallback: Component = {
+async function withTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), CHECK_TIMEOUT_MS)),
+  ]);
+}
+function withCheckTimeout<T extends Component>(check: Promise<T>, name: string): Promise<T> {
+  const fallback: Component = {
     status: 'warn',
     detail: `${name}: check exceeded ${CHECK_TIMEOUT_MS}ms budget`,
   };
-  return Promise.race([
-    check,
-    new Promise<T>((resolve) => setTimeout(() => resolve(timeoutFallback as T), CHECK_TIMEOUT_MS)),
-  ]);
+  return withTimeout(check, fallback as T);
 }
 
 type CompStatus = 'ok' | 'warn' | 'down';
@@ -127,6 +130,40 @@ async function checkCronAge(key: string, warnAfterMin: number, downAfterMin: num
     return { status: 'ok', ageSeconds };
   } catch (e: any) {
     return { status: 'warn', error: e?.message?.slice(0, 100) };
+  }
+}
+
+/**
+ * Batched heartbeat lookup — one query returns ages for every key.
+ * Aiven Bangalore → Vercel sin1 network is ~30-50ms RTT; 5 sequential
+ * checkCronAge calls cost 5 RTT (~200ms) versus this batch's 1 RTT (~50ms).
+ * Missing keys are treated as `warn: no entry yet` to preserve caller
+ * semantics.
+ */
+async function checkCronAgeBatch(
+  specs: Array<{ key: string; warnAfterMin: number; downAfterMin: number }>,
+): Promise<Record<string, Component>> {
+  const out: Record<string, Component> = {};
+  try {
+    const keys = specs.map(s => s.key);
+    const rows = await query<{ key: string; age_s: number }>(
+      `SELECT key, EXTRACT(EPOCH FROM (NOW() - updated_at))::int as age_s
+       FROM cron_state WHERE key = ANY($1)`,
+      [keys],
+    );
+    const byKey = new Map(rows.map(r => [r.key, Number(r.age_s)]));
+    for (const s of specs) {
+      const ageSeconds = byKey.get(s.key);
+      if (ageSeconds === undefined) { out[s.key] = { status: 'warn', detail: 'no entry yet' }; continue; }
+      if (ageSeconds > s.downAfterMin * 60) { out[s.key] = { status: 'down', ageSeconds, detail: `> ${s.downAfterMin}min stale` }; continue; }
+      if (ageSeconds > s.warnAfterMin * 60) { out[s.key] = { status: 'warn', ageSeconds, detail: `> ${s.warnAfterMin}min stale` }; continue; }
+      out[s.key] = { status: 'ok', ageSeconds };
+    }
+    return out;
+  } catch (e: any) {
+    const err = e?.message?.slice(0, 100);
+    for (const s of specs) out[s.key] = { status: 'warn', error: err };
+    return out;
   }
 }
 
@@ -375,15 +412,28 @@ export async function GET(req: NextRequest) {
   // realized trade.
   const db = await withCheckTimeout(checkDb(), 'db');
   const navFreshness = await withCheckTimeout(checkNavFreshness(), 'navFreshness');
-  const suiPoolCron = await withCheckTimeout(checkCronAge('cron:lastRun:sui-community-pool', 45, 90), 'suiPoolCron');
+
+  // Batched: 5 heartbeats -> 1 RTT (~50ms vs ~250ms serial).
   // FIX 2026-06-22: was reading 'polymarket-edge:daily' (a stats key only
   // written on actual trade execution), so cron 'no entry yet' even though
   // the trader was firing every 5 min. Use the real heartbeat key the
   // trader route writes at the top of every invocation.
-  const traderCron = await withCheckTimeout(checkCronAge('cron:lastRun:polymarket-edge-trader', 15, 30), 'traderCron');
-  const hedgeReconcileCron = await withCheckTimeout(checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240), 'hedgeReconcileCron');
-  const bluefinHealthCron = await withCheckTimeout(checkCronAge('bluefin-health:consecutiveDegraded', 15, 30), 'bluefinHealthCron');
-  const bluefinDbReconcileCron = await withCheckTimeout(checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60), 'bluefinDbReconcileCron');
+  const heartbeatSpecs = [
+    { key: 'cron:lastRun:sui-community-pool',      warnAfterMin: 45,  downAfterMin: 90  },
+    { key: 'cron:lastRun:polymarket-edge-trader',  warnAfterMin: 15,  downAfterMin: 30  },
+    { key: 'cron:lastRun:sui-hedge-reconcile',     warnAfterMin: 120, downAfterMin: 240 },
+    { key: 'bluefin-health:consecutiveDegraded',   warnAfterMin: 15,  downAfterMin: 30  },
+    { key: 'cron:lastRun:bluefin-db-reconcile',    warnAfterMin: 30,  downAfterMin: 60  },
+  ];
+  const beats = await withTimeout(
+    checkCronAgeBatch(heartbeatSpecs),
+    Object.fromEntries(heartbeatSpecs.map(s => [s.key, { status: 'warn' as CompStatus, detail: `heartbeats: check exceeded ${CHECK_TIMEOUT_MS}ms budget` } as Component])),
+  );
+  const suiPoolCron            = beats['cron:lastRun:sui-community-pool']     ?? { status: 'warn' as const, detail: 'batch missing' };
+  const traderCron             = beats['cron:lastRun:polymarket-edge-trader'] ?? { status: 'warn' as const, detail: 'batch missing' };
+  const hedgeReconcileCron     = beats['cron:lastRun:sui-hedge-reconcile']    ?? { status: 'warn' as const, detail: 'batch missing' };
+  const bluefinHealthCron      = beats['bluefin-health:consecutiveDegraded']  ?? { status: 'warn' as const, detail: 'batch missing' };
+  const bluefinDbReconcileCron = beats['cron:lastRun:bluefin-db-reconcile']   ?? { status: 'warn' as const, detail: 'batch missing' };
 
   // v0.3.0 defense: phantom hedge rate over last hour. Proxies via closed
   // hedges with $0 realized_pnl and notional ≥ $1 — the same query the
