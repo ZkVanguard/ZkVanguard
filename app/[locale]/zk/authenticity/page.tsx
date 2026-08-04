@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Shield, CheckCircle, Code, Cpu, Lock, FileCode, Zap, Upload, AlertCircle } from 'lucide-react';
+import { Link } from '@/i18n/routing';
 import { logger } from '@/lib/utils/logger';
 
 interface AuthenticityData {
@@ -328,7 +329,7 @@ export default function AuthenticityVerificationPage() {
           )}
 
           <div className="mt-4 p-3 bg-[#007AFF]/10 border border-[#007AFF]/20 rounded text-sm text-[#007AFF]">
-            💡 <strong>Tip:</strong> Go to the <a href="/zk/proof" className="underline hover:text-[#007AFF]/80">/zk/proof</a> page,
+            💡 <strong>Tip:</strong> Go to the <Link href="/zk/proof" className="underline hover:text-[#007AFF]/80">/zk/proof</Link> page,
             generate a proof, copy the JSON, and paste it here to verify it independently!
           </div>
         </div>
