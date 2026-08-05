@@ -94,7 +94,86 @@
     "totalValue": "投资组合总价值",
     "riskScore": "风险评分",
     "activePositions": "活跃头寸",
-    "monthlyReturn": "月度回报"
+    "monthlyReturn": "月度回报",
+    "settingsModal": {
+      "title": "设置",
+      "subtitle": "配置您的仪表板偏好",
+      "close": "关闭",
+      "saving": "保存中…",
+      "save": "保存更改",
+      "cancel": "取消",
+      "tabs": {
+        "general": "通用",
+        "hedging": "对冲",
+        "alerts": "提醒",
+        "privacy": "隐私"
+      },
+      "general": {
+        "display": "显示",
+        "darkMode": "深色模式",
+        "darkModeDesc": "在浅色和深色主题之间切换",
+        "compactView": "紧凑视图",
+        "compactViewDesc": "在更少的空间显示更多数据",
+        "wallet": "钱包",
+        "walletDesc": "钱包设置由您连接的钱包提供商(MetaMask、WalletConnect 等)管理。"
+      },
+      "hedging": {
+        "autoApproval": "自动批准",
+        "autoApprovalDesc": "自动批准低于阈值的对冲",
+        "threshold": "阈值:${amount}",
+        "riskLimits": "风险限额",
+        "maxLeverage": "最大杠杆:{n}x",
+        "stopLoss": "默认止损:{n}%",
+        "takeProfit": "默认止盈:{n}%"
+      },
+      "alerts": {
+        "title": "提醒偏好",
+        "price": "价格提醒",
+        "priceDesc": "在价格出现显著变动时接收通知",
+        "hedge": "对冲提醒",
+        "hedgeDesc": "对冲执行和清算通知",
+        "agent": "AI 代理提醒",
+        "agentDesc": "AI 代理的更新和建议"
+      },
+      "privacy": {
+        "title": "隐私功能",
+        "private": "隐私模式",
+        "privateDesc": "通过隐身地址隐藏交易详情",
+        "zk": "ZK-STARK 证明",
+        "zkDesc": "为结算生成零知识证明",
+        "protected": "您的隐私受到保护",
+        "protectedDesc": "所有敏感数据均已加密。ZK 证明确保您的头寸保持私密,同时可在链上验证。"
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "主网模式",
+        "subtitle": "主网上已禁用 USDC 水龙头",
+        "body": "要在 Cronos 主网上获取 USDC,请使用<exchange>加密货币交易所</exchange>或 <dex>VVS Finance DEX</dex>。"
+      },
+      "sui": {
+        "title": "SUI 钱包已连接",
+        "body": "USDC 水龙头适用于 Cronos (EVM) 钱包"
+      },
+      "title": "测试网 USDC 水龙头",
+      "subtitle": "铸造测试网 USDC 用于测试对冲",
+      "balanceLabel": "您的测试网 USDC 余额",
+      "mintAmount": "铸造数量",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "测试网 USDC:{balance}",
+        "minted": "已铸造!",
+        "minting": "铸造中…",
+        "getUsdc": "+ 获取 {amount} USDC"
+      },
+      "confirmInWallet": "在钱包中确认…",
+      "minting": "铸造中…",
+      "mintedSuccess": "铸造成功!",
+      "mintButton": "铸造 {amount} USDC",
+      "viewExplorer": "在浏览器中查看",
+      "contractAddress": "测试网 USDC:{addr}",
+      "contractInfo": "Cronos 测试网 (Chain ID: 338) • 6 位小数"
+    }
   },
   "agents": {
     "title": "AI代理网络",

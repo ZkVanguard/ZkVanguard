@@ -94,7 +94,86 @@
     "totalValue": "कुल पोर्टफोलियो वैल्यू",
     "riskScore": "रिस्क स्कोर",
     "activePositions": "एक्टिव पोजीशन",
-    "monthlyReturn": "मंथली रिटर्न"
+    "monthlyReturn": "मंथली रिटर्न",
+    "settingsModal": {
+      "title": "सेटिंग्स",
+      "subtitle": "अपनी डैशबोर्ड प्राथमिकताएँ कॉन्फ़िगर करें",
+      "close": "बंद करें",
+      "saving": "सहेजा जा रहा है…",
+      "save": "परिवर्तन सहेजें",
+      "cancel": "रद्द करें",
+      "tabs": {
+        "general": "सामान्य",
+        "hedging": "हेजिंग",
+        "alerts": "अलर्ट",
+        "privacy": "गोपनीयता"
+      },
+      "general": {
+        "display": "डिस्प्ले",
+        "darkMode": "डार्क मोड",
+        "darkModeDesc": "लाइट और डार्क थीम के बीच स्विच करें",
+        "compactView": "संक्षिप्त दृश्य",
+        "compactViewDesc": "कम जगह में अधिक डेटा दिखाएँ",
+        "wallet": "वॉलेट",
+        "walletDesc": "वॉलेट सेटिंग्स आपके कनेक्टेड वॉलेट प्रदाता (MetaMask, WalletConnect आदि) के माध्यम से प्रबंधित होती हैं।"
+      },
+      "hedging": {
+        "autoApproval": "स्वतः अनुमोदन",
+        "autoApprovalDesc": "सीमा से नीचे हेज को स्वचालित रूप से स्वीकृत करें",
+        "threshold": "सीमा: ${amount}",
+        "riskLimits": "जोखिम सीमाएँ",
+        "maxLeverage": "अधिकतम लीवरेज: {n}x",
+        "stopLoss": "डिफ़ॉल्ट स्टॉप-लॉस: {n}%",
+        "takeProfit": "डिफ़ॉल्ट टेक-प्रॉफिट: {n}%"
+      },
+      "alerts": {
+        "title": "अलर्ट प्राथमिकताएँ",
+        "price": "मूल्य अलर्ट",
+        "priceDesc": "महत्वपूर्ण मूल्य परिवर्तनों पर सूचनाएँ प्राप्त करें",
+        "hedge": "हेज अलर्ट",
+        "hedgeDesc": "हेज निष्पादन और परिसमापन के लिए सूचनाएँ",
+        "agent": "AI एजेंट अलर्ट",
+        "agentDesc": "AI एजेंटों से अपडेट और अनुशंसाएँ"
+      },
+      "privacy": {
+        "title": "गोपनीयता विशेषताएँ",
+        "private": "निजी मोड",
+        "privateDesc": "स्टेल्थ पतों के साथ लेनदेन विवरण छिपाएँ",
+        "zk": "ZK-STARK प्रमाण",
+        "zkDesc": "निपटान के लिए शून्य-ज्ञान प्रमाण उत्पन्न करें",
+        "protected": "आपकी गोपनीयता सुरक्षित है",
+        "protectedDesc": "सभी संवेदनशील डेटा एन्क्रिप्टेड है। ZK प्रमाण सुनिश्चित करते हैं कि आपकी पोजीशनें निजी बनी रहें और ऑन-चेन सत्यापित हों।"
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "मेननेट मोड",
+        "subtitle": "मेननेट पर USDC फॉसेट अक्षम है",
+        "body": "Cronos मेननेट पर USDC प्राप्त करने के लिए, <exchange>क्रिप्टोकरेंसी एक्सचेंज</exchange> या <dex>VVS Finance DEX</dex> का उपयोग करें।"
+      },
+      "sui": {
+        "title": "SUI वॉलेट कनेक्ट है",
+        "body": "USDC फॉसेट Cronos (EVM) वॉलेट के लिए उपलब्ध है"
+      },
+      "title": "टेस्टनेट USDC फॉसेट",
+      "subtitle": "हेज परीक्षण के लिए टेस्टनेट USDC टकसाल करें",
+      "balanceLabel": "आपका टेस्टनेट USDC शेष",
+      "mintAmount": "टकसाल राशि",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "टेस्टनेट USDC: {balance}",
+        "minted": "टकसाल हो गया!",
+        "minting": "टकसाल हो रहा है…",
+        "getUsdc": "+ {amount} USDC प्राप्त करें"
+      },
+      "confirmInWallet": "वॉलेट में पुष्टि करें…",
+      "minting": "टकसाल हो रहा है…",
+      "mintedSuccess": "सफलतापूर्वक टकसाल हो गया!",
+      "mintButton": "{amount} USDC टकसाल करें",
+      "viewExplorer": "एक्सप्लोरर पर देखें",
+      "contractAddress": "टेस्टनेट USDC: {addr}",
+      "contractInfo": "Cronos टेस्टनेट (Chain ID: 338) • 6 दशमलव"
+    }
   },
   "agents": {
     "title": "AI एजेंट नेटवर्क",
