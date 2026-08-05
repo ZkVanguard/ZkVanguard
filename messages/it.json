@@ -94,7 +94,86 @@
     "totalValue": "Valore totale del portafoglio",
     "riskScore": "Punteggio di rischio",
     "activePositions": "Posizioni attive",
-    "monthlyReturn": "Rendimento mensile"
+    "monthlyReturn": "Rendimento mensile",
+    "settingsModal": {
+      "title": "Impostazioni",
+      "subtitle": "Configura le preferenze della dashboard",
+      "close": "Chiudi",
+      "saving": "Salvataggio…",
+      "save": "Salva modifiche",
+      "cancel": "Annulla",
+      "tabs": {
+        "general": "Generale",
+        "hedging": "Copertura",
+        "alerts": "Avvisi",
+        "privacy": "Privacy"
+      },
+      "general": {
+        "display": "Visualizzazione",
+        "darkMode": "Modalità scura",
+        "darkModeDesc": "Passa tra i temi chiaro e scuro",
+        "compactView": "Vista compatta",
+        "compactViewDesc": "Mostra più dati in meno spazio",
+        "wallet": "Portafoglio",
+        "walletDesc": "Le impostazioni del portafoglio sono gestite dal tuo provider di portafoglio connesso (MetaMask, WalletConnect, ecc.)"
+      },
+      "hedging": {
+        "autoApproval": "Approvazione automatica",
+        "autoApprovalDesc": "Approva automaticamente le coperture sotto la soglia",
+        "threshold": "Soglia: ${amount}",
+        "riskLimits": "Limiti di rischio",
+        "maxLeverage": "Leva massima: {n}x",
+        "stopLoss": "Stop-loss predefinito: {n}%",
+        "takeProfit": "Take-profit predefinito: {n}%"
+      },
+      "alerts": {
+        "title": "Preferenze di avviso",
+        "price": "Avvisi di prezzo",
+        "priceDesc": "Ricevi notifiche sui movimenti di prezzo significativi",
+        "hedge": "Avvisi di copertura",
+        "hedgeDesc": "Notifiche di esecuzione delle coperture e liquidazioni",
+        "agent": "Avvisi agente IA",
+        "agentDesc": "Aggiornamenti dagli agenti IA e raccomandazioni"
+      },
+      "privacy": {
+        "title": "Funzionalità di privacy",
+        "private": "Modalità privata",
+        "privateDesc": "Nascondi i dettagli della transazione con indirizzi stealth",
+        "zk": "Prove ZK-STARK",
+        "zkDesc": "Genera prove a conoscenza zero per i regolamenti",
+        "protected": "La tua privacy è protetta",
+        "protectedDesc": "Tutti i dati sensibili sono crittografati. Le prove ZK garantiscono che le tue posizioni rimangano private ma comunque verificabili on-chain."
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Modalità mainnet",
+        "subtitle": "Il faucet USDC è disabilitato sulla mainnet",
+        "body": "Per ottenere USDC sulla mainnet Cronos, utilizza un <exchange>exchange di criptovalute</exchange> o <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "Wallet SUI connesso",
+        "body": "Il faucet USDC è disponibile per i wallet Cronos (EVM)"
+      },
+      "title": "Faucet USDC testnet",
+      "subtitle": "Conia USDC testnet per testare le coperture",
+      "balanceLabel": "Il tuo saldo USDC testnet",
+      "mintAmount": "Importo da coniare",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "USDC testnet: {balance}",
+        "minted": "Coniato!",
+        "minting": "Coniazione…",
+        "getUsdc": "+ Ottieni {amount} USDC"
+      },
+      "confirmInWallet": "Conferma nel wallet…",
+      "minting": "Coniazione…",
+      "mintedSuccess": "Coniato con successo!",
+      "mintButton": "Conia {amount} USDC",
+      "viewExplorer": "Visualizza nell'esploratore",
+      "contractAddress": "USDC testnet: {addr}",
+      "contractInfo": "Cronos testnet (Chain ID: 338) • 6 decimali"
+    }
   },
   "agents": {
     "title": "Rete di agenti AI",
