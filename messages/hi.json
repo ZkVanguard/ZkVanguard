@@ -144,6 +144,35 @@
         "protected": "आपकी गोपनीयता सुरक्षित है",
         "protectedDesc": "सभी संवेदनशील डेटा एन्क्रिप्टेड है। ZK प्रमाण सुनिश्चित करते हैं कि आपकी पोजीशनें निजी बनी रहें और ऑन-चेन सत्यापित हों।"
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "मेननेट मोड",
+        "subtitle": "मेननेट पर USDC फॉसेट अक्षम है",
+        "body": "Cronos मेननेट पर USDC प्राप्त करने के लिए, <exchange>क्रिप्टोकरेंसी एक्सचेंज</exchange> या <dex>VVS Finance DEX</dex> का उपयोग करें।"
+      },
+      "sui": {
+        "title": "SUI वॉलेट कनेक्ट है",
+        "body": "USDC फॉसेट Cronos (EVM) वॉलेट के लिए उपलब्ध है"
+      },
+      "title": "टेस्टनेट USDC फॉसेट",
+      "subtitle": "हेज परीक्षण के लिए टेस्टनेट USDC टकसाल करें",
+      "balanceLabel": "आपका टेस्टनेट USDC शेष",
+      "mintAmount": "टकसाल राशि",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "टेस्टनेट USDC: {balance}",
+        "minted": "टकसाल हो गया!",
+        "minting": "टकसाल हो रहा है…",
+        "getUsdc": "+ {amount} USDC प्राप्त करें"
+      },
+      "confirmInWallet": "वॉलेट में पुष्टि करें…",
+      "minting": "टकसाल हो रहा है…",
+      "mintedSuccess": "सफलतापूर्वक टकसाल हो गया!",
+      "mintButton": "{amount} USDC टकसाल करें",
+      "viewExplorer": "एक्सप्लोरर पर देखें",
+      "contractAddress": "टेस्टनेट USDC: {addr}",
+      "contractInfo": "Cronos टेस्टनेट (Chain ID: 338) • 6 दशमलव"
     }
   },
   "agents": {

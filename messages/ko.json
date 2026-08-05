@@ -144,6 +144,35 @@
         "protected": "귀하의 개인정보는 보호됩니다",
         "protectedDesc": "모든 민감한 데이터는 암호화됩니다. ZK 증명은 온체인에서 검증할 수 있으면서도 포지션을 프라이빗하게 유지합니다."
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "메인넷 모드",
+        "subtitle": "메인넷에서는 USDC 포셋이 비활성화됩니다",
+        "body": "Cronos 메인넷에서 USDC를 얻으려면 <exchange>암호화폐 거래소</exchange> 또는 <dex>VVS Finance DEX</dex>를 이용하세요."
+      },
+      "sui": {
+        "title": "SUI 지갑 연결됨",
+        "body": "USDC 포셋은 Cronos (EVM) 지갑에서 사용할 수 있습니다"
+      },
+      "title": "테스트넷 USDC 포셋",
+      "subtitle": "헤지 테스트용 테스트넷 USDC 발행",
+      "balanceLabel": "내 테스트넷 USDC 잔액",
+      "mintAmount": "발행량",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "테스트넷 USDC: {balance}",
+        "minted": "발행됨!",
+        "minting": "발행 중…",
+        "getUsdc": "+ {amount} USDC 받기"
+      },
+      "confirmInWallet": "지갑에서 확인…",
+      "minting": "발행 중…",
+      "mintedSuccess": "발행 완료!",
+      "mintButton": "{amount} USDC 발행",
+      "viewExplorer": "탐색기에서 보기",
+      "contractAddress": "테스트넷 USDC: {addr}",
+      "contractInfo": "Cronos 테스트넷 (Chain ID: 338) • 6자리"
     }
   },
   "agents": {

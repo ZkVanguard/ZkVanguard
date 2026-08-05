@@ -144,6 +144,35 @@
         "protected": "Tu privacidad está protegida",
         "protectedDesc": "Todos los datos sensibles están cifrados. Las pruebas ZK aseguran que tus posiciones sigan siendo privadas y verificables en cadena."
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Modo mainnet",
+        "subtitle": "El grifo de USDC está deshabilitado en mainnet",
+        "body": "Para obtener USDC en Cronos mainnet, utiliza un <exchange>exchange de criptomonedas</exchange> o <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "Cartera SUI conectada",
+        "body": "El grifo de USDC está disponible para carteras Cronos (EVM)"
+      },
+      "title": "Grifo de USDC testnet",
+      "subtitle": "Acuña USDC testnet para probar coberturas",
+      "balanceLabel": "Tu saldo de USDC testnet",
+      "mintAmount": "Cantidad a acuñar",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "USDC testnet: {balance}",
+        "minted": "¡Acuñado!",
+        "minting": "Acuñando…",
+        "getUsdc": "+ Obtener {amount} USDC"
+      },
+      "confirmInWallet": "Confirma en la cartera…",
+      "minting": "Acuñando…",
+      "mintedSuccess": "¡Acuñado correctamente!",
+      "mintButton": "Acuñar {amount} USDC",
+      "viewExplorer": "Ver en el explorador",
+      "contractAddress": "USDC testnet: {addr}",
+      "contractInfo": "Cronos testnet (Chain ID: 338) • 6 decimales"
     }
   },
   "agents": {

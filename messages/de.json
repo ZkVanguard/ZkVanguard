@@ -144,6 +144,35 @@
         "protected": "Ihre Privatsphäre ist geschützt",
         "protectedDesc": "Alle sensiblen Daten sind verschlüsselt. ZK-Beweise stellen sicher, dass Ihre Positionen privat bleiben und dennoch on-chain überprüfbar sind."
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Mainnet-Modus",
+        "subtitle": "USDC-Faucet ist im Mainnet deaktiviert",
+        "body": "Um USDC im Cronos-Mainnet zu erhalten, verwenden Sie eine <exchange>Kryptowährungsbörse</exchange> oder <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "SUI-Wallet verbunden",
+        "body": "USDC-Faucet ist für Cronos (EVM)-Wallets verfügbar"
+      },
+      "title": "Testnet USDC-Faucet",
+      "subtitle": "Testnet USDC für Hedge-Tests prägen",
+      "balanceLabel": "Ihr Testnet-USDC-Saldo",
+      "mintAmount": "Prägen-Betrag",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "Testnet USDC: {balance}",
+        "minted": "Geprägt!",
+        "minting": "Präge…",
+        "getUsdc": "+ {amount} USDC erhalten"
+      },
+      "confirmInWallet": "Im Wallet bestätigen…",
+      "minting": "Präge…",
+      "mintedSuccess": "Erfolgreich geprägt!",
+      "mintButton": "{amount} USDC prägen",
+      "viewExplorer": "Im Explorer ansehen",
+      "contractAddress": "Testnet USDC: {addr}",
+      "contractInfo": "Cronos-Testnet (Chain ID: 338) • 6 Dezimalstellen"
     }
   },
   "agents": {

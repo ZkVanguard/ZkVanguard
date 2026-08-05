@@ -144,6 +144,35 @@
         "protected": "あなたのプライバシーは保護されています",
         "protectedDesc": "すべての機密データは暗号化されています。ZK証明により、ポジションはプライベートに保たれつつ、オンチェーンで検証可能です。"
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "メインネットモード",
+        "subtitle": "メインネットではUSDCフォーセットは無効です",
+        "body": "Cronosメインネットで USDC を取得するには、<exchange>暗号通貨取引所</exchange>または<dex>VVS Finance DEX</dex>をご利用ください。"
+      },
+      "sui": {
+        "title": "SUIウォレット接続済み",
+        "body": "USDCフォーセットは Cronos (EVM) ウォレット向けです"
+      },
+      "title": "テストネット USDC フォーセット",
+      "subtitle": "ヘッジテスト用にテストネット USDC を発行",
+      "balanceLabel": "テストネット USDC 残高",
+      "mintAmount": "発行量",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "テストネット USDC: {balance}",
+        "minted": "発行しました!",
+        "minting": "発行中…",
+        "getUsdc": "+ {amount} USDC を取得"
+      },
+      "confirmInWallet": "ウォレットで確認…",
+      "minting": "発行中…",
+      "mintedSuccess": "発行が完了しました!",
+      "mintButton": "{amount} USDC を発行",
+      "viewExplorer": "エクスプローラーで表示",
+      "contractAddress": "テストネット USDC: {addr}",
+      "contractInfo": "Cronos テストネット (Chain ID: 338) • 6桁"
     }
   },
   "agents": {
