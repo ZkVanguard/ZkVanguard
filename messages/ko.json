@@ -94,7 +94,86 @@
     "totalValue": "총 포트폴리오 가치",
     "riskScore": "리스크 스코어",
     "activePositions": "활성 포지션",
-    "monthlyReturn": "월간 수익률"
+    "monthlyReturn": "월간 수익률",
+    "settingsModal": {
+      "title": "설정",
+      "subtitle": "대시보드 환경 설정 구성",
+      "close": "닫기",
+      "saving": "저장 중…",
+      "save": "변경 사항 저장",
+      "cancel": "취소",
+      "tabs": {
+        "general": "일반",
+        "hedging": "헤징",
+        "alerts": "알림",
+        "privacy": "개인정보 보호"
+      },
+      "general": {
+        "display": "디스플레이",
+        "darkMode": "다크 모드",
+        "darkModeDesc": "라이트 테마와 다크 테마 간 전환",
+        "compactView": "컴팩트 보기",
+        "compactViewDesc": "더 적은 공간에 더 많은 데이터 표시",
+        "wallet": "지갑",
+        "walletDesc": "지갑 설정은 연결된 지갑 공급자(MetaMask, WalletConnect 등)를 통해 관리됩니다."
+      },
+      "hedging": {
+        "autoApproval": "자동 승인",
+        "autoApprovalDesc": "임계값 이하의 헤지를 자동으로 승인",
+        "threshold": "임계값: ${amount}",
+        "riskLimits": "리스크 한도",
+        "maxLeverage": "최대 레버리지: {n}x",
+        "stopLoss": "기본 스톱로스: {n}%",
+        "takeProfit": "기본 테이크프로핏: {n}%"
+      },
+      "alerts": {
+        "title": "알림 환경 설정",
+        "price": "가격 알림",
+        "priceDesc": "중요한 가격 변동에 대한 알림 받기",
+        "hedge": "헤지 알림",
+        "hedgeDesc": "헤지 실행 및 청산에 대한 알림",
+        "agent": "AI 에이전트 알림",
+        "agentDesc": "AI 에이전트의 업데이트 및 권장 사항"
+      },
+      "privacy": {
+        "title": "개인정보 보호 기능",
+        "private": "프라이빗 모드",
+        "privateDesc": "스텔스 주소로 거래 세부 정보 숨기기",
+        "zk": "ZK-STARK 증명",
+        "zkDesc": "결제용 영지식 증명 생성",
+        "protected": "귀하의 개인정보는 보호됩니다",
+        "protectedDesc": "모든 민감한 데이터는 암호화됩니다. ZK 증명은 온체인에서 검증할 수 있으면서도 포지션을 프라이빗하게 유지합니다."
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "메인넷 모드",
+        "subtitle": "메인넷에서는 USDC 포셋이 비활성화됩니다",
+        "body": "Cronos 메인넷에서 USDC를 얻으려면 <exchange>암호화폐 거래소</exchange> 또는 <dex>VVS Finance DEX</dex>를 이용하세요."
+      },
+      "sui": {
+        "title": "SUI 지갑 연결됨",
+        "body": "USDC 포셋은 Cronos (EVM) 지갑에서 사용할 수 있습니다"
+      },
+      "title": "테스트넷 USDC 포셋",
+      "subtitle": "헤지 테스트용 테스트넷 USDC 발행",
+      "balanceLabel": "내 테스트넷 USDC 잔액",
+      "mintAmount": "발행량",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "테스트넷 USDC: {balance}",
+        "minted": "발행됨!",
+        "minting": "발행 중…",
+        "getUsdc": "+ {amount} USDC 받기"
+      },
+      "confirmInWallet": "지갑에서 확인…",
+      "minting": "발행 중…",
+      "mintedSuccess": "발행 완료!",
+      "mintButton": "{amount} USDC 발행",
+      "viewExplorer": "탐색기에서 보기",
+      "contractAddress": "테스트넷 USDC: {addr}",
+      "contractInfo": "Cronos 테스트넷 (Chain ID: 338) • 6자리"
+    }
   },
   "agents": {
     "title": "AI 에이전트 네트워크",

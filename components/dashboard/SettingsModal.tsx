@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { logger } from '@/lib/utils/logger';
 import { X, Settings, Shield, Bell, Eye, Wallet, Zap, Moon, Sun } from 'lucide-react';
 
@@ -13,20 +14,20 @@ interface UserSettings {
   // Auto-Approval Settings
   autoApprovalEnabled: boolean;
   autoApprovalThreshold: number;
-  
+
   // Notification Settings
   priceAlerts: boolean;
   hedgeAlerts: boolean;
   agentAlerts: boolean;
-  
+
   // Privacy Settings
   privateMode: boolean;
   zkProofsEnabled: boolean;
-  
+
   // Display Settings
   darkMode: boolean;
   compactView: boolean;
-  
+
   // Risk Settings
   maxLeverage: number;
   defaultStopLoss: number;
@@ -49,6 +50,7 @@ const defaultSettings: UserSettings = {
 };
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const t = useTranslations('dashboard.settingsModal');
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [activeTab, setActiveTab] = useState<'general' | 'hedging' | 'notifications' | 'privacy'>('general');
   const [saving, setSaving] = useState(false);
@@ -86,10 +88,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   if (!isOpen) return null;
 
   const tabs = [
-    { id: 'general', label: 'General', icon: Settings },
-    { id: 'hedging', label: 'Hedging', icon: Shield },
-    { id: 'notifications', label: 'Alerts', icon: Bell },
-    { id: 'privacy', label: 'Privacy', icon: Eye },
+    { id: 'general', label: t('tabs.general'), icon: Settings },
+    { id: 'hedging', label: t('tabs.hedging'), icon: Shield },
+    { id: 'notifications', label: t('tabs.alerts'), icon: Bell },
+    { id: 'privacy', label: t('tabs.privacy'), icon: Eye },
   ] as const;
 
   return (
@@ -115,14 +117,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] leading-tight">Settings</h2>
-              <p className="text-[11px] sm:text-[13px] text-[#86868b] truncate">Configure your dashboard preferences</p>
+              <h2 className="text-[17px] sm:text-[20px] font-semibold text-[#1d1d1f] leading-tight">{t('title')}</h2>
+              <p className="text-[11px] sm:text-[13px] text-[#86868b] truncate">{t('subtitle')}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-2 text-[#86868b] hover:text-[#1d1d1f] hover:bg-[#f5f5f7] rounded-full transition-all active:scale-[0.94] flex-shrink-0"
-            aria-label="Close"
+            aria-label={t('close')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -159,15 +161,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             <div className="space-y-6">
               {/* Display Settings */}
               <div className="bg-[#f5f5f7] rounded-xl p-5">
-                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">Display</h3>
-                
+                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">{t('general.display')}</h3>
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {settings.darkMode ? <Moon className="w-5 h-5 text-[#86868b]" /> : <Sun className="w-5 h-5 text-[#86868b]" />}
                       <div>
-                        <p className="text-[14px] font-medium text-[#1d1d1f]">Dark Mode</p>
-                        <p className="text-[12px] text-[#86868b]">Switch between light and dark themes</p>
+                        <p className="text-[14px] font-medium text-[#1d1d1f]">{t('general.darkMode')}</p>
+                        <p className="text-[12px] text-[#86868b]">{t('general.darkModeDesc')}</p>
                       </div>
                     </div>
                     <ToggleSwitch
@@ -178,8 +180,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[14px] font-medium text-[#1d1d1f]">Compact View</p>
-                      <p className="text-[12px] text-[#86868b]">Show more data in less space</p>
+                      <p className="text-[14px] font-medium text-[#1d1d1f]">{t('general.compactView')}</p>
+                      <p className="text-[12px] text-[#86868b]">{t('general.compactViewDesc')}</p>
                     </div>
                     <ToggleSwitch
                       enabled={settings.compactView}
@@ -193,10 +195,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className="bg-[#f5f5f7] rounded-xl p-5">
                 <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4 flex items-center gap-2">
                   <Wallet className="w-4 h-4" />
-                  Wallet
+                  {t('general.wallet')}
                 </h3>
                 <p className="text-[13px] text-[#86868b]">
-                  Wallet settings are managed through your connected wallet provider (MetaMask, WalletConnect, etc.)
+                  {t('general.walletDesc')}
                 </p>
               </div>
             </div>
@@ -211,8 +213,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <div className="flex items-center gap-3">
                     <Zap className="w-5 h-5 text-[#FF9500]" />
                     <div>
-                      <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Auto-Approval</h3>
-                      <p className="text-[12px] text-[#86868b]">Automatically approve hedges below threshold</p>
+                      <h3 className="text-[15px] font-semibold text-[#1d1d1f]">{t('hedging.autoApproval')}</h3>
+                      <p className="text-[12px] text-[#86868b]">{t('hedging.autoApprovalDesc')}</p>
                     </div>
                   </div>
                   <ToggleSwitch
@@ -224,7 +226,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {settings.autoApprovalEnabled && (
                   <div className="mt-4 pt-4 border-t border-black/5">
                     <label className="block text-[13px] font-medium text-[#1d1d1f] mb-3">
-                      Threshold: ${settings.autoApprovalThreshold.toLocaleString()}
+                      {t('hedging.threshold', { amount: settings.autoApprovalThreshold.toLocaleString() })}
                     </label>
                     <input
                       type="range"
@@ -246,12 +248,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
               {/* Risk Settings */}
               <div className="bg-[#f5f5f7] rounded-xl p-5">
-                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">Risk Limits</h3>
-                
+                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">{t('hedging.riskLimits')}</h3>
+
                 <div className="space-y-5">
                   <div>
                     <label className="block text-[13px] font-medium text-[#1d1d1f] mb-2">
-                      Max Leverage: {settings.maxLeverage}x
+                      {t('hedging.maxLeverage', { n: settings.maxLeverage })}
                     </label>
                     <input
                       type="range"
@@ -270,7 +272,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <div>
                     <label className="block text-[13px] font-medium text-[#1d1d1f] mb-2">
-                      Default Stop Loss: {settings.defaultStopLoss}%
+                      {t('hedging.stopLoss', { n: settings.defaultStopLoss })}
                     </label>
                     <input
                       type="range"
@@ -284,7 +286,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <div>
                     <label className="block text-[13px] font-medium text-[#1d1d1f] mb-2">
-                      Default Take Profit: {settings.defaultTakeProfit}%
+                      {t('hedging.takeProfit', { n: settings.defaultTakeProfit })}
                     </label>
                     <input
                       type="range"
@@ -304,13 +306,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {activeTab === 'notifications' && (
             <div className="space-y-6">
               <div className="bg-[#f5f5f7] rounded-xl p-5">
-                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">Alert Preferences</h3>
-                
+                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">{t('alerts.title')}</h3>
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[14px] font-medium text-[#1d1d1f]">Price Alerts</p>
-                      <p className="text-[12px] text-[#86868b]">Get notified on significant price movements</p>
+                      <p className="text-[14px] font-medium text-[#1d1d1f]">{t('alerts.price')}</p>
+                      <p className="text-[12px] text-[#86868b]">{t('alerts.priceDesc')}</p>
                     </div>
                     <ToggleSwitch
                       enabled={settings.priceAlerts}
@@ -320,8 +322,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[14px] font-medium text-[#1d1d1f]">Hedge Alerts</p>
-                      <p className="text-[12px] text-[#86868b]">Notifications for hedge execution & liquidations</p>
+                      <p className="text-[14px] font-medium text-[#1d1d1f]">{t('alerts.hedge')}</p>
+                      <p className="text-[12px] text-[#86868b]">{t('alerts.hedgeDesc')}</p>
                     </div>
                     <ToggleSwitch
                       enabled={settings.hedgeAlerts}
@@ -331,8 +333,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[14px] font-medium text-[#1d1d1f]">AI Agent Alerts</p>
-                      <p className="text-[12px] text-[#86868b]">Updates from AI agents and recommendations</p>
+                      <p className="text-[14px] font-medium text-[#1d1d1f]">{t('alerts.agent')}</p>
+                      <p className="text-[12px] text-[#86868b]">{t('alerts.agentDesc')}</p>
                     </div>
                     <ToggleSwitch
                       enabled={settings.agentAlerts}
@@ -348,13 +350,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {activeTab === 'privacy' && (
             <div className="space-y-6">
               <div className="bg-[#f5f5f7] rounded-xl p-5">
-                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">Privacy Features</h3>
-                
+                <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-4">{t('privacy.title')}</h3>
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[14px] font-medium text-[#1d1d1f]">Private Mode</p>
-                      <p className="text-[12px] text-[#86868b]">Hide transaction details with stealth addresses</p>
+                      <p className="text-[14px] font-medium text-[#1d1d1f]">{t('privacy.private')}</p>
+                      <p className="text-[12px] text-[#86868b]">{t('privacy.privateDesc')}</p>
                     </div>
                     <ToggleSwitch
                       enabled={settings.privateMode}
@@ -364,8 +366,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[14px] font-medium text-[#1d1d1f]">ZK-STARK Proofs</p>
-                      <p className="text-[12px] text-[#86868b]">Generate zero-knowledge proofs for settlements</p>
+                      <p className="text-[14px] font-medium text-[#1d1d1f]">{t('privacy.zk')}</p>
+                      <p className="text-[12px] text-[#86868b]">{t('privacy.zkDesc')}</p>
                     </div>
                     <ToggleSwitch
                       enabled={settings.zkProofsEnabled}
@@ -379,9 +381,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div className="flex items-start gap-3">
                   <Shield className="w-5 h-5 text-[#34C759] flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[13px] font-medium text-[#1d1d1f]">Your Privacy is Protected</p>
+                    <p className="text-[13px] font-medium text-[#1d1d1f]">{t('privacy.protected')}</p>
                     <p className="text-[12px] text-[#86868b] mt-1">
-                      All sensitive data is encrypted. ZK proofs ensure your positions remain private while still being verifiable on-chain.
+                      {t('privacy.protectedDesc')}
                     </p>
                   </div>
                 </div>
@@ -397,14 +399,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             onClick={onClose}
             className="h-11 sm:h-auto px-5 py-2.5 text-[15px] sm:text-[14px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] active:scale-[0.98] rounded-xl transition-all"
           >
-            Cancel
+            {t('cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
             className="h-11 sm:h-auto px-5 py-2.5 text-[15px] sm:text-[14px] font-semibold text-white bg-[#007AFF] hover:bg-[#0051D5] active:scale-[0.98] rounded-xl transition-all disabled:opacity-50"
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? t('saving') : t('save')}
           </button>
         </div>
       </div>
@@ -413,11 +415,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 }
 
 // Toggle Switch Component
-function ToggleSwitch({ 
-  enabled, 
-  onChange 
-}: { 
-  enabled: boolean; 
+function ToggleSwitch({
+  enabled,
+  onChange
+}: {
+  enabled: boolean;
   onChange: (val: boolean) => void;
 }) {
   return (
