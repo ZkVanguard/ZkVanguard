@@ -144,6 +144,35 @@
         "protected": "La tua privacy è protetta",
         "protectedDesc": "Tutti i dati sensibili sono crittografati. Le prove ZK garantiscono che le tue posizioni rimangano private ma comunque verificabili on-chain."
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Modalità mainnet",
+        "subtitle": "Il faucet USDC è disabilitato sulla mainnet",
+        "body": "Per ottenere USDC sulla mainnet Cronos, utilizza un <exchange>exchange di criptovalute</exchange> o <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "Wallet SUI connesso",
+        "body": "Il faucet USDC è disponibile per i wallet Cronos (EVM)"
+      },
+      "title": "Faucet USDC testnet",
+      "subtitle": "Conia USDC testnet per testare le coperture",
+      "balanceLabel": "Il tuo saldo USDC testnet",
+      "mintAmount": "Importo da coniare",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "USDC testnet: {balance}",
+        "minted": "Coniato!",
+        "minting": "Coniazione…",
+        "getUsdc": "+ Ottieni {amount} USDC"
+      },
+      "confirmInWallet": "Conferma nel wallet…",
+      "minting": "Coniazione…",
+      "mintedSuccess": "Coniato con successo!",
+      "mintButton": "Conia {amount} USDC",
+      "viewExplorer": "Visualizza nell'esploratore",
+      "contractAddress": "USDC testnet: {addr}",
+      "contractInfo": "Cronos testnet (Chain ID: 338) • 6 decimali"
     }
   },
   "agents": {

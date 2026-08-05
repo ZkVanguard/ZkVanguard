@@ -144,6 +144,35 @@
         "protected": "Sua privacidade está protegida",
         "protectedDesc": "Todos os dados sensíveis são criptografados. As provas ZK garantem que suas posições permaneçam privadas e ainda assim verificáveis on-chain."
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Modo mainnet",
+        "subtitle": "A torneira de USDC está desativada na mainnet",
+        "body": "Para adquirir USDC na mainnet Cronos, use uma <exchange>exchange de criptomoedas</exchange> ou <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "Carteira SUI conectada",
+        "body": "A torneira de USDC está disponível para carteiras Cronos (EVM)"
+      },
+      "title": "Torneira de USDC testnet",
+      "subtitle": "Cunhe USDC testnet para testar coberturas",
+      "balanceLabel": "Seu saldo de USDC testnet",
+      "mintAmount": "Quantidade a cunhar",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "USDC testnet: {balance}",
+        "minted": "Cunhado!",
+        "minting": "Cunhando…",
+        "getUsdc": "+ Obter {amount} USDC"
+      },
+      "confirmInWallet": "Confirme na carteira…",
+      "minting": "Cunhando…",
+      "mintedSuccess": "Cunhado com sucesso!",
+      "mintButton": "Cunhar {amount} USDC",
+      "viewExplorer": "Ver no explorador",
+      "contractAddress": "USDC testnet: {addr}",
+      "contractInfo": "Cronos testnet (Chain ID: 338) • 6 decimais"
     }
   },
   "agents": {

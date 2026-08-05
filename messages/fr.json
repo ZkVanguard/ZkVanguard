@@ -144,6 +144,35 @@
         "protected": "Votre vie privée est protégée",
         "protectedDesc": "Toutes les données sensibles sont chiffrées. Les preuves ZK garantissent que vos positions restent privées tout en étant vérifiables sur la chaîne."
       }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Mode mainnet",
+        "subtitle": "Le robinet USDC est désactivé sur le mainnet",
+        "body": "Pour acquérir de l'USDC sur le mainnet Cronos, utilisez un <exchange>échange de cryptomonnaies</exchange> ou <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "Portefeuille SUI connecté",
+        "body": "Le robinet USDC est disponible pour les portefeuilles Cronos (EVM)"
+      },
+      "title": "Robinet USDC testnet",
+      "subtitle": "Créer de l'USDC testnet pour tester les couvertures",
+      "balanceLabel": "Votre solde USDC testnet",
+      "mintAmount": "Montant à créer",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "USDC testnet : {balance}",
+        "minted": "Créé !",
+        "minting": "Création…",
+        "getUsdc": "+ Obtenir {amount} USDC"
+      },
+      "confirmInWallet": "Confirmez dans le portefeuille…",
+      "minting": "Création…",
+      "mintedSuccess": "Créé avec succès !",
+      "mintButton": "Créer {amount} USDC",
+      "viewExplorer": "Voir sur l'explorateur",
+      "contractAddress": "USDC testnet : {addr}",
+      "contractInfo": "Cronos testnet (Chain ID: 338) • 6 décimales"
     }
   },
   "agents": {
