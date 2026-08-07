@@ -1,4 +1,4 @@
--- Hedge Ownership Table for ZkVanguard
+-- Hedge Ownership Table for ZkWard
 -- Stores off-chain ownership mapping for gasless hedge positions
 -- Used to verify hedge ownership without revealing wallet on-chain
 

@@ -43,7 +43,7 @@ function step(num: number, desc: string) {
 async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 async function runCompleteSystemTest() {
-  section('🚀 ZkVanguard - COMPLETE SYSTEM TEST');
+  section('🚀 ZkWard - COMPLETE SYSTEM TEST');
   
   let passed = 0, failed = 0;
   const results: any = {

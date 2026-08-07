@@ -1,4 +1,4 @@
--- ZkVanguard Analytics Database Schema
+-- ZkWard Analytics Database Schema
 -- Platform: Neon PostgreSQL (free tier: 512MB, 3GB transfer/month)
 -- GDPR Compliant: No PII stored, 90-day auto-deletion
 --

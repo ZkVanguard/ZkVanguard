@@ -1,4 +1,4 @@
--- Hedges Table Schema for ZkVanguard
+-- Hedges Table Schema for ZkWard
 -- Stores simulated hedge positions from Moonlander
 -- Can be migrated to real on-chain data later
 

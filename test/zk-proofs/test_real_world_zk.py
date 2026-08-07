@@ -1,6 +1,6 @@
 """
 Real-World ZK System Integration Test
-Tests ZK proofs with actual ZkVanguard agent workflows
+Tests ZK proofs with actual ZkWard agent workflows
 
 This demonstrates REAL Zero-Knowledge proofs with production-like data:
 - Portfolio risk assessment with hidden positions

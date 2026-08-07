@@ -73,7 +73,7 @@ sui client upgrade `
    const tx = svc.buildEnrollCustodianTx(
      ADMIN_CAP_ID,
      pubKey,
-     'ZkVanguard Internal Test Custodian',
+     'ZkWard Internal Test Custodian',
      'US',
    );
    // sign + execute with operator wallet

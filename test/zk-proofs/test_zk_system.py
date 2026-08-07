@@ -149,7 +149,7 @@ def run_all_tests():
     """Run all ZK-STARK tests"""
     print("\n" + "="*60)
     print("ZK-STARK PROOF SYSTEM TEST SUITE")
-    print("ZkVanguard - Real Zero-Knowledge Proofs")
+    print("ZkWard - Real Zero-Knowledge Proofs")
     print("="*60)
     
     results = []

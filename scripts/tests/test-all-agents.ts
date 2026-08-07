@@ -13,7 +13,7 @@ import { SimulatedPortfolioManager } from '../lib/services/SimulatedPortfolioMan
 import { getAgentOrchestrator } from '../lib/services/agent-orchestrator';
 
 async function testAllAgents() {
-  console.log('🚀 ZkVanguard - Complete Agent System Test\n');
+  console.log('🚀 ZkWard - Complete Agent System Test\n');
   console.log('=' .repeat(80));
   console.log('Testing ALL 5 agents with REAL protocols and data');
   console.log('=' .repeat(80));

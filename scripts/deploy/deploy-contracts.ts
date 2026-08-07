@@ -1,5 +1,5 @@
 /**
- * @fileoverview Deploy script for ZkVanguard contracts
+ * @fileoverview Deploy script for ZkWard contracts
  * @module scripts/deploy/deploy-contracts
  */
 
