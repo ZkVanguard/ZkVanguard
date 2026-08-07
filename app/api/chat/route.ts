@@ -19,21 +19,8 @@ export const runtime = 'nodejs';
 export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
-// SECURITY: Restrict CORS to our own domain only
-const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || 'https://zkvanguard.xyz';
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-wallet-address, x-wallet-signature, x-wallet-message',
-};
-
-/**
- * OPTIONS /api/chat
- * Handle CORS preflight requests
- */
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 200, headers: corsHeaders });
-}
+// CORS + OPTIONS handled centrally by middleware.ts (allowlist covers both
+// zkvanguard.xyz and zkward.com during the rebrand transition).
 
 // Keywords that indicate the user wants agent orchestration
 const AGENT_KEYWORDS = [

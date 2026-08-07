@@ -135,7 +135,7 @@ function calculatePnlPercent(hedge: Hedge): number {
 async function getCurrentPrices(assets: string[]): Promise<Record<string, number>> {
   try {
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.xyz' 
+      ? 'https://zkward.com' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/prices?assets=${assets.join(',')}`, {
@@ -192,7 +192,7 @@ async function closePosition(hedge: ActiveHedge, reason: string): Promise<boolea
     
     // Then try to close on the exchange (this may fail but position is still marked closed)
     const baseUrl = process.env.VERCEL 
-      ? 'https://zkvanguard.xyz' 
+      ? 'https://zkward.com' 
       : process.env.NEXTAUTH_URL || 'http://localhost:3000';
     
     const response = await fetch(`${baseUrl}/api/agents/hedging/execute`, {

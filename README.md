@@ -8,11 +8,11 @@ Prediction markets print billions per month in alpha-bearing signal. Riding it c
 
 [![Sui Mainnet](https://img.shields.io/badge/Sui-Mainnet%20Live-4ca3ff?style=flat-square)](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 [![Status](https://img.shields.io/badge/Status-Pre--audit%20%C2%B7%20TVL%20capped%20%2410K-orange?style=flat-square)](#status)
-[![Website](https://img.shields.io/badge/Website-zkvanguard.xyz-brightgreen?style=flat-square)](https://www.zkvanguard.xyz)
-[![Health API](https://img.shields.io/badge/Health-API%20live-blue?style=flat-square)](https://www.zkvanguard.xyz/api/health/production)
+[![Website](https://img.shields.io/badge/Website-zkward.com-brightgreen?style=flat-square)](https://www.zkward.com)
+[![Health API](https://img.shields.io/badge/Health-API%20live-blue?style=flat-square)](https://www.zkward.com/api/health/production)
 [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey?style=flat-square)](LICENSE)
 
-[Deposit](https://www.zkvanguard.xyz) · [Live PnL](https://www.zkvanguard.xyz/dashboard/overview) · [Risk overview](https://www.zkvanguard.xyz/dashboard/risk) · [Suiscan proof](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
+[Deposit](https://www.zkward.com) · [Live PnL](https://www.zkward.com/dashboard/overview) · [Risk overview](https://www.zkward.com/dashboard/risk) · [Suiscan proof](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 
 </div>
 
@@ -32,8 +32,8 @@ Prediction markets print billions per month in alpha-bearing signal. Riding it c
 
 ```bash
 # No clone required — hits live production endpoints
-curl -s https://www.zkvanguard.xyz/api/health/production | jq
-curl -s https://www.zkvanguard.xyz/api/predictions/per-asset | jq
+curl -s https://www.zkward.com/api/health/production | jq
+curl -s https://www.zkward.com/api/predictions/per-asset | jq
 
 # With clone — canonical "is the pool in profit?" script
 bun run scripts/analyze-pool-pnl.ts
@@ -155,7 +155,7 @@ Full architecture, env conventions, BlueFin invariants, and reconciliation topol
 ## FAQ
 
 **How do I deposit and withdraw?**
-Connect a Sui wallet at [zkvanguard.xyz](https://www.zkvanguard.xyz), approve USDC, deposit. Withdrawals are always open — the Move contract computes your USDC share of NAV (idle pool + admin wallet + BlueFin margin) and pays out atomically. Strict NAV-oracle mode adds a safety: if the cron oracle attestation is > 2h stale, both deposits and withdrawals revert to prevent bad pricing.
+Connect a Sui wallet at [zkward.com](https://www.zkward.com), approve USDC, deposit. Withdrawals are always open — the Move contract computes your USDC share of NAV (idle pool + admin wallet + BlueFin margin) and pays out atomically. Strict NAV-oracle mode adds a safety: if the cron oracle attestation is > 2h stale, both deposits and withdrawals revert to prevent bad pricing.
 
 **What if the AI is wrong?**
 Every trade > $100K needs 2-of-3 agent consensus. The [8-gate autonomy defense](#safety--the-8-gate-autonomy-defense-system) catches most failure modes automatically. Drawdown > 10% from peak NAV auto-halts new hedges. AI regret weighting shrinks position sizes after losing streaks. Beyond that, you can withdraw at any time.

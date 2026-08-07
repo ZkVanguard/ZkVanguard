@@ -76,6 +76,8 @@
     "rights": "版权所有。",
     "testnet": "SUI主网",
     "stage": "主网上线",
+    "migrationNotice": "Formerly zkvanguard.xyz — zkward.com is our new home.",
+
     "builtWith": "基于ZK-STARK构建"
   },
   "connect": {

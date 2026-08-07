@@ -4,7 +4,7 @@
 Write-Host "`n=== Advanced Chat API Stress Test ===" -ForegroundColor Cyan
 Write-Host ""
 
-$baseUrl = "https://zkvanguard.xyz"
+$baseUrl = "https://zkward.com"
 $conversationId = "stress-test-$(Get-Date -Format 'yyyyMMddHHmmss')"
 $testsPassed = 0
 $totalTests = 0

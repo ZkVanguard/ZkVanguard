@@ -39,7 +39,7 @@ polymarket-edge:stats          growing normally
 
 Quick check:
 ```bash
-curl -s https://www.zkvanguard.xyz/api/health/production | \
+curl -s https://www.zkward.com/api/health/production | \
   python -c "import json,sys;d=json.load(sys.stdin);print('build:',d['build']['commit']);print('trader age:',d['components']['traderCron']['ageSeconds'],'s');print('bluefin:',d['components']['bluefin']['positionsSummary'])"
 ```
 
@@ -125,7 +125,7 @@ release:    v0.4.0 tagged + pushed
 
 **One-liner health check:**
 ```bash
-curl -s https://www.zkvanguard.xyz/api/health/production | python -c "import json,sys;d=json.load(sys.stdin);print(d['build']['commit'],d['status'],d['components']['phantomRate']['status'],d['components']['bluefin']['positionsSummary'])"
+curl -s https://www.zkward.com/api/health/production | python -c "import json,sys;d=json.load(sys.stdin);print(d['build']['commit'],d['status'],d['components']['phantomRate']['status'],d['components']['bluefin']['positionsSummary'])"
 ```
 
 If that returns `2fd663b4 healthy ok <positions>` → everything from this session is live and working. Move on.

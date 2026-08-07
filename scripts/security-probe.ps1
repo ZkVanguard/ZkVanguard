@@ -1,4 +1,4 @@
-$base = "https://www.zkvanguard.xyz"
+$base = "https://www.zkward.com"
 $results = @()
 
 function ProbeJSON([string]$label, [string]$method, [string]$path, [string]$body, [hashtable]$headers) {

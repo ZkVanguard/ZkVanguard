@@ -152,15 +152,15 @@ export default function ApiDocsPage() {
         </div>
         <pre className="font-mono text-[12px] leading-relaxed overflow-x-auto">
 {`# Public, no auth needed today
-curl -s https://www.zkvanguard.xyz/api/platform/risk-overview \\
+curl -s https://www.zkward.com/api/platform/risk-overview \\
   | jq '.platform.tvlUsd, .hedge.coverageRatio, .reconciliation.healthyCount'
 
 # Per-wallet exposure across all products
-curl -s 'https://www.zkvanguard.xyz/api/portfolio/unified?wallet=0x...' \\
+curl -s 'https://www.zkward.com/api/portfolio/unified?wallet=0x...' \\
   | jq '.totals.nav, .totals.unrealizedPnlPct'
 
 # Fused prediction signal driving the autonomous trader
-curl -s https://www.zkvanguard.xyz/api/predictions/per-asset \\
+curl -s https://www.zkward.com/api/predictions/per-asset \\
   | jq '.predictions[] | { asset, direction, confidence, recommendation }'`}
         </pre>
       </section>

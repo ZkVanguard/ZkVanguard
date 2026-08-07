@@ -457,7 +457,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<CronResult
       if (priceValidationPassed) {
         try {
         const baseUrl = process.env.VERCEL 
-          ? 'https://zkvanguard.xyz'
+          ? 'https://zkward.com'
           : process.env.NEXT_PUBLIC_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
         const aiResponse = await fetch(`${baseUrl}/api/community-pool/ai-decision`, {
           method: 'POST',

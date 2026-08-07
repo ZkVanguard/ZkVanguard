@@ -76,6 +76,8 @@
     "rights": "Tous droits réservés.",
     "testnet": "SUI Mainnet",
     "stage": "Mainnet En Direct",
+    "migrationNotice": "Formerly zkvanguard.xyz — zkward.com is our new home.",
+
     "builtWith": "Développé avec ZK-STARK"
   },
   "connect": {

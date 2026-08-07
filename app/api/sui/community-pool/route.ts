@@ -920,7 +920,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'QSTASH_TOKEN not configured' }, { status: 503 });
       }
 
-      const cronUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.zkvanguard.xyz'}/api/cron/sui-community-pool`;
+      const cronUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.zkward.com'}/api/cron/sui-community-pool`;
       // Use regional endpoint from QSTASH_URL env or fall back to US East-1
       const qstashBase = (process.env.QSTASH_URL || 'https://qstash-us-east-1.upstash.io').replace(/\/$/, '');
       const res = await fetch(`${qstashBase}/v2/publish/${cronUrl}`, {

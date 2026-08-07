@@ -76,7 +76,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
+        "https://zkward.com",
+        "https://www.zkward.com",
         "https://zkvanguard.xyz",
+        "https://www.zkvanguard.xyz",
         "https://*.vercel.app",
         "https://starknova.xyz",
         "https://*.starknova.xyz",

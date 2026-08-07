@@ -3,7 +3,7 @@
 
 param(
     [string]$TunnelName = "zk-stark-api",
-    [string]$Hostname = "zk-api.zkvanguard.com"
+    [string]$Hostname = "zk-api.zkward.com"
 )
 
 Write-Host "🔐 ZK-STARK Cloudflare Tunnel Setup (Windows)" -ForegroundColor Cyan

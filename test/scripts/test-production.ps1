@@ -4,7 +4,7 @@
 Write-Host "`n=== ZkWard Production Test ===" -ForegroundColor Cyan
 Write-Host ""
 
-$baseUrl = "https://zkvanguard.xyz"
+$baseUrl = "https://zkward.com"
 $allPassed = $true
 
 # Test 1: Health Check

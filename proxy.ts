@@ -4,8 +4,8 @@ import createIntlMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 
 /**
- * Combined Middleware: i18n + Geo-Blocking + Security Headers
- * 
+ * Combined Middleware: i18n + Geo-Blocking + Security Headers + CORS
+ *
  * Optimized for multi-user throughput:
  * - Set-based O(1) lookups instead of Array.some() for path matching
  * - Pre-compiled blocked country set
@@ -14,6 +14,28 @@ import { routing } from './i18n/routing';
 
 // Create i18n middleware handler once (module-level singleton)
 const intlMiddleware = createIntlMiddleware(routing);
+
+// Multi-origin CORS for the rebrand transition. Both old and new domains
+// accepted; drop zkvanguard.xyz entries once the domain is fully retired
+// (planned ≥12 months after zkward.com cutover so external Suiscan proofs,
+// grant reports, and Discord alert links keep resolving).
+const ALLOWED_ORIGINS = new Set([
+  'https://zkward.com',
+  'https://www.zkward.com',
+  'https://zkvanguard.xyz',
+  'https://www.zkvanguard.xyz',
+]);
+const CORS_ALLOW_HEADERS = 'Content-Type, Authorization, X-Wallet-Address, X-Wallet-Signature, X-Wallet-Message';
+const CORS_ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
+
+function applyCors(response: NextResponse, allow: string | null): NextResponse {
+  if (allow) {
+    response.headers.set('Access-Control-Allow-Origin', allow);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set('Vary', 'Origin');
+  }
+  return response;
+}
 
 /** Add security headers to all responses */
 function addSecurityHeaders(response: NextResponse): NextResponse {
@@ -122,14 +144,31 @@ function getApiCachePolicy(pathname: string): string | null {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // FAST PATH: Skip i18n middleware entirely for API routes
   if (pathname.startsWith('/api')) {
+    const origin = request.headers.get('origin');
+    const allow = origin && ALLOWED_ORIGINS.has(origin) ? origin : null;
+
+    // CORS preflight — respond before any other work
+    if (request.method === 'OPTIONS') {
+      const preflightHeaders = new Headers();
+      if (allow) {
+        preflightHeaders.set('Access-Control-Allow-Origin', allow);
+        preflightHeaders.set('Access-Control-Allow-Credentials', 'true');
+      }
+      preflightHeaders.set('Access-Control-Allow-Methods', CORS_ALLOW_METHODS);
+      preflightHeaders.set('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS);
+      preflightHeaders.set('Vary', 'Origin');
+      return new NextResponse(null, { status: 204, headers: preflightHeaders });
+    }
+
     if (isProtected(pathname)) {
       const country = getCountryFromRequest(request);
       if (country && BLOCKED_COUNTRIES.has(country)) {
         logGeoBlock(request, country, pathname);
-        return createBlockedResponse(country, pathname);
+        // CORS applied to the 451 so the browser can actually read the error body
+        return applyCors(createBlockedResponse(country, pathname), allow);
       }
     }
     const response = addSecurityHeaders(NextResponse.next());
@@ -142,7 +181,7 @@ export function proxy(request: NextRequest) {
       }
     }
 
-    return response;
+    return applyCors(response, allow);
   }
   
   // Apply i18n for non-API routes
@@ -232,7 +271,7 @@ function createBlockedResponse(country: string, pathname: string): NextResponse 
         error: 'Service unavailable in your region',
         code: 'GEO_RESTRICTED',
         message: 'This service is not available in your jurisdiction due to regulatory requirements.',
-        support: 'For questions, contact compliance@zkvanguard.io'
+        support: 'For questions, contact compliance@zkward.com'
       }),
       {
         status: 451,
@@ -296,7 +335,7 @@ function createBlockedResponse(country: string, pathname: string): NextResponse 
         </p>
         <p>
           If you believe this is an error, please contact us at 
-          <a href="mailto:compliance@zkvanguard.io">compliance@zkvanguard.io</a>
+          <a href="mailto:compliance@zkward.com">compliance@zkward.com</a>
         </p>
         <p class="code">Error Code: GEO_RESTRICTED</p>
       </div>

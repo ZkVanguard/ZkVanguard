@@ -470,7 +470,7 @@ async function fetchRealZKProofs() {
 Real blockchain transactions. Real ZK proofs. Real gasless execution.
 All verifiable on Cronos testnet explorer. Watch..."
 
-[Screen shows zkvanguard.xyz]
+[Screen shows zkward.com]
 [Click "Try Demo"]
 [Portfolio loads with REAL testnet balances]
 ```

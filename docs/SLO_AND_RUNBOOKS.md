@@ -94,11 +94,11 @@ curl -m 5 https://api.sui-prod.bluefin.io/markets
 
 # 2. Is it our credentials or theirs?
 curl -sH "Authorization: Bearer $CRON_SECRET" \
-  "https://www.zkvanguard.xyz/api/admin/bluefin-preflight"
+  "https://www.zkward.com/api/admin/bluefin-preflight"
 
 # 3. Test-order one signature:
 curl -sH "Authorization: Bearer $CRON_SECRET" \
-  -X POST "https://www.zkvanguard.xyz/api/admin/bluefin-trace-order" \
+  -X POST "https://www.zkward.com/api/admin/bluefin-trace-order" \
   -d '{"symbol":"BTC-PERP","side":"LONG","size":0.001,"leverage":3}'
 ```
 
@@ -220,7 +220,7 @@ curl -sH "Authorization: Bearer $QSTASH_TOKEN" $QSTASH_URL/v2/schedules
 
 # 2. Are cron routes throwing 5xx (blocking QStash from marking success)?
 curl -sH "Authorization: Bearer $CRON_SECRET" \
-  https://www.zkvanguard.xyz/api/health/production | jq .components.cronJobs
+  https://www.zkward.com/api/health/production | jq .components.cronJobs
 
 # 3. Vercel deploy status
 curl -sH "Authorization: Bearer $VERCEL_TOKEN" \
@@ -231,7 +231,7 @@ curl -sH "Authorization: Bearer $VERCEL_TOKEN" \
 - Manually trigger the most critical cron (sui-community-pool) to force a NAV snapshot:
   ```bash
   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
-    https://www.zkvanguard.xyz/api/cron/sui-community-pool
+    https://www.zkward.com/api/cron/sui-community-pool
   ```
 - If Vercel is down: no mitigation — sit tight, monitor Vercel status
 
@@ -261,7 +261,7 @@ psql -c "SELECT COUNT(*), status FROM hedges WHERE created_at > NOW() - INTERVAL
 
 # 2. BlueFin ground-truth check
 curl -s -H "Authorization: Bearer $CRON_SECRET" \
-  https://www.zkvanguard.xyz/api/admin/bluefin-debug | jq
+  https://www.zkward.com/api/admin/bluefin-debug | jq
 
 # 3. Check for known root causes:
 #    - Isolated-margin bug regression (BlueFin config change on their side)

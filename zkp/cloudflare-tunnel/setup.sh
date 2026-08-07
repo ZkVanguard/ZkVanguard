@@ -14,7 +14,7 @@
 set -e
 
 TUNNEL_NAME="zk-stark-api"
-HOSTNAME="zk-api.zkvanguard.com"  # Change to your domain
+HOSTNAME="zk-api.zkward.com"  # Change to your domain
 
 echo "🔐 ZK-STARK Cloudflare Tunnel Setup"
 echo "===================================="

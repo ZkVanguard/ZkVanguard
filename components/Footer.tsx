@@ -62,6 +62,7 @@ export const Footer = memo(function Footer() {
               © {currentYear} ZkWard. {t('rights')}
               <span className="hidden md:inline ml-2">·</span>
               <span className="block md:inline md:ml-2 text-[#007AFF]">{t('testnet')}</span>
+              <div className="mt-1 text-[11px] text-[#86868b]">{t('migrationNotice')}</div>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-[12px]">
               <span className="px-3 py-1.5 bg-[#007AFF]/10 text-[#007AFF] rounded-full font-medium">

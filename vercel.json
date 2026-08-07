@@ -9,23 +9,5 @@
       "NODE_OPTIONS": "--no-deprecation"
     }
   },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://zkvanguard.xyz"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-Wallet-Address, X-Wallet-Signature, X-Wallet-Message"
-        }
-      ]
-    }
-  ]
+  "headers": []
 }

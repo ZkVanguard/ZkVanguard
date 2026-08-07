@@ -102,7 +102,7 @@ bun run scripts/check-hedge-signal-alignment.ts
 bun run scripts/analyze-pool-pnl.ts
 
 # 4. Cron heartbeats within cadence
-curl -s https://www.zkvanguard.xyz/api/health/production | jq '.cron_heartbeats'
+curl -s https://www.zkward.com/api/health/production | jq '.cron_heartbeats'
 ```
 
 **Post-deploy: re-attest external NAV bundle.** The `admin_reset_hedge_state` call deletes external_nav DFs; strict mode then blocks user flow for up to 30 min. Bundle reset + `admin_attest_external_nav` in one PTB. See the `sui-hedge-reconcile` route implementation for reference.

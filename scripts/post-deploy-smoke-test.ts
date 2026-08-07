@@ -8,7 +8,7 @@
  * Read-only. No signing, no state changes. Idempotent.
  *
  * Usage:
- *   POST_DEPLOY_URL=https://www.zkvanguard.xyz bun run scripts/post-deploy-smoke-test.ts
+ *   POST_DEPLOY_URL=https://www.zkward.com bun run scripts/post-deploy-smoke-test.ts
  *   POST_DEPLOY_URL=... POST_DEPLOY_STRICT=1 bun run scripts/post-deploy-smoke-test.ts
  *
  * Exit codes:
@@ -17,7 +17,7 @@
  *   2 — at least one HIGH check failed (investigate before promoting)
  */
 
-const URL = (process.env.POST_DEPLOY_URL || 'https://www.zkvanguard.xyz').replace(/\/$/, '');
+const URL = (process.env.POST_DEPLOY_URL || 'https://www.zkward.com').replace(/\/$/, '');
 const STRICT = (process.env.POST_DEPLOY_STRICT ?? '') === '1';
 const TIMEOUT_MS = 10_000;
 
