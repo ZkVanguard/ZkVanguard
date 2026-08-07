@@ -12,7 +12,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 const ALLOW_HEADERS = 'Content-Type, Authorization, X-Wallet-Address, X-Wallet-Signature, X-Wallet-Message';
-const ALLOW_METHODS = 'GET, POST, OPTIONS';
+const ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 
 export function middleware(req: NextRequest) {
   const origin = req.headers.get('origin');
