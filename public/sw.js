@@ -1,4 +1,4 @@
-// ZkVanguard service worker.
+// ZkWard service worker.
 // Purpose: satisfy Chrome's PWA install-eligibility rules (registered SW with a
 // fetch handler) and provide a minimal offline fallback.
 // Strategy: network-first for HTML documents; passthrough for everything else.
@@ -6,7 +6,7 @@
 // mask fresh deploys, and users of a live financial dashboard should NEVER see
 // stale numbers. Only the app shell is cached.
 
-const CACHE_NAME = 'zkv-shell-v1';
+const CACHE_NAME = 'zkward-shell-v1';
 const APP_SHELL = ['/', '/logo-official.svg', '/manifest.json'];
 
 self.addEventListener('install', (event) => {

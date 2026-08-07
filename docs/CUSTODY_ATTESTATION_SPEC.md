@@ -11,7 +11,7 @@
 
 ## Why this matters
 
-ZkVanguard does not hold real-world assets today. But the codebase already has
+ZkWard does not hold real-world assets today. But the codebase already has
 the trust scaffolding to support them:
 
 - 7-agent autonomous orchestrator (asset-agnostic)
@@ -27,10 +27,10 @@ that bridge.
 
 After shipping this primitive:
 
-- Institutional users can prove to counterparties that their ZkVanguard
+- Institutional users can prove to counterparties that their ZkWard
   portfolio is backed by off-chain T-bills, real estate, gold, etc., **without
   revealing the asset list publicly**
-- ZkVanguard becomes credible to RWA tokenizers (Ondo, Maple, Securitize
+- ZkWard becomes credible to RWA tokenizers (Ondo, Maple, Securitize
   analogs) as the autonomous risk + attestation layer for their assets
 - The "BlackRock for Web3" framing earns concrete code instead of being
   aspirational
@@ -216,7 +216,7 @@ For wallets holding `CustodyAttestation` objects:
 ## Use cases unlocked
 
 1. **Institutional LP onboarding** — hedge fund proves to a counterparty
-   that their ZkVanguard private portfolio is backed by $X of T-bills held
+   that their ZkWard private portfolio is backed by $X of T-bills held
    at Bank Y, without revealing the T-bill ladder
 
 2. **Insurance / reinsurance proofs** — DAO treasury proves its hedge has
@@ -227,7 +227,7 @@ For wallets holding `CustodyAttestation` objects:
    collateral; custody attestation lets the user satisfy that without
    compromising portfolio privacy
 
-4. **B2B SDK consumer** — RWA tokenizer like Ondo can integrate ZkVanguard
+4. **B2B SDK consumer** — RWA tokenizer like Ondo can integrate ZkWard
    as the custody-attestation layer for any USDY-backed product
 
 ## Implementation effort
@@ -254,8 +254,8 @@ infrastructure that any tokenized-real-asset issuer needs."
 
 That framing is defensible because the primitive exists in code, the
 mechanism is auditable, and the integration path for partners is documented
-in the SDK. It doesn't claim ZkVanguard *is* an RWA platform — it claims
-ZkVanguard is the **trust layer that RWA platforms need** on Sui.
+in the SDK. It doesn't claim ZkWard *is* an RWA platform — it claims
+ZkWard is the **trust layer that RWA platforms need** on Sui.
 
 ## Out of scope (don't promise this in Tranche 3)
 

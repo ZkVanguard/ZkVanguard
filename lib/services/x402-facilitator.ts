@@ -263,7 +263,7 @@ export class X402FacilitatorService {
    */
   createPaymentRequirements(
     amount: string,
-    description: string = 'ZkVanguard Settlement'
+    description: string = 'ZkWard Settlement'
   ): PaymentRequirements {
     return {
       scheme: 'exact',

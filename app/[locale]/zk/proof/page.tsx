@@ -177,7 +177,7 @@ function ZKProofPage() {
 
       // Require user signature before sending to server-side storage
       const signatureMessage = [
-        'ZkVanguard: Confirm proof storage',
+        'ZkWard: Confirm proof storage',
         `Scenario: ${selectedScenario.name}`,
         `Address: ${address}`,
         `Timestamp: ${new Date().toISOString()}`,

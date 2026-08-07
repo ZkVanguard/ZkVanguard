@@ -40,10 +40,10 @@ export async function generateMetadata(
 
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://zkvanguard.com'),
-    title: 'ZkVanguard - AI-Powered RWA Risk Management with Zero-Knowledge Proofs',
+    title: 'ZkWard - AI-Powered RWA Risk Management with Zero-Knowledge Proofs',
     description: t('subtitle'),
     keywords: ['RWA', 'DeFi', 'AI Agents', 'Risk Management', 'Cronos', 'zkEVM'],
-    authors: [{ name: 'ZkVanguard Team' }],
+    authors: [{ name: 'ZkWard Team' }],
     icons: {
       icon: '/logo-official.svg',
       shortcut: '/logo-official.svg',
@@ -53,10 +53,10 @@ export async function generateMetadata(
     appleWebApp: {
       capable: true,
       statusBarStyle: 'default',
-      title: 'ZkVanguard',
+      title: 'ZkWard',
     },
     openGraph: {
-      title: 'ZkVanguard',
+      title: 'ZkWard',
       description: 'AI-Powered RWA Risk Management Platform',
       type: 'website',
       images: ['/logo-official.svg'],

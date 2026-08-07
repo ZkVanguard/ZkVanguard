@@ -644,7 +644,7 @@ export default function SimulatorPage() {
             addLog('', 'info');
             addLog('⚡ ACTIVATING HEDGE BEFORE CRASH HITS ⚡', 'success');
             addLog('   └─ Traditional systems: Would wait for price drop confirmation', 'info');
-            addLog('   └─ ZkVanguard: Acting on prediction market LEADING indicator', 'success');
+            addLog('   └─ ZkWard: Acting on prediction market LEADING indicator', 'success');
 
             // ACTIVATE HEDGE EARLY - this is the key innovation!
             hedgeActivated = true;
@@ -1043,7 +1043,7 @@ export default function SimulatorPage() {
             'info'
           );
           addLog(
-            `❌ Without ZkVanguard: Would be down $${(wouldBeLoss / 1000000).toFixed(2)}M`,
+            `❌ Without ZkWard: Would be down $${(wouldBeLoss / 1000000).toFixed(2)}M`,
             'error'
           );
           addLog(
@@ -1065,7 +1065,7 @@ export default function SimulatorPage() {
           const hedgeSavings = Math.abs(hedgePnL);
 
           // REAL API CALL to Ollama/Qwen AI
-          const aiPrompt = `You are analyzing a live portfolio stress event for ZkVanguard. Keep your response under 100 words.
+          const aiPrompt = `You are analyzing a live portfolio stress event for ZkWard. Keep your response under 100 words.
 
 Current Status:
 - Event: Trump tariff announcement (Oct 10, 2025)  
@@ -1292,7 +1292,7 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
           addLog(``, 'info');
           addLog(`📊 RESULTS SUMMARY (Seed: ${newSeed}):`, 'info');
           addLog(
-            `   └─ ZkVanguard Response Time: ${simulatedResponseTime} seconds (from detection to hedge)`,
+            `   └─ ZkWard Response Time: ${simulatedResponseTime} seconds (from detection to hedge)`,
             'success'
           );
           addLog(`   └─ Market Variance Applied: ${(marketVariance * 100).toFixed(2)}%`, 'info');
@@ -1357,7 +1357,7 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
 
           addLog(``, 'info');
           addLog(
-            `💡 This replay shows how ZkVanguard would have protected a $150M portfolio`,
+            `💡 This replay shows how ZkWard would have protected a $150M portfolio`,
             'info'
           );
           addLog(`   during the actual Trump tariff announcement.`, 'info');

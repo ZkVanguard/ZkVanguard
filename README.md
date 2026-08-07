@@ -1,10 +1,10 @@
 <div align="center">
 
-# ZkVanguard
+# ZkWard
 
 **An AI-managed USDC vault on Sui — deposit once, autonomous agents allocate & hedge for you.**
 
-Prediction markets print billions per month in alpha-bearing signal. Riding it consistently needs bots, capital, and 24/7 attention — table stakes for hedge funds, impossible for retail. ZkVanguard collapses that workflow into a one-click USDC vault: 7 AI agents, BlueFin V2 perp hedging, 3-way reconciliation, 8-gate autonomy defense, ZK-STARK-attested at scale. Live on Sui mainnet.
+Prediction markets print billions per month in alpha-bearing signal. Riding it consistently needs bots, capital, and 24/7 attention — table stakes for hedge funds, impossible for retail. ZkWard collapses that workflow into a one-click USDC vault: 7 AI agents, BlueFin V2 perp hedging, 3-way reconciliation, 8-gate autonomy defense, ZK-STARK-attested at scale. Live on Sui mainnet.
 
 [![Sui Mainnet](https://img.shields.io/badge/Sui-Mainnet%20Live-4ca3ff?style=flat-square)](https://suiscan.xyz/mainnet/object/0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726)
 [![Status](https://img.shields.io/badge/Status-Pre--audit%20%C2%B7%20TVL%20capped%20%2410K-orange?style=flat-square)](#status)
@@ -167,7 +167,7 @@ Withdrawals are non-custodial — the Move contract holds pool USDC and computes
 Deliberate. The cap is enforced by the Move contract itself (`admin_set_tvl_cap`) and lifts only after external audit closes. Operating publicly at a bounded size is proof — same code, same crons, same defense stack, capital-constrained until reviewers sign off.
 
 **How is this different from Ethena / GMX / Aave GHO?**
-Ethena is delta-neutral USDe backed by ETH shorts. GMX is a perp DEX. Aave GHO is over-collateralized. ZkVanguard is none of these — it's an AI-directional vault that uses **prediction markets as its alpha source** and perps only to hedge, not to yield-farm. Closest analog is a Yearn v3 strategy vault, but with signal-driven allocation instead of yield harvesting.
+Ethena is delta-neutral USDe backed by ETH shorts. GMX is a perp DEX. Aave GHO is over-collateralized. ZkWard is none of these — it's an AI-directional vault that uses **prediction markets as its alpha source** and perps only to hedge, not to yield-farm. Closest analog is a Yearn v3 strategy vault, but with signal-driven allocation instead of yield harvesting.
 
 **What if BlueFin has an outage?**
 `bluefin-health` cron runs a 3-strike de-risk (close-all reduceOnly on venue degradation). `bluefin-db-reconcile` (every 15 min) and `sui-hedge-reconcile` (hourly) sweep any orphaned positions when the venue recovers. The vault continues to accept deposits/withdrawals against on-chain NAV throughout.

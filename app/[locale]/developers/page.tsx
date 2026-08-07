@@ -52,7 +52,7 @@ const ENDPOINTS: ApiEndpoint[] = [
 ];
 
 const CATEGORIES = [
-  { id: 'risk', label: 'Risk engine', icon: Shield, blurb: 'Aladdin-equivalent. The same risk infrastructure ZkVanguard uses on its own funds, exposed as APIs.' },
+  { id: 'risk', label: 'Risk engine', icon: Shield, blurb: 'Aladdin-equivalent. The same risk infrastructure ZkWard uses on its own funds, exposed as APIs.' },
   { id: 'signals', label: 'Signal pipeline', icon: Activity, blurb: 'Fused prediction-market alpha (Polymarket + Manifold + funding + momentum) with multi-timeframe drift detection.' },
   { id: 'agents', label: 'AI agent orchestration', icon: Brain, blurb: '7-agent autonomous engine with 2/3 consensus voting and ZK attestation on trade-impacting decisions.' },
   { id: 'hedge', label: 'Hedge execution', icon: Zap, blurb: 'Multi-venue perp routing (BlueFin / Hyperliquid / Moonlander) with funding-rate-aware splits.' },
@@ -86,7 +86,7 @@ export default function ApiDocsPage() {
           Aladdin-as-a-Service for Sui
         </h1>
         <p className="text-[17px] text-[#1d1d1f] leading-relaxed max-w-3xl">
-          ZkVanguard runs three live products on a shared risk engine + signal pipeline + ZK
+          ZkWard runs three live products on a shared risk engine + signal pipeline + ZK
           attestation stack. The same APIs that power our internal funds are available for other
           Sui projects to build on — vaults, DEXes, treasury managers, RWA tokenizers.
         </p>
@@ -107,7 +107,7 @@ export default function ApiDocsPage() {
         </div>
         <p className="text-[14px] text-[#1d1d1f] leading-relaxed mb-3">
           BlackRock's $1B+ ARR Aladdin moat isn't its AUM — it's that 200+ external asset managers
-          pay to use its risk engine. ZkVanguard takes the same shape on Sui: <strong>the risk
+          pay to use its risk engine. ZkWard takes the same shape on Sui: <strong>the risk
           engine, signal pipeline, agent orchestrator, and ZK attestation primitives that we run our
           own funds on are productized as B2B infrastructure for the entire Sui ecosystem.</strong>
         </p>
@@ -216,7 +216,7 @@ curl -s https://www.zkvanguard.xyz/api/predictions/per-asset \\
           your project.
         </p>
         <a
-          href="mailto:ashishregmi2017@gmail.com?subject=ZkVanguard%20API%20early%20access"
+          href="mailto:ashishregmi2017@gmail.com?subject=ZkWard%20API%20early%20access"
           className="inline-flex items-center gap-2 bg-[#1d1d1f] text-white px-5 py-2.5 rounded-xl text-[14px] font-semibold hover:bg-[#0A0E1A]"
         >
           <Mail className="w-4 h-4" /> Request early access
@@ -224,7 +224,7 @@ curl -s https://www.zkvanguard.xyz/api/predictions/per-asset \\
       </section>
 
       <footer className="text-center text-[11px] text-[#86868b] pt-4">
-        ZkVanguard · SUI mainnet · 50+ endpoints · 1,713 LOC ZK primitives · audit pending
+        ZkWard · SUI mainnet · 50+ endpoints · 1,713 LOC ZK primitives · audit pending
       </footer>
     </div>
   );

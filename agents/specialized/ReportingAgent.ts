@@ -1066,7 +1066,7 @@ export class ReportingAgent extends BaseAgent {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ZkVanguard Report</title>
+  <title>ZkWard Report</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     h1 { color: #2c3e50; }
@@ -1076,7 +1076,7 @@ export class ReportingAgent extends BaseAgent {
   </style>
 </head>
 <body>
-  <h1>ZkVanguard Report</h1>
+  <h1>ZkWard Report</h1>
   <pre>${JSON.stringify(report, null, 2)}</pre>
 </body>
 </html>

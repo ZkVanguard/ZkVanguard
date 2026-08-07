@@ -51,7 +51,7 @@ export const Navbar = memo(function Navbar() {
           {/* Logo - Always visible */}
           <Link href="/" className="flex items-center gap-2 -ml-2">
             <Logo />
-            <span className="lg:hidden text-[17px] font-semibold text-[#1d1d1f] tracking-tight">ZkVanguard</span>
+            <span className="lg:hidden text-[17px] font-semibold text-[#1d1d1f] tracking-tight">ZkWard</span>
           </Link>
 
           {/* Desktop Navigation - Centered with proper spacing */}

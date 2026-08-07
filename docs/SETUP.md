@@ -1,4 +1,4 @@
-# ZkVanguard - Setup & Quick Start Guide
+# ZkWard - Setup & Quick Start Guide
 
 ## Prerequisites
 

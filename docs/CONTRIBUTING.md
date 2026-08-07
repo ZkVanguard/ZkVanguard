@@ -1,6 +1,6 @@
-# Contributing to ZkVanguard
+# Contributing to ZkWard
 
-Thank you for your interest in contributing to ZkVanguard! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to ZkWard! This document provides guidelines and instructions for contributing.
 
 ## 🚀 Quick Start
 
@@ -228,4 +228,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for contributing to ZkVanguard! 🚀
+Thank you for contributing to ZkWard! 🚀

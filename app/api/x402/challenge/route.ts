@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { 
       amount = '10000', // Default 0.01 USDC (6 decimals)
-      description = 'ZkVanguard Service Access',
+      description = 'ZkWard Service Access',
       resource = '/api/protected-resource',
     } = body;
 

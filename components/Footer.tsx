@@ -59,7 +59,7 @@ export const Footer = memo(function Footer() {
         <div className="border-t border-[#d2d2d7] py-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="text-[12px] text-[#86868b] leading-relaxed">
-              © {currentYear} ZkVanguard. {t('rights')}
+              © {currentYear} ZkWard. {t('rights')}
               <span className="hidden md:inline ml-2">·</span>
               <span className="block md:inline md:ml-2 text-[#007AFF]">{t('testnet')}</span>
             </div>

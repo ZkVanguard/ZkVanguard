@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Link } from '@/i18n/routing';
 import { useTranslations } from 'next-intl';
 
-const CONSENT_KEY = 'zkvanguard_cookie_consent';
+const CONSENT_KEY = 'zkward_cookie_consent';
 
 interface ConsentSettings {
   necessary: boolean;    // Always true, required for operation

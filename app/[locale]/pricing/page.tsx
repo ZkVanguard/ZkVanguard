@@ -4,7 +4,7 @@ import { Link } from '@/i18n/routing';
 import { REVENUE_STREAMS, POOL_ECONOMICS, PREMIUM_PRODUCT_FEES } from '@/lib/config/pricing';
 
 export const metadata: Metadata = {
-  title: 'Pricing | ZkVanguard',
+  title: 'Pricing | ZkWard',
   description:
     'Three revenue streams, all mapped to shipped code: automatic pool fees, per-use premium product fees, and SaaS subscriptions for end users + B2B API access.',
 };
@@ -203,7 +203,7 @@ export default async function PricingPage() {
 
       <footer className="bg-white border-t border-black/5 py-6 sm:py-8 pb-safe">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 text-center text-[11px] sm:text-[13px] text-[#86868b] leading-relaxed" suppressHydrationWarning>
-          © {new Date().getFullYear()} ZkVanguard · Pricing aligns with{' '}
+          © {new Date().getFullYear()} ZkWard · Pricing aligns with{' '}
           <code className="bg-[#f5f5f7] px-1 py-0.5 rounded break-all">community_pool_usdc.move</code>{' '}
           on Sui mainnet · subscriptions Stripe-ready, live with Tranche 2
         </div>
