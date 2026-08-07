@@ -220,7 +220,7 @@
   "whitepaper": {
     "version": "Versão 1.0",
     "date": "Janeiro 2026",
-    "title": "Whitepaper ZkVanguard",
+    "title": "Whitepaper ZkWard",
     "subtitle": "Um cofre cripto gerido por IA que aproveita o alpha do Polymarket — verificado por ZK, autônomo, ao vivo na Sui mainnet",
     "readButton": "Ler o whitepaper",
     "toc": "Índice",
@@ -242,9 +242,9 @@
       "references": "Referências"
     },
     "abstract": {
-      "highlight": "ZkVanguard introduz uma mudança de paradigma na gestão de riscos de ativos digitais institucionais, combinando agentes de IA autônomos com inteligência de mercados preditivos colaborativos e criptografia zero-knowledge pós-quântica. Diferentemente dos sistemas reativos tradicionais que respondem após quedas de mercado, a arquitetura preditiva do ZkVanguard antecipa eventos de volatilidade com 3-7 dias de antecedência.",
+      "highlight": "ZkWard introduz uma mudança de paradigma na gestão de riscos de ativos digitais institucionais, combinando agentes de IA autônomos com inteligência de mercados preditivos colaborativos e criptografia zero-knowledge pós-quântica. Diferentemente dos sistemas reativos tradicionais que respondem após quedas de mercado, a arquitetura preditiva do ZkWard antecipa eventos de volatilidade com 3-7 dias de antecedência.",
       "p1": "A plataforma orquestra seis agentes de IA especializados—Lead, Risco, Hedge, Liquidação, Relatórios e Monitor de Preços—que analisam autonomamente os portfólios, consomem dados de mercados preditivos em tempo real da Delphi/Polymarket, geram estratégias de hedge matematicamente ótimas e executam transações sem gás na blockchain Cronos.",
-      "p2": "Apenas o Polymarket já processa mais de 20 bilhões de dólares em volume por mês, e o setor de mercados de previsão cresceu para 63,5 bilhões em 2025. O sinal é real, mas aproveitá-lo de forma consistente exigiu bots personalizados, gestão sofisticada de risco e atenção constante. O ZkVanguard reduz todo esse fluxo a um único depósito de USDC com um clique, com duas camadas de receita já ativas: taxas de protocolo on-chain em cada depósito no cofre (50 pb anuais de gestão + 10% de desempenho, encaminhadas para uma FeeManagerCap controlada por MSafe multisig) e assinaturas em níveis para acessar recursos premium (hedges privados e criador de portfólios privados)."
+      "p2": "Apenas o Polymarket já processa mais de 20 bilhões de dólares em volume por mês, e o setor de mercados de previsão cresceu para 63,5 bilhões em 2025. O sinal é real, mas aproveitá-lo de forma consistente exigiu bots personalizados, gestão sofisticada de risco e atenção constante. O ZkWard reduz todo esse fluxo a um único depósito de USDC com um clique, com duas camadas de receita já ativas: taxas de protocolo on-chain em cada depósito no cofre (50 pb anuais de gestão + 10% de desempenho, encaminhadas para uma FeeManagerCap controlada por MSafe multisig) e assinaturas em níveis para acessar recursos premium (hedges privados e criador de portfólios privados)."
     },
     "introduction": {
       "opportunity": "A oportunidade do alfa dos mercados de previsão",
@@ -288,15 +288,15 @@
     },
     "conclusion": {
       "title": "Conclusão",
-      "text": "ZkVanguard representa uma mudança de paradigma fundamental na gestão de riscos de ativos digitais institucionais. Combinando inteligência de IA preditiva com privacidade criptográfica pós-quântica e execução sem gás, abordamos as três barreiras críticas que impedem a adoção institucional.",
-      "p1": "ZkVanguard combina orquestração de IA multi-agente, inteligência de mercados de previsão, privacidade ZK-STARK e execução sem gás para tornar acessível e privada a gestão de risco de nível institucional.",
+      "text": "ZkWard representa uma mudança de paradigma fundamental na gestão de riscos de ativos digitais institucionais. Combinando inteligência de IA preditiva com privacidade criptográfica pós-quântica e execução sem gás, abordamos as três barreiras críticas que impedem a adoção institucional.",
+      "p1": "ZkWard combina orquestração de IA multi-agente, inteligência de mercados de previsão, privacidade ZK-STARK e execução sem gás para tornar acessível e privada a gestão de risco de nível institucional.",
       "p2": "A stack está em produção na mainnet SUI com um pool de capital real, autonomia impulsionada por cron e oito portas de defesa que protegem contra drawdowns, execuções fantasma e hedges obsoletos.",
       "p3": "Este whitepaper descreve o sistema como funciona hoje, não um roadmap para o futuro."
     },
     "solution": {
       "title": "Nossa Solução: Inteligência Preditiva",
       "paradigm": "O Paradigma Preditivo",
-      "paradigmText": "A ZkVanguard apresenta uma abordagem fundamentalmente diferente: gerenciamento de riscos preditivo alimentado por inteligência coletiva. Em vez de reagirmos a colapsos, antecipamos-os:",
+      "paradigmText": "A ZkWard apresenta uma abordagem fundamentalmente diferente: gerenciamento de riscos preditivo alimentado por inteligência coletiva. Em vez de reagirmos a colapsos, antecipamos-os:",
       "coreStack": "Pilha de Inovação Coreana",
       "multiAgent": "Sistema Multimídia de Inteligência Artificial",
       "multiAgentDesc": "Seis agentes especializados coordenam autonomamente para analisar, recomendar, executar e relatar sobre estratégias de proteção de portfólio.",
@@ -318,7 +318,7 @@
     "architecture": {
       "title": "Arquitetura Técnica",
       "overview": "Visão Sistemática",
-      "overviewText": "A ZkVanguard emprega uma arquitetura camada-a-camada projetada para segurança, escalabilidade e operação autônoma:",
+      "overviewText": "A ZkWard emprega uma arquitetura camada-a-camada projetada para segurança, escalabilidade e operação autônoma:",
       "techStack": "Pilha Tecnológica",
       "tableLayer": "Camada",
       "tableTechnology": "Tecnologia",
@@ -328,7 +328,7 @@
     },
     "agents": {
       "title": "Sistema Multimídia de Inteligência Artificial",
-      "intro": "ZkVanguard implementa seis agentes de IA especializados que operam de forma autônoma, mantendo o controle humano no loop para decisões críticas:",
+      "intro": "ZkWard implementa seis agentes de IA especializados que operam de forma autônoma, mantendo o controle humano no loop para decisões críticas:",
       "lead": "Agente Líder - Orquestrador de Estratégia",
       "risk": "Agente de Risco - Monitoramento em Tempo Real",
       "hedging": "Agente de Hedge - Execução Preditiva",
@@ -339,13 +339,13 @@
     "zkp": {
       "title": "Camada de Privacidade Zero-Conhecimento",
       "protocol": "Protocolo ZK-STARK",
-      "protocolText": "ZkVanguard implementa um sistema de prova baseado em ZK-STARK (Zero-Knowledge Scalável e Transparência Argumento de Conhecimento) acelerado por CUDA, com base no protocolo FRI (Protocolo Interativo de Verificação Rápida de Reed-Solomon):",
+      "protocolText": "ZkWard implementa um sistema de prova baseado em ZK-STARK (Zero-Knowledge Scalável e Transparência Argumento de Conhecimento) acelerado por CUDA, com base no protocolo FRI (Protocolo Interativo de Verificação Rápida de Reed-Solomon):",
       "security": "Parâmetros de Segurança e Demonstração de Integridade",
       "verification": "Verificação Matemática Formal",
       "verificationTitle": "Todos os 6 Teoremas Criptográficos Provarizados",
       "verificationText": "Nossa implementação foi verificada formalmente contra as definições acadêmicas em Ben-Sasson et al. Isso não é apenas teste — é uma prova matemática.",
       "hedgeArch": "Arquitetura de Garantia de Cofrança Preservadora da Privacidade",
-      "hedgeArchText": "Ao executar hedge em blockchains públicas, o ZkVanguard protege a privacidade do usuário através de:"
+      "hedgeArchText": "Ao executar hedge em blockchains públicas, o ZkWard protege a privacidade do usuário através de:"
     },
     "gasless": {
       "title": "Protocolo de Transação Sem Gás (x402)",
@@ -357,7 +357,7 @@
     "predictions": {
       "title": "Integração de Mercado de Previsão",
       "sources": "Origens de Dados",
-      "sourcesText": "ZkVanguard integra-se com principais mercados de previsão para fornecer previsões baseadas na participação da comunidade:",
+      "sourcesText": "ZkWard integra-se com principais mercados de previsão para fornecer previsões baseadas na participação da comunidade:",
       "hedgeRatio": "Cálculo da Razão de Hedge",
       "hedgeRatioText": "O Agente de Cofranqueamento usa probabilidades de previsão para ajustar dinamicamente as proporções de cofranqueamento:",
       "scenarios": "Exemplos de Predições Exemplificativas",
@@ -443,7 +443,7 @@
   },
   "zkVerification": {
     "title": "Prova Matemática ZK-STARK",
-    "subtitle": "Verificação formal de que ZkVanguard implementa um verdadeiro ZK-STARK conforme especificações acadêmicas de Ben-Sasson et al.",
+    "subtitle": "Verificação formal de que ZkWard implementa um verdadeiro ZK-STARK conforme especificações acadêmicas de Ben-Sasson et al.",
     "auditorSummary": "Resumo Rápido para Auditores",
     "implementation": "Implementação",
     "securityLevel": "Nível de Segurança",
@@ -467,7 +467,7 @@
     "noPredictionSignals": "Sem sinais de mercados de previsão",
     "centralizedServices": "Serviços Centralizados",
     "custodialRisk": "Risco custodial",
-    "whyWins": "Por que ZkVanguard Vence",
+    "whyWins": "Por que ZkWard Vence",
     "aiPowered": "Automação com IA",
     "aiDescription": "7 agentes especializados operando 24/7",
     "zkVerificationFeature": "Verificação ZK-STARK",

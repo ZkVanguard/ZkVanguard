@@ -294,7 +294,7 @@ export default function CustodyProofsPage() {
             Once a custodian signs an attestation and you submit it on-chain, it will appear here.
           </p>
           <a
-            href="mailto:ashishregmi2017@gmail.com?subject=ZkVanguard%20custody%20attestation%20request"
+            href="mailto:ashishregmi2017@gmail.com?subject=ZkWard%20custody%20attestation%20request"
             className="inline-flex items-center gap-2 bg-[#1d1d1f] text-white px-5 py-2.5 rounded-xl text-[13px] font-semibold hover:bg-[#0A0E1A]"
           >
             <Mail className="w-4 h-4" /> Request custodian onboarding

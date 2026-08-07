@@ -1,10 +1,10 @@
-# ZkVanguard — Start ZKP Server + Cloudflare Tunnel
+# ZkWard — Start ZKP Server + Cloudflare Tunnel
 # Usage: .\start.ps1
 
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
-Write-Host "`n  Starting ZkVanguard services...`n" -ForegroundColor Cyan
+Write-Host "`n  Starting ZkWard services...`n" -ForegroundColor Cyan
 
 # --- 1. ZKP API Server (background job) ---
 $serverJob = Start-Job -Name "ZKP-Server" -ScriptBlock {

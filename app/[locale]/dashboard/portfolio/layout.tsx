@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Unified Portfolio | ZkVanguard',
+  title: 'Unified Portfolio | ZkWard',
   description:
     'Aggregated view of your positions across the SUI USDC pool, private hedges, and custom portfolios — one wallet, one NAV, one consolidated P&L.',
   openGraph: {
-    title: 'Unified Portfolio | ZkVanguard',
+    title: 'Unified Portfolio | ZkWard',
     description:
-      'Aggregated exposure across every ZkVanguard product, mirroring BlackRock\'s consolidated-statement model.',
+      'Aggregated exposure across every ZkWard product, mirroring BlackRock\'s consolidated-statement model.',
     type: 'website',
   },
 };

@@ -153,7 +153,7 @@ export default function ZKVerificationPage() {
             ZK-STARK Empirical Soundness Report
           </h1>
           <p className="text-xl text-[#86868b] max-w-2xl mx-auto leading-relaxed">
-            Reproducible checks that ZkVanguard&apos;s ZK-STARK matches the construction in Ben-Sasson et al. (ePrint 2018/046, 2018/828). Empirical only — not machine-checked formal proofs.
+            Reproducible checks that ZkWard&apos;s ZK-STARK matches the construction in Ben-Sasson et al. (ePrint 2018/046, 2018/828). Empirical only — not machine-checked formal proofs.
           </p>
         </div>
 

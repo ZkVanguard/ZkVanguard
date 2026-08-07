@@ -1,7 +1,7 @@
 /**
  * Portfolio Simulation Script
  * 
- * Demonstrates the full ZkVanguard system using REAL market data:
+ * Demonstrates the full ZkWard system using REAL market data:
  * - Crypto.com MCP (real-time prices)
  * - Crypto.com AI SDK (AI-powered analysis)
  * - Automated trading based on AI recommendations
@@ -19,7 +19,7 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function main() {
-  console.log('🚀 Starting ZkVanguard Portfolio Simulation');
+  console.log('🚀 Starting ZkWard Portfolio Simulation');
   console.log('📊 Using REAL market data from CoinGecko API (FREE)');
   console.log('🤖 Using REAL AI agent orchestration system');
   console.log('⚙️  Only portfolio positions are simulated - all analysis is REAL\n');
@@ -135,7 +135,7 @@ async function main() {
   console.log('  - Portfolio analysis: Real Agent Orchestrator');
   console.log('  - Risk assessment: Real Risk Agent');
   console.log('  - Hedge recommendations: Real Hedging Agent');
-  console.log('💡 This demonstrates the full ZkVanguard system with real agents and live data\n');
+  console.log('💡 This demonstrates the full ZkWard system with real agents and live data\n');
 
   await manager.disconnect();
 }

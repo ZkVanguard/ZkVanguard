@@ -1,6 +1,6 @@
 {
-  "name": "ZkVanguard — AI-managed vault on Sui",
-  "short_name": "ZkVanguard",
+  "name": "ZkWard — AI-managed vault on Sui",
+  "short_name": "ZkWard",
   "description": "Autonomous AI vault trading prediction-market alpha on Sui, ZK-STARK-attested on-chain.",
   "start_url": "/",
   "scope": "/",

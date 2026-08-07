@@ -1,7 +1,7 @@
 # Production Deployment Test Script
-# Tests ZkVanguard deployment on Vercel
+# Tests ZkWard deployment on Vercel
 
-Write-Host "`n=== ZkVanguard Production Test ===" -ForegroundColor Cyan
+Write-Host "`n=== ZkWard Production Test ===" -ForegroundColor Cyan
 Write-Host ""
 
 $baseUrl = "https://zkvanguard.xyz"

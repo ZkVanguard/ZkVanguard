@@ -56,7 +56,7 @@ IMPLEMENTATION
 - Merkle trees (SHA-256) for vector commitments
 - CUDA acceleration for 10-100x performance on GPU
 
-Author: ZkVanguard Team
+Author: ZkWard Team
 License: MIT
 """
 

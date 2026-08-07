@@ -220,7 +220,7 @@
   "whitepaper": {
     "version": "버전 1.0",
     "date": "2026년 1월",
-    "title": "ZkVanguard 백서",
+    "title": "ZkWard 백서",
     "subtitle": "Polymarket 알파를 운용하는 AI 관리 크립토 볼트 — ZK 증명, 자율적, Sui 메인넷에서 라이브",
     "readButton": "백서 읽기",
     "toc": "목차",
@@ -242,9 +242,9 @@
       "references": "참고문헌"
     },
     "abstract": {
-      "highlight": "ZkVanguard는 자율 AI 에이전트와 크라우드소싱 예측 시장 인텔리전스, 포스트 양자 영지식 암호학을 결합하여 기관 디지털 자산 리스크 관리의 패러다임 전환을 도입합니다. 시장 폭락 후 대응하는 전통적인 반응적 시스템과 달리, ZkVanguard의 예측 아키텍처는 3-7일 전에 변동성 이벤트를 예측하여 선제적 포트폴리오 보호를 가능하게 합니다.",
+      "highlight": "ZkWard는 자율 AI 에이전트와 크라우드소싱 예측 시장 인텔리전스, 포스트 양자 영지식 암호학을 결합하여 기관 디지털 자산 리스크 관리의 패러다임 전환을 도입합니다. 시장 폭락 후 대응하는 전통적인 반응적 시스템과 달리, ZkWard의 예측 아키텍처는 3-7일 전에 변동성 이벤트를 예측하여 선제적 포트폴리오 보호를 가능하게 합니다.",
       "p1": "플랫폼은 6개의 전문 AI 에이전트(리드, 리스크, 헤징, 결제, 리포팅, 가격 모니터)를 조율하여 자율적으로 포트폴리오를 분석하고, Delphi/Polymarket의 실시간 예측 시장 데이터를 소비하며, 수학적으로 최적화된 헤지 전략을 생성하고, Cronos 블록체인에서 가스리스 트랜잭션을 실행합니다.",
-      "p2": "Polymarket 단독으로 월 200억 달러 이상의 거래량을 처리하고 있으며, 예측 시장 부문은 2025년 635억 달러까지 성장했습니다. 시그널은 실재하지만, 이를 꾸준히 활용하려면 맞춤형 봇, 정교한 리스크 관리, 그리고 24시간 주의가 필요했습니다. ZkVanguard는 이 모든 워크플로우를 한 번의 USDC 예치로 압축하며, 현재 가동 중인 두 가지 수익 계층을 갖추고 있습니다: 모든 볼트 예치에 대한 온체인 프로토콜 수수료(연간 50bps 관리 + 10% 성과 수수료, MSafe 멀티시그가 통제하는 FeeManagerCap으로 라우팅)와 프리미엄 기능(프라이빗 헤지 및 프라이빗 포트폴리오 크리에이터)에 접근하기 위한 계층형 구독."
+      "p2": "Polymarket 단독으로 월 200억 달러 이상의 거래량을 처리하고 있으며, 예측 시장 부문은 2025년 635억 달러까지 성장했습니다. 시그널은 실재하지만, 이를 꾸준히 활용하려면 맞춤형 봇, 정교한 리스크 관리, 그리고 24시간 주의가 필요했습니다. ZkWard는 이 모든 워크플로우를 한 번의 USDC 예치로 압축하며, 현재 가동 중인 두 가지 수익 계층을 갖추고 있습니다: 모든 볼트 예치에 대한 온체인 프로토콜 수수료(연간 50bps 관리 + 10% 성과 수수료, MSafe 멀티시그가 통제하는 FeeManagerCap으로 라우팅)와 프리미엄 기능(프라이빗 헤지 및 프라이빗 포트폴리오 크리에이터)에 접근하기 위한 계층형 구독."
     },
     "introduction": {
       "opportunity": "16조 달러의 기회",
@@ -288,15 +288,15 @@
     },
     "conclusion": {
       "title": "결론",
-      "text": "ZkVanguard는 기관 디지털 자산 리스크 관리의 근본적인 패러다임 전환을 나타냅니다. 예측 AI 인텔리전스와 포스트 양자 암호화 프라이버시, 가스리스 실행을 결합하여 기관 채택을 방해하는 세 가지 중요한 장벽을 해결합니다.",
-      "p1": "ZkVanguard는 멀티 에이전트 AI 오케스트레이션, 예측 시장 인텔리전스, ZK-STARK 프라이버시, 가스리스 실행을 결합하여 기관 등급의 리스크 관리를 접근 가능하고 프라이빗하게 만듭니다.",
+      "text": "ZkWard는 기관 디지털 자산 리스크 관리의 근본적인 패러다임 전환을 나타냅니다. 예측 AI 인텔리전스와 포스트 양자 암호화 프라이버시, 가스리스 실행을 결합하여 기관 채택을 방해하는 세 가지 중요한 장벽을 해결합니다.",
+      "p1": "ZkWard는 멀티 에이전트 AI 오케스트레이션, 예측 시장 인텔리전스, ZK-STARK 프라이버시, 가스리스 실행을 결합하여 기관 등급의 리스크 관리를 접근 가능하고 프라이빗하게 만듭니다.",
       "p2": "이 스택은 실제 자본 풀, 크론 기반 자율성, 드로우다운·팬텀 필·오래된 헤지로부터 보호하는 8개의 방어 게이트를 갖춘 SUI 메인넷에서 라이브로 실행되고 있습니다.",
       "p3": "이 백서는 미래의 로드맵이 아니라 오늘 실행되는 시스템을 설명합니다."
     },
     "solution": {
       "title": "OUR SOLUTION: 예측 인텔리전스",
       "paradigm": "예측적 패러다임",
-      "paradigmText": "ZkVanguard는 근본적으로 다른 접근 방식을 도입합니다: 크라우드소스드 지능에 의한 예측적 위험 관리입니다. 우리는 붕괴를 대응하는 것이 아니라 예측합니다:",
+      "paradigmText": "ZkWard는 근본적으로 다른 접근 방식을 도입합니다: 크라우드소스드 지능에 의한 예측적 위험 관리입니다. 우리는 붕괴를 대응하는 것이 아니라 예측합니다:",
       "coreStack": "커널 혁신 스택",
       "multiAgent": "다중 에이전트 AI 시스템",
       "multiAgentDesc": "포트폴리오 보호 전략을 분석하고 추천하며, 이를 실행하고 보고하기 위해 특화된 여섯 개의 자율적 에이전트가 협력합니다.",
@@ -318,7 +318,7 @@
     "architecture": {
       "title": "기술 아키텍처",
       "overview": "시스템 개요",
-      "overviewText": "ZkVanguard는 보안, 확장성 및 자율운영을 위한 계층 구조를 채택하고 있습니다:",
+      "overviewText": "ZkWard는 보안, 확장성 및 자율운영을 위한 계층 구조를 채택하고 있습니다:",
       "techStack": "기술 스택",
       "tableLayer": "층",
       "tableTechnology": "기술",
@@ -328,7 +328,7 @@
     },
     "agents": {
       "title": "다중 에이전트 인공지능 시스템",
-      "intro": "ZkVanguard는 여섯 개의 전문 AI 에이전트를 배포하며, 중요한 의사결정을 제외하고는 인간 인터리프어스 루프 제어를 유지합니다:",
+      "intro": "ZkWard는 여섯 개의 전문 AI 에이전트를 배포하며, 중요한 의사결정을 제외하고는 인간 인터리프어스 루프 제어를 유지합니다:",
       "lead": "주도 에이전트 - 전략 오케스트레이터",
       "risk": "위험 관리-agent - 실시간 모니터링",
       "hedging": "헤지 에이전트 - 예측 실행",
@@ -339,13 +339,13 @@
     "zkp": {
       "title": "제로지식 프라이버시 레이어",
       "protocol": "ZK-STARK 프로토콜",
-      "protocolText": "ZkVanguard는 FRI(빠른 Reed-Solomon 상호작용적 인터랙티브 오라클 증명) 프로토콜을 기반으로 CUDA 가속화된 ZK-STARK(Zero-Knowledge Scalable Transparent ARgument of Knowledge) 증명 시스템을 구현합니다:",
+      "protocolText": "ZkWard는 FRI(빠른 Reed-Solomon 상호작용적 인터랙티브 오라클 증명) 프로토콜을 기반으로 CUDA 가속화된 ZK-STARK(Zero-Knowledge Scalable Transparent ARgument of Knowledge) 증명 시스템을 구현합니다:",
       "security": "보안 매개변수 및 정확성 증명",
       "verification": "형식적 수학적 검증",
       "verificationTitle": "모든 6개의 암호학적 정리가 증명되었습니다",
       "verificationText": "우리의 구현은 본-사스론 등이 제시한 학술적 정의와 공식적으로 검증되었습니다. 이것은 단순히 테스트가 아닙니다—수학적 증명입니다.",
       "hedgeArch": "개인정보 보호를 위한 힐지 구조",
-      "hedgeArchText": "공개 블록체인에서 헤지 실행 시 ZkVanguard는 다음과 같은 방식으로 사용자 프라이버시를 보호합니다:"
+      "hedgeArchText": "공개 블록체인에서 헤지 실행 시 ZkWard는 다음과 같은 방식으로 사용자 프라이버시를 보호합니다:"
     },
     "gasless": {
       "title": "가스 없는 거래 프로토콜 (x402)",
@@ -357,7 +357,7 @@
     "predictions": {
       "title": "예측 시장 통합",
       "sources": "데이터 소스",
-      "sourcesText": "ZkVanguard는 주도적인 예측 시장과 통합하여 대중 참여형 전망을 제공합니다:",
+      "sourcesText": "ZkWard는 주도적인 예측 시장과 통합하여 대중 참여형 전망을 제공합니다:",
       "hedgeRatio": "헤지 비율 계산",
       "hedgeRatioText": "헤지 에이전트는 예측 확률을 사용하여 헤지 비율을 동적으로 조정합니다:",
       "scenarios": "예시 예측 상황",
@@ -443,7 +443,7 @@
   },
   "zkVerification": {
     "title": "ZK-STARK 수학적 증명",
-    "subtitle": "ZkVanguard가 Ben-Sasson 등의 학술 사양에 따른 진정한 ZK-STARK를 구현함을 공식 검증",
+    "subtitle": "ZkWard가 Ben-Sasson 등의 학술 사양에 따른 진정한 ZK-STARK를 구현함을 공식 검증",
     "auditorSummary": "감사자 빠른 요약",
     "implementation": "구현",
     "securityLevel": "보안 레벨",
@@ -467,7 +467,7 @@
     "noPredictionSignals": "예측 시장 시그널 없음",
     "centralizedServices": "중앙화 서비스",
     "custodialRisk": "커스터디 리스크",
-    "whyWins": "ZkVanguard가 승리하는 이유",
+    "whyWins": "ZkWard가 승리하는 이유",
     "aiPowered": "AI 기반 자동화",
     "aiDescription": "5개의 전문 에이전트가 24/7 작동",
     "zkVerificationFeature": "ZK-STARK 검증",

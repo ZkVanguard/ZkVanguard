@@ -220,7 +220,7 @@
   "whitepaper": {
     "version": "版本 1.0",
     "date": "2026年1月",
-    "title": "ZkVanguard 白皮书",
+    "title": "ZkWard 白皮书",
     "subtitle": "驾驭 Polymarket alpha 的 AI 管理加密金库 — ZK 见证、自主、在 Sui 主网上线",
     "readButton": "阅读白皮书",
     "toc": "目录",
@@ -242,9 +242,9 @@
       "references": "参考文献"
     },
     "abstract": {
-      "highlight": "ZkVanguard通过将自主AI代理与众包预测市场智能和后量子零知识密码学相结合，引入了机构数字资产风险管理的范式转变。与传统的在市场崩盘后才做出响应的被动系统不同，ZkVanguard的预测架构能够提前3-7天预测波动事件，实现投资组合的先发保护。",
+      "highlight": "ZkWard通过将自主AI代理与众包预测市场智能和后量子零知识密码学相结合，引入了机构数字资产风险管理的范式转变。与传统的在市场崩盘后才做出响应的被动系统不同，ZkWard的预测架构能够提前3-7天预测波动事件，实现投资组合的先发保护。",
       "p1": "该平台协调六个专业AI代理——领导代理、风险代理、对冲代理、结算代理、报告代理和价格监控代理——自主分析投资组合，消费来自Delphi/Polymarket的实时预测市场数据，生成数学最优对冲策略，并在Cronos区块链上执行无Gas交易。通过我们的CUDA加速ZK-STARK证明系统（512位目标安全性，通过FRI协议实现180位有效可靠性），所有敏感投资组合数据保持私密，同时通过可验证计算保持完全合规。",
-      "p2": "Polymarket 单一平台目前每月交易量超过 200 亿美元，预测市场板块在 2025 年增长到 635 亿美元。信号是真实的，但要持续地驾驭它，需要自定义机器人、成熟的风险管理和 24/7 的关注。ZkVanguard 将整个工作流压缩成一次性 USDC 存款，一键完成，并由两个同时运行的收入层支撑：每笔金库存款的链上协议费用（年化 50 bps 管理费 + 10% 业绩费，路由到由 MSafe 多签控制的 FeeManagerCap）以及面向高级功能（私密对冲和私密投资组合创建器）的分级订阅。"
+      "p2": "Polymarket 单一平台目前每月交易量超过 200 亿美元，预测市场板块在 2025 年增长到 635 亿美元。信号是真实的，但要持续地驾驭它，需要自定义机器人、成熟的风险管理和 24/7 的关注。ZkWard 将整个工作流压缩成一次性 USDC 存款，一键完成，并由两个同时运行的收入层支撑：每笔金库存款的链上协议费用（年化 50 bps 管理费 + 10% 业绩费，路由到由 MSafe 多签控制的 FeeManagerCap）以及面向高级功能（私密对冲和私密投资组合创建器）的分级订阅。"
     },
     "introduction": {
       "opportunity": "16万亿美元的机遇",
@@ -288,15 +288,15 @@
     },
     "conclusion": {
       "title": "结论",
-      "text": "ZkVanguard代表了机构数字资产风险管理的根本性范式转变。通过将预测性AI智能与后量子加密隐私和无Gas执行相结合，我们解决了阻止机构采用的三个关键障碍：被动风险管理、隐私漏洞和高昂的交易成本。",
-      "p1": "ZkVanguard 结合多智能体 AI 编排、预测市场情报、ZK-STARK 隐私和无 gas 执行,使机构级风险管理变得可访问且私密。",
+      "text": "ZkWard代表了机构数字资产风险管理的根本性范式转变。通过将预测性AI智能与后量子加密隐私和无Gas执行相结合，我们解决了阻止机构采用的三个关键障碍：被动风险管理、隐私漏洞和高昂的交易成本。",
+      "p1": "ZkWard 结合多智能体 AI 编排、预测市场情报、ZK-STARK 隐私和无 gas 执行,使机构级风险管理变得可访问且私密。",
       "p2": "该技术栈已在 SUI 主网上线,拥有真实资金池、由 cron 驱动的自主运行,以及八道防御闸门,可防范回撤、幻影成交和过时的对冲头寸。",
       "p3": "本白皮书描述的是当今正在运行的系统,而非未来的路线图。"
     },
     "solution": {
       "title": "我们的解决方案：预测智能",
       "paradigm": "预测范式",
-      "paradigmText": "ZkVanguard 引入了一种根本不同的方法：依托众包智能的预测风险管理。我们不是在故障发生后作出反应，而是提前预见它们：",
+      "paradigmText": "ZkWard 引入了一种根本不同的方法：依托众包智能的预测风险管理。我们不是在故障发生后作出反应，而是提前预见它们：",
       "coreStack": "核心创新栈",
       "multiAgent": "多代理AI系统",
       "multiAgentDesc": "六个专门的代理自治协作，分析、推荐、执行和报告组合保护策略。",
@@ -318,7 +318,7 @@
     "architecture": {
       "title": "技术架构",
       "overview": "系统概述",
-      "overviewText": "ZkVanguard采用了一种分层架构，旨在实现安全、可扩展性和自主运行：",
+      "overviewText": "ZkWard采用了一种分层架构，旨在实现安全、可扩展性和自主运行：",
       "techStack": "技术栈",
       "tableLayer": "层",
       "tableTechnology": "技术",
@@ -328,7 +328,7 @@
     },
     "agents": {
       "title": "多代理人工智能系统",
-      "intro": "ZkVanguard 部署了六个专门的AI代理，这些代理在保持人类在环控制的前提下自主运行，并对关键决策进行人工干预：",
+      "intro": "ZkWard 部署了六个专门的AI代理，这些代理在保持人类在环控制的前提下自主运行，并对关键决策进行人工干预：",
       "lead": "主代理 - 策略 orchestrator",
       "risk": "风险代理 - 实时监控",
       "hedging": "套期保值代理 - 预测执行",
@@ -339,13 +339,13 @@
     "zkp": {
       "title": "零知识隐私层",
       "protocol": "ZK-STARK 协议",
-      "protocolText": "ZkVanguard 实现了一种基于快速傅里叶消去交互式预言证明（FRI）协议的 CUDA 加速零知识可扩展透明知识论据（ZK-STARK）证明系统：",
+      "protocolText": "ZkWard 实现了一种基于快速傅里叶消去交互式预言证明（FRI）协议的 CUDA 加速零知识可扩展透明知识论据（ZK-STARK）证明系统：",
       "security": "安全参数与正确性证明",
       "verification": "形式化数学验证",
       "verificationTitle": "所有6个密码学定理已被证明",
       "verificationText": "我们的实现已经正式验证了Ben-Sasson等人提出的学术定义。这不仅仅是测试——这是数学证明。",
       "hedgeArch": "隐私保护对冲架构",
-      "hedgeArchText": "在执行对公共区块链进行套期保值时，ZkVanguard 通过以下方式保护用户隐私："
+      "hedgeArchText": "在执行对公共区块链进行套期保值时，ZkWard 通过以下方式保护用户隐私："
     },
     "gasless": {
       "title": "无gas交易协议（x402）",
@@ -357,7 +357,7 @@
     "predictions": {
       "title": "预测市场集成",
       "sources": "数据源",
-      "sourcesText": "ZkVanguard 集成领先的预测市场，提供众包预测：",
+      "sourcesText": "ZkWard 集成领先的预测市场，提供众包预测：",
       "hedgeRatio": "保证金比率计算",
       "hedgeRatioText": "对冲代理使用预测概率动态调整对冲比率：",
       "scenarios": "示例预测场景",
@@ -443,7 +443,7 @@
   },
   "zkVerification": {
     "title": "ZK-STARK数学证明",
-    "subtitle": "正式验证ZkVanguard按照Ben-Sasson等人的学术规范实现了真正的ZK-STARK",
+    "subtitle": "正式验证ZkWard按照Ben-Sasson等人的学术规范实现了真正的ZK-STARK",
     "auditorSummary": "审计师快速摘要",
     "implementation": "实现",
     "securityLevel": "安全级别",
@@ -467,7 +467,7 @@
     "noPredictionSignals": "无预测市场信号",
     "centralizedServices": "中心化服务",
     "custodialRisk": "托管风险",
-    "whyWins": "为何ZkVanguard胜出",
+    "whyWins": "为何ZkWard胜出",
     "aiPowered": "AI驱动自动化",
     "aiDescription": "5个专业代理全天候工作",
     "zkVerificationFeature": "ZK-STARK验证",

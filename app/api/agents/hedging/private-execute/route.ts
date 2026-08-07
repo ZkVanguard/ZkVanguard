@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   return NextResponse.json({
-    name: 'ZkVanguard Private Hedge System',
+    name: 'ZkWard Private Hedge System',
     description: 'Privacy-preserving on-chain hedge execution using ZK proofs',
     
     privacyFeatures: {

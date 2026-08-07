@@ -61,7 +61,7 @@ async function sleep(ms: number) {
 }
 
 async function runStressTest() {
-  logSection('🚀 ZkVanguard - COMPREHENSIVE PORTFOLIO STRESS TEST');
+  logSection('🚀 ZkWard - COMPREHENSIVE PORTFOLIO STRESS TEST');
   
   const startTime = Date.now();
   let testsPassed = 0;

@@ -20,9 +20,9 @@ export default function DocsPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#007AFF] to-[#5856D6] bg-clip-text text-transparent mb-2">
-            ZkVanguard Documentation
+            ZkWard Documentation
           </h1>
-          <p className="text-[#6E6E73]">Complete guide to building with ZkVanguard on Cronos zkEVM</p>
+          <p className="text-[#6E6E73]">Complete guide to building with ZkWard on Cronos zkEVM</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -75,7 +75,7 @@ function OverviewSection() {
       
       <div className="mb-6">
         <p className="text-[#424245] mb-4">
-          ZkVanguard is a multi-agent AI system for institutional RWA (Real-World Assets) risk management with Zero-Knowledge proofs on Cronos zkEVM. 
+          ZkWard is a multi-agent AI system for institutional RWA (Real-World Assets) risk management with Zero-Knowledge proofs on Cronos zkEVM. 
           <strong className="text-[#34C759]"> All systems operational: 10/10 tests passing with real integrations.</strong> Five specialized 
           AI agents coordinate to analyze risk, recommend hedging strategies, execute settlements with ZK proofs, and generate reports.
         </p>
@@ -206,8 +206,8 @@ function QuickStartSection() {
       <div className="bg-[#1D1D1F] rounded-lg p-4 mb-6">
         <pre className="text-[#F5F5F7] text-sm overflow-x-auto">
 {`# Clone the repository
-git clone https://github.com/ZkVanguard/ZkVanguard.git
-cd ZkVanguard
+git clone https://github.com/ZkWard/ZkWard.git
+cd ZkWard
 
 # Install dependencies
 npm install
