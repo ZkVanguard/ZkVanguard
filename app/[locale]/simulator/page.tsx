@@ -2005,7 +2005,7 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
                     </div>
                     <div className="bg-[#f5f5f7] rounded-[12px] p-4 border-2 border-[#34C759]/30">
                       <div className="text-[12px] sm:text-[13px] text-[#86868b] mb-2">
-                        With zkVanguard Hedging
+                        With ZkWard Hedging
                       </div>
                       <div className="text-[22px] sm:text-[26px] font-bold text-[#34C759]">
                         {pnlValue >= 0 ? '+' : '-'}${Math.abs(pnlValue / 1000000).toFixed(2)}M
@@ -2125,14 +2125,14 @@ Provide brief analysis: Is the hedge strategy working? What should we watch for 
                   {/* Comparison Table */}
                   <div>
                     <h4 className="text-[14px] sm:text-[15px] font-semibold mb-3 text-[#1d1d1f]">
-                      Traditional vs zkVanguard
+                      Traditional vs ZkWard
                     </h4>
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-[13px] sm:text-[14px] border border-black/5 rounded-[12px] overflow-hidden">
                         <thead>
                           <tr className="bg-[#f5f5f7] text-[#86868b]">
                             <th className="px-4 py-2.5 text-left font-medium">Traditional</th>
-                            <th className="px-4 py-2.5 text-left font-medium">zkVanguard</th>
+                            <th className="px-4 py-2.5 text-left font-medium">ZkWard</th>
                           </tr>
                         </thead>
                         <tbody className="text-[#1d1d1f]">
