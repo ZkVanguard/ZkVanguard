@@ -47,7 +47,7 @@ interface MonitorState {
   failingComponents: string[];
 }
 
-const PROD_URL = (process.env.PROD_URL || 'https://www.zkvanguard.xyz').replace(/\/$/, '');
+const PROD_URL = (process.env.PROD_URL || 'https://www.zkward.com').replace(/\/$/, '');
 const RE_ALERT_DEGRADED_MS = 60 * 60 * 1000;   // every 60 min while degraded
 const RE_ALERT_DOWN_MS = 30 * 60 * 1000;       // every 30 min while down
 

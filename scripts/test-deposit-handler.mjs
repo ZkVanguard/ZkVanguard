@@ -8,7 +8,7 @@
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 
-const BASE = process.env.TEST_BASE || 'https://www.zkvanguard.xyz';
+const BASE = process.env.TEST_BASE || 'https://www.zkward.com';
 const NETWORK = 'mainnet';
 const USD_AMOUNT = 10; // $10 USDC test
 // Use the pool's own admin wallet as the dry-run sender (it actually holds USDC).

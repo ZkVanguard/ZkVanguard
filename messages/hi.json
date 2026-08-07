@@ -76,6 +76,8 @@
     "rights": "सर्वाधिकार सुरक्षित।",
     "testnet": "SUI Mainnet",
     "stage": "Mainnet लाइव",
+    "migrationNotice": "Formerly zkvanguard.xyz — zkward.com is our new home.",
+
     "builtWith": "ZK-STARK के साथ निर्मित"
   },
   "connect": {

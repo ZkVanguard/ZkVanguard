@@ -50,7 +50,7 @@ function AttestationCard({ a }: { a: AttestationView }) {
   // artifact institutions can pass around out-of-band.
   const downloadJson = () => {
     const artifact = {
-      $schema: 'https://zkvanguard.xyz/schemas/custody-attestation/v1',
+      $schema: 'https://zkward.com/schemas/custody-attestation/v1',
       objectId: a.objectId,
       portfolioId: a.portfolioId,
       custodianPubkey: a.custodianPubkey,

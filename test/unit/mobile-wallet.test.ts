@@ -42,7 +42,7 @@ function withFakeBrowser(
 describe('isMobileBrowser', () => {
   it('detects modern iOS Safari', () => {
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/dashboard',
+      'https://www.zkward.com/dashboard',
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1',
       5,
       () => {
@@ -53,7 +53,7 @@ describe('isMobileBrowser', () => {
 
   it('detects Android Chrome', () => {
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/dashboard',
+      'https://www.zkward.com/dashboard',
       'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
       5,
       () => {
@@ -66,7 +66,7 @@ describe('isMobileBrowser', () => {
     // iPad Safari 13+ reports a macOS UA — the touch-points check is
     // what saves us.
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/dashboard',
+      'https://www.zkward.com/dashboard',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15',
       5, // iPad reports 5 touch points
       () => {
@@ -77,7 +77,7 @@ describe('isMobileBrowser', () => {
 
   it('does NOT flag a real desktop Mac with no touch input', () => {
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/dashboard',
+      'https://www.zkward.com/dashboard',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15',
       0, // no touch points on a real Mac
       () => {
@@ -90,7 +90,7 @@ describe('isMobileBrowser', () => {
     // 1 touch point is common on Macs with Force Touch trackpads or
     // pen-input tablets — those aren't mobile browsers.
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/',
+      'https://www.zkward.com/',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15',
       1,
       () => {
@@ -101,7 +101,7 @@ describe('isMobileBrowser', () => {
 
   it('does NOT flag desktop Chrome on Windows', () => {
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/',
+      'https://www.zkward.com/',
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
       0,
       () => {
@@ -120,7 +120,7 @@ describe('SUI_MOBILE_WALLETS', () => {
   it('universal-link builder reproduces the original href when decoded', () => {
     // Includes query + hash to catch the two most common ways route
     // context gets clobbered.
-    const href = 'https://www.zkvanguard.xyz/dashboard?section=vault#deposit';
+    const href = 'https://www.zkward.com/dashboard?section=vault#deposit';
     const encoded = encodeURIComponent(href);
     const link = SUI_MOBILE_WALLETS[0].buildUniversalLink(encoded);
     const lastSegment = link.split('/').pop() ?? '';
@@ -154,7 +154,7 @@ describe('buildMobileWalletLink', () => {
 
   it('produces a full universal link when window.location.href is set', () => {
     withFakeBrowser(
-      'https://www.zkvanguard.xyz/dashboard?section=vault#deposit',
+      'https://www.zkward.com/dashboard?section=vault#deposit',
       'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
       5,
       () => {
@@ -164,7 +164,7 @@ describe('buildMobileWalletLink', () => {
         // route context (path + query + hash) is preserved.
         const encoded = link.split('/browse/')[1];
         expect(decodeURIComponent(encoded)).toBe(
-          'https://www.zkvanguard.xyz/dashboard?section=vault#deposit',
+          'https://www.zkward.com/dashboard?section=vault#deposit',
         );
       },
     );

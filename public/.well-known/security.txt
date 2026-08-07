@@ -1,20 +1,20 @@
-# Security Policy for ZK Vanguard
-# https://zkvanguard.xyz
+# Security Policy for ZkWard
+# https://zkward.com
+# (Formerly zkvanguard.xyz — old domain retires soon; use the new one.)
 
-Contact: mailto:security@zkvanguard.xyz
+Contact: mailto:security@zkward.com
 Expires: 2027-03-20T00:00:00.000Z
 Preferred-Languages: en
+Canonical: https://zkward.com/.well-known/security.txt
 
 # About This Project
-# ZK Vanguard is a legitimate DeFi project participating in:
-# - Tether Hackathon Galáctica: WDK Edition 1 (Feb 25 - Mar 22, 2026)
-# 
+# ZkWard is a legitimate DeFi project — an AI-managed USDC vault on SUI mainnet.
+#
 # This site does NOT:
 # - Collect seed phrases or private keys
 # - Create wallets in the browser
 # - Store any sensitive wallet credentials
 #
 # Users connect their OWN wallets via WDK self-custodial wallet.
-# 
-# Source Code: https://github.com/[YOUR-REPO]
-# Hackathon: https://dorahacks.io/hackathon/wdk1
+#
+# Source Code: https://github.com/ZkVanguard/ZkVanguard

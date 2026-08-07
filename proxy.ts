@@ -232,7 +232,7 @@ function createBlockedResponse(country: string, pathname: string): NextResponse 
         error: 'Service unavailable in your region',
         code: 'GEO_RESTRICTED',
         message: 'This service is not available in your jurisdiction due to regulatory requirements.',
-        support: 'For questions, contact compliance@zkvanguard.io'
+        support: 'For questions, contact compliance@zkward.com'
       }),
       {
         status: 451,
@@ -296,7 +296,7 @@ function createBlockedResponse(country: string, pathname: string): NextResponse 
         </p>
         <p>
           If you believe this is an error, please contact us at 
-          <a href="mailto:compliance@zkvanguard.io">compliance@zkvanguard.io</a>
+          <a href="mailto:compliance@zkward.com">compliance@zkward.com</a>
         </p>
         <p class="code">Error Code: GEO_RESTRICTED</p>
       </div>

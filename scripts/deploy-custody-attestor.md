@@ -59,7 +59,7 @@ sui client upgrade `
 3. **Smoke test**:
    ```bash
    # Should now return deployed=true with empty attestations[]
-   curl "https://www.zkvanguard.xyz/api/custody?action=list-attestations&wallet=0x<your_wallet>"
+   curl "https://www.zkward.com/api/custody?action=list-attestations&wallet=0x<your_wallet>"
    ```
 4. **Enroll the first custodian** (test ed25519 key for now):
    ```typescript

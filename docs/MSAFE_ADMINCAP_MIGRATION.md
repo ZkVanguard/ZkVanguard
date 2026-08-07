@@ -162,7 +162,7 @@ bun run scripts/analyze-pool-pnl.ts
 # Expected: green NAV report, no errors from strict mode
 
 # 4. Discord health-monitor confirms all crons green in next 30min window
-curl -s https://www.zkvanguard.xyz/api/health/production | python -m json.tool
+curl -s https://www.zkward.com/api/health/production | python -m json.tool
 # Expected: all cron heartbeats fresh; bluefin component operational
 ```
 

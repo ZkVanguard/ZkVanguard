@@ -365,7 +365,7 @@ class BackgroundHedgeController extends EventEmitter {
       
       // Call the hedge execution API
       const appUrl = process.env.VERCEL 
-        ? 'https://zkvanguard.xyz' 
+        ? 'https://zkward.com' 
         : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       const response = await fetch(`${appUrl}/api/agents/hedging/execute`, {
         method: 'POST',

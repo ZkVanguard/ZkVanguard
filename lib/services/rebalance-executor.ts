@@ -61,8 +61,8 @@ export async function assessPortfolio(
     };
 
     if (process.env.VERCEL) {
-      // Running on Vercel - use production domain (zkvanguard.xyz has no protection)
-      baseUrl = 'https://zkvanguard.xyz';
+      // Running on Vercel - use production domain (zkward.com has no protection)
+      baseUrl = 'https://zkward.com';
     } else if (process.env.NEXT_PUBLIC_API_URL) {
       baseUrl = process.env.NEXT_PUBLIC_API_URL;
     } else {

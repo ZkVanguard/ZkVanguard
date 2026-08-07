@@ -23,7 +23,7 @@ Package: `0x107292a69eea2f6eaf4a4e4727ee25d747b04c1985441b138933f0ef33f7b726`
 
 ### Production infrastructure
 
-- Public API endpoints at `zkvanguard.xyz/api/**`
+- Public API endpoints at `zkward.com/api/**`
 - All active cron routes (see `docs/MAINNET_READINESS.md § Scale & Security Hardening`) — gating logic, signature verification, rate limits, cron_state halt flags
 - **v0.3.0 8-gate autonomy defense stack** — `PortfolioDriver`, `HedgeFillVerifier`, `StaleHedgeDetector`, `applyHedgeabilityClamp`, `regret-tracker`, `alert-response-loop`, phantom-rate detection at `/api/health/production`. Bypass or corruption of any gate is in scope.
 - Off-chain ZK-STARK prover (`zkp/` Python backend)

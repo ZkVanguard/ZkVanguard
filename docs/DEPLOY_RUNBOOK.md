@@ -467,7 +467,7 @@ Run from terminal during incident response.
 Example flatten-everything sequence:
 ```bash
 SECRET="$(grep ^CRON_SECRET= .env.local | cut -d= -f2 | tr -d '\"')"
-URL=https://www.zkvanguard.xyz
+URL=https://www.zkward.com
 curl -s -X GET  -H "Authorization: Bearer $SECRET" $URL/api/admin/bluefin-debug | jq
 curl -s -X GET  -H "Authorization: Bearer $SECRET" $URL/api/admin/close-bluefin-positions | jq  # dry run
 curl -s -X POST -H "Authorization: Bearer $SECRET" $URL/api/admin/close-bluefin-positions | jq  # commit
@@ -540,7 +540,7 @@ The 8-gate autonomy defense system ships with every destructive action behind an
 
 **Verify current gate state before flipping the last one:**
 ```bash
-curl -sS https://www.zkvanguard.xyz/api/health/production | jq .gates
+curl -sS https://www.zkward.com/api/health/production | jq .gates
 ```
 
 ### New QStash schedule required
@@ -555,7 +555,7 @@ curl -X POST -H "Authorization: Bearer $QSTASH_TOKEN" \
   -H "Upstash-Cron: */15 * * * *" -H "Upstash-Method: POST" \
   -H "Upstash-Forward-Authorization: Bearer $CRON_SECRET_FALLBACK" \
   -H "Upstash-Retries: 2" -d '{}' \
-  "$QSTASH_URL/v2/schedules/https://www.zkvanguard.xyz/api/cron/alert-response-loop"
+  "$QSTASH_URL/v2/schedules/https://www.zkward.com/api/cron/alert-response-loop"
 ```
 
 ### Verify from console
