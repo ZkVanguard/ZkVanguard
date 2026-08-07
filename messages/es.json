@@ -94,7 +94,86 @@
     "totalValue": "Valor Total de Cartera",
     "riskScore": "Puntuación de Riesgo",
     "activePositions": "Posiciones Activas",
-    "monthlyReturn": "Retorno Mensual"
+    "monthlyReturn": "Retorno Mensual",
+    "settingsModal": {
+      "title": "Ajustes",
+      "subtitle": "Configura las preferencias del panel",
+      "close": "Cerrar",
+      "saving": "Guardando…",
+      "save": "Guardar cambios",
+      "cancel": "Cancelar",
+      "tabs": {
+        "general": "General",
+        "hedging": "Cobertura",
+        "alerts": "Alertas",
+        "privacy": "Privacidad"
+      },
+      "general": {
+        "display": "Pantalla",
+        "darkMode": "Modo oscuro",
+        "darkModeDesc": "Cambia entre temas claro y oscuro",
+        "compactView": "Vista compacta",
+        "compactViewDesc": "Muestra más datos en menos espacio",
+        "wallet": "Cartera",
+        "walletDesc": "Los ajustes de cartera se gestionan a través del proveedor de tu cartera conectada (MetaMask, WalletConnect, etc.)"
+      },
+      "hedging": {
+        "autoApproval": "Aprobación automática",
+        "autoApprovalDesc": "Aprueba automáticamente coberturas por debajo del umbral",
+        "threshold": "Umbral: ${amount}",
+        "riskLimits": "Límites de riesgo",
+        "maxLeverage": "Apalancamiento máx.: {n}x",
+        "stopLoss": "Stop-loss por defecto: {n}%",
+        "takeProfit": "Take-profit por defecto: {n}%"
+      },
+      "alerts": {
+        "title": "Preferencias de alertas",
+        "price": "Alertas de precio",
+        "priceDesc": "Recibe notificaciones sobre movimientos de precio significativos",
+        "hedge": "Alertas de cobertura",
+        "hedgeDesc": "Notificaciones de ejecución de coberturas y liquidaciones",
+        "agent": "Alertas de agente IA",
+        "agentDesc": "Actualizaciones de los agentes de IA y recomendaciones"
+      },
+      "privacy": {
+        "title": "Funciones de privacidad",
+        "private": "Modo privado",
+        "privateDesc": "Oculta los detalles de la transacción con direcciones sigilosas",
+        "zk": "Pruebas ZK-STARK",
+        "zkDesc": "Genera pruebas de conocimiento cero para las liquidaciones",
+        "protected": "Tu privacidad está protegida",
+        "protectedDesc": "Todos los datos sensibles están cifrados. Las pruebas ZK aseguran que tus posiciones sigan siendo privadas y verificables en cadena."
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Modo mainnet",
+        "subtitle": "El grifo de USDC está deshabilitado en mainnet",
+        "body": "Para obtener USDC en Cronos mainnet, utiliza un <exchange>exchange de criptomonedas</exchange> o <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "Cartera SUI conectada",
+        "body": "El grifo de USDC está disponible para carteras Cronos (EVM)"
+      },
+      "title": "Grifo de USDC testnet",
+      "subtitle": "Acuña USDC testnet para probar coberturas",
+      "balanceLabel": "Tu saldo de USDC testnet",
+      "mintAmount": "Cantidad a acuñar",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "USDC testnet: {balance}",
+        "minted": "¡Acuñado!",
+        "minting": "Acuñando…",
+        "getUsdc": "+ Obtener {amount} USDC"
+      },
+      "confirmInWallet": "Confirma en la cartera…",
+      "minting": "Acuñando…",
+      "mintedSuccess": "¡Acuñado correctamente!",
+      "mintButton": "Acuñar {amount} USDC",
+      "viewExplorer": "Ver en el explorador",
+      "contractAddress": "USDC testnet: {addr}",
+      "contractInfo": "Cronos testnet (Chain ID: 338) • 6 decimales"
+    }
   },
   "agents": {
     "title": "Red de agentes IA",
@@ -209,7 +288,10 @@
     },
     "conclusion": {
       "title": "Conclusión",
-      "text": "ZkWard representa un cambio de paradigma fundamental en la gestión de riesgos de activos digitales institucionales. Al combinar inteligencia de IA predictiva con privacidad criptográfica post-cuántica y ejecución sin gas, abordamos las tres barreras críticas que impiden la adopción institucional."
+      "text": "ZkWard representa un cambio de paradigma fundamental en la gestión de riesgos de activos digitales institucionales. Al combinar inteligencia de IA predictiva con privacidad criptográfica post-cuántica y ejecución sin gas, abordamos las tres barreras críticas que impiden la adopción institucional.",
+      "p1": "ZkWard combina orquestación de IA multi-agente, inteligencia de mercados de predicción, privacidad ZK-STARK y ejecución sin gas para hacer accesible y privada la gestión de riesgo de grado institucional.",
+      "p2": "El sistema está en producción en la mainnet de SUI con un fondo de capital real, autonomía impulsada por cron y ocho puertas de defensa que protegen contra caídas, ejecuciones fantasma y coberturas obsoletas.",
+      "p3": "Este whitepaper describe el sistema tal como funciona hoy, no una hoja de ruta para el futuro."
     },
     "solution": {
       "title": "Nuestra Solución: Inteligencia Predicativa",

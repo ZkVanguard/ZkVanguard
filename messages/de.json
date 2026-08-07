@@ -94,7 +94,86 @@
     "totalValue": "Gesamter Portfolio-Wert",
     "riskScore": "Risikobewertung",
     "activePositions": "Aktive Positionen",
-    "monthlyReturn": "Monatliche Rendite"
+    "monthlyReturn": "Monatliche Rendite",
+    "settingsModal": {
+      "title": "Einstellungen",
+      "subtitle": "Dashboard-Einstellungen konfigurieren",
+      "close": "Schließen",
+      "saving": "Speichern…",
+      "save": "Änderungen speichern",
+      "cancel": "Abbrechen",
+      "tabs": {
+        "general": "Allgemein",
+        "hedging": "Hedging",
+        "alerts": "Warnungen",
+        "privacy": "Datenschutz"
+      },
+      "general": {
+        "display": "Anzeige",
+        "darkMode": "Dunkelmodus",
+        "darkModeDesc": "Zwischen hellem und dunklem Design wechseln",
+        "compactView": "Kompaktansicht",
+        "compactViewDesc": "Mehr Daten auf weniger Raum anzeigen",
+        "wallet": "Wallet",
+        "walletDesc": "Wallet-Einstellungen werden über Ihren verbundenen Wallet-Anbieter verwaltet (MetaMask, WalletConnect usw.)"
+      },
+      "hedging": {
+        "autoApproval": "Automatische Freigabe",
+        "autoApprovalDesc": "Hedges unter dem Schwellenwert automatisch genehmigen",
+        "threshold": "Schwellenwert: ${amount}",
+        "riskLimits": "Risikolimits",
+        "maxLeverage": "Max. Hebel: {n}x",
+        "stopLoss": "Standard-Stop-Loss: {n}%",
+        "takeProfit": "Standard-Take-Profit: {n}%"
+      },
+      "alerts": {
+        "title": "Benachrichtigungseinstellungen",
+        "price": "Preiswarnungen",
+        "priceDesc": "Benachrichtigungen bei signifikanten Preisbewegungen erhalten",
+        "hedge": "Hedge-Warnungen",
+        "hedgeDesc": "Benachrichtigungen zu Hedge-Ausführungen und Liquidationen",
+        "agent": "KI-Agent-Warnungen",
+        "agentDesc": "Updates und Empfehlungen von KI-Agenten"
+      },
+      "privacy": {
+        "title": "Datenschutzfunktionen",
+        "private": "Privater Modus",
+        "privateDesc": "Transaktionsdetails mit Stealth-Adressen ausblenden",
+        "zk": "ZK-STARK-Beweise",
+        "zkDesc": "Zero-Knowledge-Beweise für Abrechnungen erzeugen",
+        "protected": "Ihre Privatsphäre ist geschützt",
+        "protectedDesc": "Alle sensiblen Daten sind verschlüsselt. ZK-Beweise stellen sicher, dass Ihre Positionen privat bleiben und dennoch on-chain überprüfbar sind."
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "Mainnet-Modus",
+        "subtitle": "USDC-Faucet ist im Mainnet deaktiviert",
+        "body": "Um USDC im Cronos-Mainnet zu erhalten, verwenden Sie eine <exchange>Kryptowährungsbörse</exchange> oder <dex>VVS Finance DEX</dex>."
+      },
+      "sui": {
+        "title": "SUI-Wallet verbunden",
+        "body": "USDC-Faucet ist für Cronos (EVM)-Wallets verfügbar"
+      },
+      "title": "Testnet USDC-Faucet",
+      "subtitle": "Testnet USDC für Hedge-Tests prägen",
+      "balanceLabel": "Ihr Testnet-USDC-Saldo",
+      "mintAmount": "Prägen-Betrag",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "Testnet USDC: {balance}",
+        "minted": "Geprägt!",
+        "minting": "Präge…",
+        "getUsdc": "+ {amount} USDC erhalten"
+      },
+      "confirmInWallet": "Im Wallet bestätigen…",
+      "minting": "Präge…",
+      "mintedSuccess": "Erfolgreich geprägt!",
+      "mintButton": "{amount} USDC prägen",
+      "viewExplorer": "Im Explorer ansehen",
+      "contractAddress": "Testnet USDC: {addr}",
+      "contractInfo": "Cronos-Testnet (Chain ID: 338) • 6 Dezimalstellen"
+    }
   },
   "agents": {
     "title": "KI-Agenten-Netzwerk",
@@ -209,7 +288,10 @@
     },
     "conclusion": {
       "title": "Fazit",
-      "text": "ZkWard repräsentiert einen fundamentalen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte. Durch die Kombination von prädiktiver KI-Intelligenz mit post-quanten kryptographischer Privatsphäre und gasfreier Ausführung adressieren wir die drei kritischen Barrieren, die die institutionelle Adoption verhindern."
+      "text": "ZkWard repräsentiert einen fundamentalen Paradigmenwechsel im institutionellen Risikomanagement digitaler Vermögenswerte. Durch die Kombination von prädiktiver KI-Intelligenz mit post-quanten kryptographischer Privatsphäre und gasfreier Ausführung adressieren wir die drei kritischen Barrieren, die die institutionelle Adoption verhindern.",
+      "p1": "ZkWard verbindet Multi-Agent-KI-Orchestrierung, Prediction-Market-Intelligenz, ZK-STARK-Privatsphäre und gaslose Ausführung, um Risikomanagement auf institutionellem Niveau zugänglich und privat zu machen.",
+      "p2": "Der Stack läuft live auf dem SUI Mainnet mit einem echten Kapitalpool, cron-gesteuerter Autonomie und acht Verteidigungstoren, die vor Drawdowns, Phantom-Fills und veralteten Hedges schützen.",
+      "p3": "Dieses Whitepaper beschreibt das System, wie es heute läuft, nicht eine Roadmap für die Zukunft."
     },
     "solution": {
       "title": "Unsere Lösung: Vorhersagende Intelligenz",

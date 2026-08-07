@@ -61,9 +61,14 @@ async function handle(request: NextRequest): Promise<NextResponse> {
   if (auth !== true) return auth;
 
   const now = Date.now();
-  const claimed = await tryClaimCronRun(CRON_KEY, TICK_INTERVAL_MS, now);
-  if (!claimed) {
-    return NextResponse.json({ skipped: true, reason: 'tick claim debounce' });
+  // tryClaimCronRun returns { claimed: boolean, lastRunMs, reason? } — an
+  // OBJECT, always truthy. `!claim` was always false, so the debounce
+  // never triggered and TICK_INTERVAL_MS was silently ignored (cron
+  // effectively ran every 2 min per QStash cadence). Same pattern in
+  // sui-community-pool:189 uses `!claim.claimed` correctly.
+  const claim = await tryClaimCronRun(CRON_KEY, TICK_INTERVAL_MS, now);
+  if (!claim.claimed) {
+    return NextResponse.json({ skipped: true, reason: claim.reason ?? 'tick claim debounce' });
   }
   await setCronState(HEARTBEAT_KEY, now).catch(() => {});
 

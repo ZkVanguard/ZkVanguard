@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
 import { Coins, Loader2, CheckCircle, AlertCircle, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useWriteContract, useWaitForTransactionReceipt, usePublicClient, useChainId } from '@/lib/wdk/wdk-hooks';
 import { useWallet } from '@/lib/hooks/useWallet';
@@ -44,12 +45,9 @@ const TESTNET_USDC_ABI = [
   },
 ] as const;
 
-const MINT_AMOUNTS = [
-  { label: '1,000 USDC', value: '1000' },
-  { label: '10,000 USDC', value: '10000' },
-  { label: '100,000 USDC', value: '100000' },
-  { label: '1,000,000 USDC', value: '1000000' },
-];
+// Amount button values only — labels formatted at render time via
+// Intl.NumberFormat(locale) so thousand separators respect the active locale.
+const MINT_AMOUNTS = ['1000', '10000', '100000', '1000000'];
 
 interface TestnetUSDCFaucetProps {
   compact?: boolean;
@@ -57,13 +55,16 @@ interface TestnetUSDCFaucetProps {
 }
 
 export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFaucetProps) {
+  const t = useTranslations('dashboard.usdcFaucet');
+  const locale = useLocale();
+  const formatAmount = (v: string | number) => new Intl.NumberFormat(locale).format(Number(v));
   const { evmAddress, isSUI } = useWallet();
   const address = evmAddress as `0x${string}` | undefined;
   const publicClient = usePublicClient();
   const chainId = useChainId();
   const isTestnet = chainId === CHAIN_IDS.CRONOS_TESTNET;
   const _explorerUrl = getExplorerUrl(chainId);
-  
+
   const [balance, setBalance] = useState<string>('0');
   const [selectedAmount, setSelectedAmount] = useState('10000');
   const [mintSuccess, setMintSuccess] = useState(false);
@@ -77,19 +78,23 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
             <AlertTriangle className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <h3 className="font-semibold text-amber-800">Mainnet Mode</h3>
-            <p className="text-sm text-amber-600">USDC Faucet is disabled on mainnet</p>
+            <h3 className="font-semibold text-amber-800">{t('mainnet.title')}</h3>
+            <p className="text-sm text-amber-600">{t('mainnet.subtitle')}</p>
           </div>
         </div>
         <p className="text-xs text-amber-700 mt-2">
-          To acquire USDC on Cronos mainnet, use a{' '}
-          <a href="https://crypto.com/exchange" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
-            cryptocurrency exchange
-          </a>{' '}
-          or{' '}
-          <a href="https://vvs.finance" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
-            VVS Finance DEX
-          </a>.
+          {t.rich('mainnet.body', {
+            exchange: (chunks) => (
+              <a href="https://crypto.com/exchange" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+                {chunks}
+              </a>
+            ),
+            dex: (chunks) => (
+              <a href="https://vvs.finance" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+                {chunks}
+              </a>
+            ),
+          })}
         </p>
       </div>
     );
@@ -157,15 +162,17 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
       return (
         <div className="text-center py-6 px-4 bg-[#4DA2FF]/5 border border-[#4DA2FF]/20 rounded-[16px]">
           <Coins className="w-8 h-8 text-[#4DA2FF] mx-auto mb-2" />
-          <p className="text-sm text-[#4DA2FF] font-medium">SUI Wallet Connected</p>
-          <p className="text-xs text-[#86868B] mt-1">USDC Faucet is available for Cronos (EVM) wallets</p>
+          <p className="text-sm text-[#4DA2FF] font-medium">{t('sui.title')}</p>
+          <p className="text-xs text-[#86868B] mt-1">{t('sui.body')}</p>
         </div>
       );
     }
     return null;
   }
 
-  // Compact mode â€” small inline button for use inside modals
+  const formattedBalance = formatAmount(parseFloat(balance).toFixed(2));
+
+  // Compact mode — small inline button for use inside modals
   if (compact) {
     return (
       <div className="flex items-center gap-2 p-3 bg-[#FF9500]/5 border border-[#FF9500]/20 rounded-[12px]">
@@ -173,11 +180,11 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-semibold text-[#1d1d1f]">
-              Testnet USDC: {parseFloat(balance).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              {t('compact.balance', { balance: formattedBalance })}
             </span>
             {mintSuccess ? (
               <span className="text-[11px] text-[#34C759] font-medium flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" /> Minted!
+                <CheckCircle className="w-3 h-3" /> {t('compact.minted')}
               </span>
             ) : (
               <button
@@ -186,9 +193,9 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
                 className="text-[11px] font-semibold text-[#FF9500] hover:text-[#FF9500]/80 disabled:opacity-50 flex items-center gap-1"
               >
                 {isBusy ? (
-                  <><Loader2 className="w-3 h-3 animate-spin" /> Minting...</>
+                  <><Loader2 className="w-3 h-3 animate-spin" /> {t('compact.minting')}</>
                 ) : (
-                  <>+ Get {parseInt(selectedAmount).toLocaleString()} USDC</>
+                  <>{t('compact.getUsdc', { amount: formatAmount(selectedAmount) })}</>
                 )}
               </button>
             )}
@@ -209,34 +216,34 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
           <Coins className="w-5 h-5 text-[#FF9500]" />
         </div>
         <div>
-          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">Testnet USDC Faucet</h3>
-          <p className="text-[12px] text-[#86868b]">Mint testnet USDC for testing hedges</p>
+          <h3 className="text-[15px] font-semibold text-[#1d1d1f]">{t('title')}</h3>
+          <p className="text-[12px] text-[#86868b]">{t('subtitle')}</p>
         </div>
       </div>
 
       {/* Current Balance */}
       <div className="p-3 bg-[#f5f5f7] rounded-[12px] flex items-center justify-between">
-        <span className="text-[13px] text-[#86868b]">Your Testnet USDC Balance</span>
+        <span className="text-[13px] text-[#86868b]">{t('balanceLabel')}</span>
         <span className="text-[15px] font-bold text-[#1d1d1f]">
-          {parseFloat(balance).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDC
+          {formattedBalance} {t('amountSuffix')}
         </span>
       </div>
 
       {/* Amount Selection */}
       <div>
-        <label className="block text-[12px] font-semibold text-[#86868b] mb-2">Mint Amount</label>
+        <label className="block text-[12px] font-semibold text-[#86868b] mb-2">{t('mintAmount')}</label>
         <div className="grid grid-cols-2 gap-2">
-          {MINT_AMOUNTS.map((amt) => (
+          {MINT_AMOUNTS.map((value) => (
             <button
-              key={amt.value}
-              onClick={() => setSelectedAmount(amt.value)}
+              key={value}
+              onClick={() => setSelectedAmount(value)}
               className={`px-3 py-2 rounded-[10px] text-[13px] font-medium transition-all ${
-                selectedAmount === amt.value
+                selectedAmount === value
                   ? 'bg-[#FF9500] text-white'
                   : 'bg-[#f5f5f7] text-[#1d1d1f] hover:bg-[#e8e8ed]'
               }`}
             >
-              {amt.label}
+              {formatAmount(value)} {t('amountSuffix')}
             </button>
           ))}
         </div>
@@ -251,17 +258,17 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
         {isBusy ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            {isMintPending ? 'Confirm in Wallet...' : 'Minting...'}
+            {isMintPending ? t('confirmInWallet') : t('minting')}
           </>
         ) : mintSuccess ? (
           <>
             <CheckCircle className="w-4 h-4" />
-            Minted Successfully!
+            {t('mintedSuccess')}
           </>
         ) : (
           <>
             <Coins className="w-4 h-4" />
-            Mint {parseInt(selectedAmount).toLocaleString()} USDC
+            {t('mintButton', { amount: formatAmount(selectedAmount) })}
           </>
         )}
       </button>
@@ -274,7 +281,7 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-1 text-[12px] text-[#007AFF] hover:underline"
         >
-          View on Explorer <ExternalLink className="w-3 h-3" />
+          {t('viewExplorer')} <ExternalLink className="w-3 h-3" />
         </a>
       )}
 
@@ -288,8 +295,8 @@ export function MockUSDCFaucet({ compact = false, onMintSuccess }: TestnetUSDCFa
 
       {/* Contract Info */}
       <div className="text-[10px] text-[#86868b] text-center space-y-0.5">
-        <p>Testnet USDC: {TESTNET_USDC_ADDRESS.substring(0, 10)}...{TESTNET_USDC_ADDRESS.substring(38)}</p>
-        <p>Cronos Testnet (Chain ID: 338) &bull; 6 decimals</p>
+        <p>{t('contractAddress', { addr: `${TESTNET_USDC_ADDRESS.substring(0, 10)}...${TESTNET_USDC_ADDRESS.substring(38)}` })}</p>
+        <p>{t('contractInfo')}</p>
       </div>
     </div>
   );

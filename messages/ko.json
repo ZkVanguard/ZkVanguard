@@ -94,7 +94,86 @@
     "totalValue": "총 포트폴리오 가치",
     "riskScore": "리스크 스코어",
     "activePositions": "활성 포지션",
-    "monthlyReturn": "월간 수익률"
+    "monthlyReturn": "월간 수익률",
+    "settingsModal": {
+      "title": "설정",
+      "subtitle": "대시보드 환경 설정 구성",
+      "close": "닫기",
+      "saving": "저장 중…",
+      "save": "변경 사항 저장",
+      "cancel": "취소",
+      "tabs": {
+        "general": "일반",
+        "hedging": "헤징",
+        "alerts": "알림",
+        "privacy": "개인정보 보호"
+      },
+      "general": {
+        "display": "디스플레이",
+        "darkMode": "다크 모드",
+        "darkModeDesc": "라이트 테마와 다크 테마 간 전환",
+        "compactView": "컴팩트 보기",
+        "compactViewDesc": "더 적은 공간에 더 많은 데이터 표시",
+        "wallet": "지갑",
+        "walletDesc": "지갑 설정은 연결된 지갑 공급자(MetaMask, WalletConnect 등)를 통해 관리됩니다."
+      },
+      "hedging": {
+        "autoApproval": "자동 승인",
+        "autoApprovalDesc": "임계값 이하의 헤지를 자동으로 승인",
+        "threshold": "임계값: ${amount}",
+        "riskLimits": "리스크 한도",
+        "maxLeverage": "최대 레버리지: {n}x",
+        "stopLoss": "기본 스톱로스: {n}%",
+        "takeProfit": "기본 테이크프로핏: {n}%"
+      },
+      "alerts": {
+        "title": "알림 환경 설정",
+        "price": "가격 알림",
+        "priceDesc": "중요한 가격 변동에 대한 알림 받기",
+        "hedge": "헤지 알림",
+        "hedgeDesc": "헤지 실행 및 청산에 대한 알림",
+        "agent": "AI 에이전트 알림",
+        "agentDesc": "AI 에이전트의 업데이트 및 권장 사항"
+      },
+      "privacy": {
+        "title": "개인정보 보호 기능",
+        "private": "프라이빗 모드",
+        "privateDesc": "스텔스 주소로 거래 세부 정보 숨기기",
+        "zk": "ZK-STARK 증명",
+        "zkDesc": "결제용 영지식 증명 생성",
+        "protected": "귀하의 개인정보는 보호됩니다",
+        "protectedDesc": "모든 민감한 데이터는 암호화됩니다. ZK 증명은 온체인에서 검증할 수 있으면서도 포지션을 프라이빗하게 유지합니다."
+      }
+    },
+    "usdcFaucet": {
+      "mainnet": {
+        "title": "메인넷 모드",
+        "subtitle": "메인넷에서는 USDC 포셋이 비활성화됩니다",
+        "body": "Cronos 메인넷에서 USDC를 얻으려면 <exchange>암호화폐 거래소</exchange> 또는 <dex>VVS Finance DEX</dex>를 이용하세요."
+      },
+      "sui": {
+        "title": "SUI 지갑 연결됨",
+        "body": "USDC 포셋은 Cronos (EVM) 지갑에서 사용할 수 있습니다"
+      },
+      "title": "테스트넷 USDC 포셋",
+      "subtitle": "헤지 테스트용 테스트넷 USDC 발행",
+      "balanceLabel": "내 테스트넷 USDC 잔액",
+      "mintAmount": "발행량",
+      "amountSuffix": "USDC",
+      "compact": {
+        "balance": "테스트넷 USDC: {balance}",
+        "minted": "발행됨!",
+        "minting": "발행 중…",
+        "getUsdc": "+ {amount} USDC 받기"
+      },
+      "confirmInWallet": "지갑에서 확인…",
+      "minting": "발행 중…",
+      "mintedSuccess": "발행 완료!",
+      "mintButton": "{amount} USDC 발행",
+      "viewExplorer": "탐색기에서 보기",
+      "contractAddress": "테스트넷 USDC: {addr}",
+      "contractInfo": "Cronos 테스트넷 (Chain ID: 338) • 6자리"
+    }
   },
   "agents": {
     "title": "AI 에이전트 네트워크",
@@ -209,7 +288,10 @@
     },
     "conclusion": {
       "title": "결론",
-      "text": "ZkWard는 기관 디지털 자산 리스크 관리의 근본적인 패러다임 전환을 나타냅니다. 예측 AI 인텔리전스와 포스트 양자 암호화 프라이버시, 가스리스 실행을 결합하여 기관 채택을 방해하는 세 가지 중요한 장벽을 해결합니다."
+      "text": "ZkWard는 기관 디지털 자산 리스크 관리의 근본적인 패러다임 전환을 나타냅니다. 예측 AI 인텔리전스와 포스트 양자 암호화 프라이버시, 가스리스 실행을 결합하여 기관 채택을 방해하는 세 가지 중요한 장벽을 해결합니다.",
+      "p1": "ZkWard는 멀티 에이전트 AI 오케스트레이션, 예측 시장 인텔리전스, ZK-STARK 프라이버시, 가스리스 실행을 결합하여 기관 등급의 리스크 관리를 접근 가능하고 프라이빗하게 만듭니다.",
+      "p2": "이 스택은 실제 자본 풀, 크론 기반 자율성, 드로우다운·팬텀 필·오래된 헤지로부터 보호하는 8개의 방어 게이트를 갖춘 SUI 메인넷에서 라이브로 실행되고 있습니다.",
+      "p3": "이 백서는 미래의 로드맵이 아니라 오늘 실행되는 시스템을 설명합니다."
     },
     "solution": {
       "title": "OUR SOLUTION: 예측 인텔리전스",
