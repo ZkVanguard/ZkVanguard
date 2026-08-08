@@ -1,4 +1,4 @@
-/// ZkVanguard Community Pool Module for SUI
+/// ZkWard Community Pool Module for SUI
 /// AI-managed community investment pool with share-based ownership
 /// ERC-4626-inspired vault adapted for Move/SUI
 /// 

@@ -1,4 +1,4 @@
-/// ZkVanguard Community Pool Timelock Module for SUI (DEFAULT CHAIN)
+/// ZkWard Community Pool Timelock Module for SUI (DEFAULT CHAIN)
 /// Optimized timelock controller for CommunityPool admin operations
 /// 
 /// SECURITY:

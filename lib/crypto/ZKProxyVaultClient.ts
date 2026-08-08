@@ -111,7 +111,7 @@ export class ZKProxyVaultClient {
    * This cryptographically links the owner to their proxy
    */
   generateZKBindingHash(ownerAddress: string, seed: string = 'hedge'): string {
-    const data = `${ownerAddress.toLowerCase()}:${seed}:${Date.now()}:ZKVANGUARD_BINDING_V1`;
+    const data = `${ownerAddress.toLowerCase()}:${seed}:${Date.now()}:ZKWARD_BINDING_V2`;
     return '0x' + crypto.createHash('sha256').update(data).digest('hex');
   }
 

@@ -1,4 +1,4 @@
-/// ZkVanguard Community Pool USDC Module for SUI
+/// ZkWard Community Pool USDC Module for SUI
 /// AI-managed community investment pool accepting USDC deposits
 /// 3-Asset allocation: BTC, ETH, SUI managed by AI via QStash
 ///
