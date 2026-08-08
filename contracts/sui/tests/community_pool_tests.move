@@ -1,4 +1,4 @@
-/// Comprehensive tests for ZkVanguard Community Pool
+/// Comprehensive tests for ZkWard Community Pool
 /// Testing deposits, withdrawals, circuit breakers, and security
 #[test_only]
 #[allow(unused_use, unused_const)]

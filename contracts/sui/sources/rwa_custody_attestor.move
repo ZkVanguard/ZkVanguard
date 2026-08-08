@@ -4,7 +4,7 @@
 /// signed attestations that bind a portfolio to off-chain backing assets,
 /// without revealing the asset list publicly.
 ///
-/// This is the bridge primitive between ZkVanguard's autonomous DeFi
+/// This is the bridge primitive between ZkWard's autonomous DeFi
 /// infrastructure and real-world asset (RWA) integration paths. A custodian
 /// signs `(portfolio_id, asset_list_hash, nonce, valid_until)` with their
 /// enrolled ed25519 key; the attestation lives as an owned object on the
@@ -97,7 +97,7 @@ module zkvanguard::rwa_custody_attestor {
     /// escrow for institutional flows).
     public struct CustodyAttestation has key, store {
         id: UID,
-        /// Portfolio identifier (e.g. ZkVanguard pool position ID, or any
+        /// Portfolio identifier (e.g. ZkWard pool position ID, or any
         /// counterparty-meaningful integer).
         portfolio_id: u64,
         /// Public key of the custodian who issued this attestation.

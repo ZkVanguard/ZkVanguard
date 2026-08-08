@@ -50,10 +50,10 @@ const EXPLORER_URLS: Record<number, string> = {
 };
 
 // Deterministic treasury proxy address for EVM chains
-const ZKVANGUARD_PDA_DOMAIN = 'ZKVANGUARD_PROXY_PDA_V1';
+const ZKWARD_PDA_DOMAIN = 'ZKWARD_PROXY_PDA_V2';
 
 async function deriveTreasuryProxyClient(): Promise<string> {
-  const derivationPath = `${ZKVANGUARD_PDA_DOMAIN}:treasury:pool-share:0`;
+  const derivationPath = `${ZKWARD_PDA_DOMAIN}:treasury:pool-share:0`;
   const encoder = new TextEncoder();
   const data = encoder.encode(derivationPath);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);

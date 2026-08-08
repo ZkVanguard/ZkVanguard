@@ -44,7 +44,7 @@ export function ActionApprovalModal({
 
     try {
       // Create detailed message for signature
-      const signatureMessage = `ZkVanguard - Manager Approval\n\n` +
+      const signatureMessage = `ZkWard - Manager Approval\n\n` +
         `Action: ${action.title}\n` +
         `Type: ${action.type.toUpperCase()}\n` +
         `Description: ${action.description}\n\n` +

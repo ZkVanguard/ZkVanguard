@@ -102,7 +102,7 @@ export function SettlementsPanel({ address: _address }: { address: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: amountInUnits.toString(),
-          description: `ZkVanguard Batch Settlement (${payments.length} payments)`,
+          description: `ZkWard Batch Settlement (${payments.length} payments)`,
           resource: '/api/settlements',
         }),
       });
