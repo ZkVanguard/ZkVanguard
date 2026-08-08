@@ -9,8 +9,10 @@
 
 // ─── Core Asset Types ────────────────────────────────────────────────────────
 
-/** The 4 pool assets managed by AI allocation */
-export type PoolAsset = 'BTC' | 'ETH' | 'SUI' | 'CRO';
+/** Pool assets managed by AI allocation. Enabled set is dynamic (env-driven
+ * via POOL_ASSETS_ENABLED — see lib/services/sui/cron/allocation.ts). Kept
+ * as `string` so new tickers rotate in without cascading type changes. */
+export type PoolAsset = string;
 
 export const POOL_ASSETS: readonly PoolAsset[] = ['BTC', 'ETH', 'SUI', 'CRO'] as const;
 

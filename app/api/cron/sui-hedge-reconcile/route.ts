@@ -160,9 +160,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<ReconcileR
       // Discord WARN fires per stale. Env gate STALE_HEDGE_AUTO_CLOSE=1
       // required for the actual close; log-only otherwise.
       try {
+        // Include ALL active hedges (not just notional_value >= 1). The
+        // notional filter previously hid orphan operational hedges (e.g.
+        // #5 SUI LONG at $0.53 sat 69 days invisible to this check). Age +
+        // max-age gates in StaleHedgeDetector are the actual staleness
+        // arbiter; the $1 filter was defense-in-depth that turned into
+        // defense-in-blindness.
         const activeRows = await query<{ id: number; asset: string; side: 'LONG' | 'SHORT'; created_at: Date; notional_value: number }>(
           `SELECT id, asset, side, created_at, notional_value FROM hedges
-           WHERE chain='sui' AND status='active' AND notional_value >= 1`
+           WHERE chain='sui' AND status='active'`
         );
         const activeHedges = activeRows.map((r) => ({
           id: r.id,

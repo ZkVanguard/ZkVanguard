@@ -18,7 +18,8 @@ import { logger } from '@/lib/utils/logger';
 // ============================================
 
 export type HederaNetwork = 'mainnet' | 'testnet';
-export type PoolAsset = 'BTC' | 'ETH' | 'SUI' | 'CRO';
+// Dynamic pool asset — see lib/types/bluefin-types.ts for the rationale.
+export type PoolAsset = string;
 
 export interface HederaSwapQuote {
   asset: PoolAsset;
