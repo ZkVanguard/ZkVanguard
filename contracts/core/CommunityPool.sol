@@ -115,8 +115,8 @@ interface IHedgeExecutor {
 }
 
 /**
- * @title ZkVanguard Community Pool
- * @author ZkVanguard Team
+ * @title ZkWard Community Pool
+ * @author ZkWard Team
  * @notice AI-managed community investment pool with share-based ownership
  * @dev ERC-4626-inspired vault for collective investment in BTC, ETH, SUI, CRO
  *
@@ -730,7 +730,7 @@ contract CommunityPool is
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * @notice Deposit USDC into ZkVanguard Community Pool and receive shares
+     * @notice Deposit USDC into ZkWard Community Pool and receive shares
      * @dev Deposits USDC and mints proportional pool shares to the caller.
      *      Uses ERC-4626 virtual offset to prevent share inflation attacks.
      *      Your shares represent ownership of the pool's diversified portfolio.
@@ -891,7 +891,7 @@ contract CommunityPool is
     }
 
     /**
-     * @notice Withdraw USDC from ZkVanguard Community Pool by burning shares
+     * @notice Withdraw USDC from ZkWard Community Pool by burning shares
      * @dev Burns your pool shares and returns proportional USDC value.
      *      Includes slippage protection to ensure minimum received amount.
      *      Performance fees are deducted if profit above high-water mark.

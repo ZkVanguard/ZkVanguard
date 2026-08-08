@@ -33,7 +33,7 @@ export interface ProxyPDAVerification {
 }
 
 // Domain separator for our PDA derivation (prevents cross-protocol attacks)
-const ZKVANGUARD_PDA_DOMAIN = 'ZKVANGUARD_PROXY_PDA_V1';
+const ZKWARD_PDA_DOMAIN = 'ZKWARD_PROXY_PDA_V2';
 
 /**
  * Derive a deterministic proxy address from owner wallet
@@ -52,7 +52,7 @@ export function deriveProxyPDA(
   const normalizedOwner = ownerAddress.toLowerCase();
   
   // Create derivation path: DOMAIN + owner + seed + nonce
-  const derivationPath = `${ZKVANGUARD_PDA_DOMAIN}:${normalizedOwner}:${seed}:${nonce}`;
+  const derivationPath = `${ZKWARD_PDA_DOMAIN}:${normalizedOwner}:${seed}:${nonce}`;
   
   // Generate deterministic proxy address using keccak256 (same as EVM)
   // This mirrors how CREATE2 and Solana PDAs work
@@ -83,7 +83,7 @@ export function deriveProxyPDA(
  * ALL deposits go to this one address — individual user tracking is via events.
  */
 export function deriveTreasuryProxy(seed: string = 'pool-share'): string {
-  const derivationPath = `${ZKVANGUARD_PDA_DOMAIN}:treasury:${seed}:0`;
+  const derivationPath = `${ZKWARD_PDA_DOMAIN}:treasury:${seed}:0`;
   const hash = crypto.createHash('sha256').update(derivationPath).digest('hex');
   return '0x' + hash.slice(-40);
 }
