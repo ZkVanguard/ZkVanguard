@@ -19,12 +19,19 @@
  */
 import { logger } from '@/lib/utils/logger';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
+import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 import { getActiveHedges, settleActiveHedges } from '@/lib/services/sui/cron/hedge-lifecycle';
 import {
   getAdminUsdcBalance,
   getAdminNonUsdcUsdValue,
   replenishAdminUsdc,
 } from '@/lib/services/sui/cron/admin-swaps';
+
+const SETTLE_SKIP_STREAK_KEY = 'hedge-settle:consecutive-skips';
+// After N consecutive residual-guard skips, escalate to KILL so the
+// operator gets a page. Not silent forever = not a deadlock. Chosen
+// to match ~1h of skips on a 30-min cron cadence (2 skips = 1h wall clock).
+const SETTLE_SKIP_ESCALATE_AT = Number(process.env.HEDGE_SETTLE_SKIP_ESCALATE_AT) || 4;
 
 export interface HedgeSettlementResult {
   settled: number;
@@ -115,23 +122,36 @@ export async function runStep65HedgeSettle(input: Step65Input): Promise<Step65Re
       const residualUsd = await getAdminNonUsdcUsdValue(network, pricesUSD);
       const REPLENISH_RESIDUAL_GUARD_USD = Number(process.env.HEDGE_SETTLE_RESIDUAL_GUARD_USD) || 1;
       if (residualUsd > REPLENISH_RESIDUAL_GUARD_USD && adminUsdcForSettlement < totalCollateralNeeded * 0.95) {
+        // Track consecutive-skip streak so the residual guard cannot become
+        // a silent permanent deadlock. Escalate to KILL after N skips.
+        const priorStreak = await getCronStateOr<number>(SETTLE_SKIP_STREAK_KEY, 0);
+        const streak = priorStreak + 1;
+        await setCronState(SETTLE_SKIP_STREAK_KEY, streak).catch(() => {});
+
         logger.warn('[SUI Cron] Skipping hedge settlement — replenish incomplete; would write fake losses', {
           residualUsd: residualUsd.toFixed(2),
           adminUsdc: adminUsdcForSettlement.toFixed(2),
           totalCollateralNeeded: totalCollateralNeeded.toFixed(2),
           guard: REPLENISH_RESIDUAL_GUARD_USD,
+          consecutiveSkips: streak,
         });
+        const escalate = streak >= SETTLE_SKIP_ESCALATE_AT;
         await notifyDiscord(
-          `Hedge settlement SKIPPED: admin still holds $${residualUsd.toFixed(2)} of non-USDC after replenish (USDC $${adminUsdcForSettlement.toFixed(2)} vs needed $${totalCollateralNeeded.toFixed(2)}). Likely aggregator route failure — would write fake losses if settled. Retry next tick.`,
-          'WARN',
-          { residualUsd: residualUsd.toFixed(2), adminUsdcForSettlement: adminUsdcForSettlement.toFixed(2), totalCollateralNeeded: totalCollateralNeeded.toFixed(2) },
+          escalate
+            ? `🚨 Hedge settlement STUCK ${streak}× in a row: admin holds $${residualUsd.toFixed(2)} non-USDC, USDC $${adminUsdcForSettlement.toFixed(2)} vs needed $${totalCollateralNeeded.toFixed(2)}. Aggregator route silently failing. MANUAL INTERVENTION: fund admin wallet with ~$${totalCollateralNeeded.toFixed(0)} USDC, or diagnose 7k route for the non-USDC leg.`
+            : `Hedge settlement SKIPPED (${streak}/${SETTLE_SKIP_ESCALATE_AT}): admin still holds $${residualUsd.toFixed(2)} of non-USDC after replenish (USDC $${adminUsdcForSettlement.toFixed(2)} vs needed $${totalCollateralNeeded.toFixed(2)}). Likely aggregator route failure — would write fake losses if settled. Retry next tick.`,
+          escalate ? 'KILL' : 'WARN',
+          { residualUsd: residualUsd.toFixed(2), adminUsdcForSettlement: adminUsdcForSettlement.toFixed(2), totalCollateralNeeded: totalCollateralNeeded.toFixed(2), consecutiveSkips: streak },
         );
         hedgeSettlement = {
           settled: 0, failed: 0, details: [],
           replenishment,
-          debug: { skippedReason: 'replenish-incomplete', residualUsd, adminUsdcForSettlement, totalCollateralNeeded },
+          debug: { skippedReason: 'replenish-incomplete', residualUsd, adminUsdcForSettlement, totalCollateralNeeded, consecutiveSkips: streak, escalated: escalate },
         };
       } else if (adminUsdcForSettlement > 0.001) {
+        // Successful path — clear the skip streak so a future recurrence
+        // starts counting from zero again.
+        await setCronState(SETTLE_SKIP_STREAK_KEY, 0).catch(() => {});
         const settlement = await settleActiveHedges(network);
         hedgeSettlement = {
           settled: settlement.settled,

@@ -55,10 +55,11 @@ export async function runStep66DriftRebalance(input: Step66Input): Promise<Step6
   let executionAllocations: Record<string, number> | undefined;
 
   if (!(process.env.SUI_POOL_ADMIN_KEY && !aboveSafetyCeiling && navUsd >= 15)) {
+    const emptyPerAsset: Record<string, number> = Object.fromEntries(POOL_ASSETS.map(a => [a, 0]));
     driftRebalance = {
-      preHoldings: { BTC: 0, ETH: 0, SUI: 0 },
-      targets: { BTC: 0, ETH: 0, SUI: 0 },
-      deltas: { BTC: 0, ETH: 0, SUI: 0 },
+      preHoldings: { ...emptyPerAsset },
+      targets: { ...emptyPerAsset },
+      deltas: { ...emptyPerAsset },
       sold: [], totalSoldUsdc: 0,
       skippedReason: !process.env.SUI_POOL_ADMIN_KEY
         ? 'no admin key'
@@ -162,10 +163,11 @@ export async function runStep66DriftRebalance(input: Step66Input): Promise<Step6
   } catch (driftErr) {
     const msg = driftErr instanceof Error ? driftErr.message : String(driftErr);
     logger.warn('[SUI Cron] Step 6.6 drift rebalance failed (non-critical)', { error: msg });
+    const emptyPerAsset: Record<string, number> = Object.fromEntries(POOL_ASSETS.map(a => [a, 0]));
     driftRebalance = {
-      preHoldings: { BTC: 0, ETH: 0, SUI: 0 },
-      targets: { BTC: 0, ETH: 0, SUI: 0 },
-      deltas: { BTC: 0, ETH: 0, SUI: 0 },
+      preHoldings: { ...emptyPerAsset },
+      targets: { ...emptyPerAsset },
+      deltas: { ...emptyPerAsset },
       sold: [], totalSoldUsdc: 0,
       skippedReason: `error: ${msg}`,
     };

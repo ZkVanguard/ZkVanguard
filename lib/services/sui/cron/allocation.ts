@@ -11,9 +11,26 @@ import { logger } from '@/lib/utils/logger';
 import { getMarketDataService } from '@/lib/services/market-data/RealMarketDataService';
 import { classifyVolatility, classifyTrend, scoreAsset, clampConfidence } from '@/lib/services/sui/cron/signal-gating';
 
-// 3 pool assets (SUI community pool — BTC, ETH, SUI only)
-export const POOL_ASSETS = ['BTC', 'ETH', 'SUI'] as const;
-export type PoolAsset = (typeof POOL_ASSETS)[number];
+// Pool assets — env-driven so we can rotate the enabled set per market
+// condition without touching code. Default matches the SUI USDC pool
+// launch composition (BTC, ETH, SUI). Comma-separated, case-insensitive,
+// dedup'd. Example: POOL_ASSETS_ENABLED="BTC,ETH,SUI,SOL,XRP".
+function readPoolAssets(): readonly string[] {
+  const raw = (process.env.POOL_ASSETS_ENABLED || '').trim();
+  if (!raw) return ['BTC', 'ETH', 'SUI'] as const;
+  const seen = new Set<string>();
+  const parsed: string[] = [];
+  for (const tok of raw.split(',')) {
+    const asset = tok.trim().toUpperCase();
+    if (!asset || asset === 'USDC') continue;
+    if (seen.has(asset)) continue;
+    seen.add(asset);
+    parsed.push(asset);
+  }
+  return parsed.length > 0 ? parsed : (['BTC', 'ETH', 'SUI'] as const);
+}
+export const POOL_ASSETS = readPoolAssets();
+export type PoolAsset = string;
 
 export interface AssetIndicator {
   asset: PoolAsset;
