@@ -21,6 +21,7 @@
 
 import type { FiveMinBTCSignal } from '../market-data/Polymarket5MinService';
 import type { AggregatedPrediction } from '../market-data/PredictionAggregatorService';
+import { kellyFractionLeveraged } from './quant-models';
 
 // ───────────────────────────────────────────────────────────────────────
 // Hard limits — these mirror on-chain Move contract guards.
@@ -224,6 +225,10 @@ export function computeSafeCollateralUsd(args: {
   currentHedgedUsd: number;
   /** Optional override: max ratio of TVL allowed (defaults to SIZING_LIMITS) */
   maxHedgeRatioOfTvl?: number;
+  /** Position leverage — enables leverage-corrected Kelly. Default 1 (unlevered)
+   *  matches the historical 1:1-payoff kellyFraction path so existing callers
+   *  are unchanged; pass explicit leverage to size properly for levered perps. */
+  leverage?: number;
 }): number {
   const { signal, poolTvlUsd, currentHedgedUsd } = args;
   if (!Number.isFinite(poolTvlUsd) || poolTvlUsd <= 0) return 0;
@@ -245,8 +250,19 @@ export function computeSafeCollateralUsd(args: {
 
   const maxHedgeRatio = args.maxHedgeRatioOfTvl ?? SIZING_LIMITS.MAX_HEDGE_RATIO_OF_TVL;
 
-  // 1. Kelly-derived size (from signal alone)
-  const kelly = kellyFraction(signal.probability);
+  // 1. Kelly-derived size (from signal alone).
+  //    - leverage=1 (default): use the classic 1:1-payoff kellyFraction so
+  //      existing callers get unchanged output.
+  //    - leverage>1: switch to leverage-corrected Kelly so the payoff-odds
+  //      term reflects the actual perp payout / adverse move to liq.
+  //    Both paths honour SIZING_LIMITS.KELLY_DIVISOR.
+  const kelly = args.leverage && args.leverage > 1
+    ? kellyFractionLeveraged({
+        probability: signal.probability,
+        leverage: args.leverage,
+        kellyDivisor: SIZING_LIMITS.KELLY_DIVISOR,
+      })
+    : kellyFraction(signal.probability);
   // Apply liquidity weight — illiquid signals shrink size
   const sizingFraction = kelly * signal.weight;
   const kellySize = poolTvlUsd * sizingFraction;
