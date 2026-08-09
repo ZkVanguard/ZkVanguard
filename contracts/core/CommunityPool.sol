@@ -120,7 +120,7 @@ interface IHedgeExecutor {
  * @notice AI-managed community investment pool with share-based ownership
  * @dev ERC-4626-inspired vault for collective investment in BTC, ETH, SUI, CRO
  *
- * @custom:security-contact security@zkvanguard.xyz
+ * @custom:security-contact security@zkward.com
  * @custom:oz-upgrades-from CommunityPool
  *
  * FEATURES:
