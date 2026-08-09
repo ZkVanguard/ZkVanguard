@@ -954,25 +954,64 @@ export class BluefinAggregatorService {
       const result = await suiClient.signAndExecuteTransaction({
         transaction: tx,
         signer: keypair,
-        options: { showEffects: true, showEvents: true },
+        options: { showEffects: true, showEvents: true, showBalanceChanges: true },
       });
 
       const success = result.effects?.status?.status === 'success';
+
+      // Read the ACTUAL delivered amount from balance changes rather than
+      // trusting quote.expectedAmountOut. Root cause of the 2026-08-08 bleed:
+      // some 7k routes returned success=true with the underlying router
+      // delivering $0 of the destination token. Previously we reported the
+      // QUOTED amount as if it were the fill, so admin USDC accounting
+      // silently drifted (thought it swapped $4.36, real balance $0).
+      let actualAmountOut = quote.expectedAmountOut;
+      let deliveredZero = false;
+      if (success) {
+        const changes = (result as unknown as {
+          balanceChanges?: Array<{
+            coinType: string;
+            amount: string;
+            owner: { AddressOwner?: string } | string;
+          }>;
+        }).balanceChanges;
+        if (Array.isArray(changes)) {
+          const received = changes.find(c => {
+            const ownerAddr = typeof c.owner === 'object' && c.owner?.AddressOwner
+              ? c.owner.AddressOwner : null;
+            return c.coinType === quote.toCoinType && ownerAddr === senderAddress;
+          });
+          if (received && !received.amount.startsWith('-')) {
+            actualAmountOut = received.amount;
+          } else {
+            // Tx succeeded but no positive balance change for toCoinType —
+            // the router delivered nothing. Treat as a swap failure.
+            actualAmountOut = '0';
+            deliveredZero = true;
+          }
+        }
+      }
 
       logger.info(`[BluefinAggregator] Swap executed: USDC → ${quote.asset}`, {
         txDigest: result.digest,
         success,
         amountIn: quote.amountIn,
         expectedOut: quote.expectedAmountOut,
+        actualOut: actualAmountOut,
+        deliveredZero,
       });
 
       return {
         asset: quote.asset,
-        success,
+        success: success && !deliveredZero,
         txDigest: result.digest,
         amountIn: quote.amountIn,
-        amountOut: quote.expectedAmountOut,
-        error: success ? undefined : result.effects?.status?.error,
+        amountOut: actualAmountOut,
+        error: !success
+          ? result.effects?.status?.error
+          : deliveredZero
+            ? `Tx success but router delivered 0 ${quote.toCoinType} (quote said ${quote.expectedAmountOut})`
+            : undefined,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
