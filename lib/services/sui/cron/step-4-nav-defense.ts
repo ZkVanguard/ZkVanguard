@@ -34,6 +34,7 @@ import { runPortfolioDriverTick } from '@/lib/services/sui/PortfolioDriver';
 import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
 import { attestExternalNav } from '@/lib/services/sui/cron/nav-oracle';
 import { replenishAdminUsdc } from '@/lib/services/sui/cron/admin-swaps';
+import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
 import { recordPoolNavSnapshot } from '@/lib/services/sui/cron/persistence';
 import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
@@ -119,11 +120,21 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
   {
     const tierLev = resolveLeverage(navUsd, undefined);
     const ratio = hedgeRatioForNav(navUsd);
-    const perpSpecs: Record<string, { minQuantity: number; stepSize: number }> = {
+    // Per-symbol minQty/stepSize. Known tickers baked in for zero-RPC path;
+    // anything else falls back to venue metadata (fetched below alongside OI).
+    // Kept the baked defaults because BluefinService.getMarketData is best-
+    // effort and can 429 — losing a hedgeability check to a rate-limit is
+    // a real bleed, so we cache what we know.
+    const KNOWN_PERP_SPECS: Record<string, { minQuantity: number; stepSize: number }> = {
       BTC: { minQuantity: 0.001, stepSize: 0.001 },
       ETH: { minQuantity: 0.01,  stepSize: 0.01  },
       SUI: { minQuantity: 1,     stepSize: 1     },
+      SOL: { minQuantity: 0.1,   stepSize: 0.1   },
     };
+    const perpSpecs: Record<string, { minQuantity: number; stepSize: number }> = {};
+    for (const asset of POOL_ASSETS) {
+      if (KNOWN_PERP_SPECS[asset]) perpSpecs[asset] = KNOWN_PERP_SPECS[asset];
+    }
     // Fetch BlueFin OI for the 3 perps so the clamp also enforces the
     // T3-B OI cap (5% of venue OI by default). At BlueFin's real ETH OI
     // ~$40k, any hedge > ~$2k would be rejected by T3-B at open time;
@@ -134,15 +145,24 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
     let openInterestUsd: Record<string, number> | undefined;
     try {
       const bfService = BluefinService.getInstance();
-      const oiResults = await Promise.all([
-        bfService.getMarketData('BTC-PERP').catch(() => null),
-        bfService.getMarketData('ETH-PERP').catch(() => null),
-        bfService.getMarketData('SUI-PERP').catch(() => null),
-      ]);
+      // Fetch OI + fill in unknown minQty for every enabled asset in one pass.
+      const marketFetches = await Promise.all(
+        POOL_ASSETS.map(a => bfService.getMarketData(`${a}-PERP`).catch(() => null).then(m => ({ asset: a, market: m }))),
+      );
       openInterestUsd = {};
-      if (oiResults[0]?.openInterestUsd) openInterestUsd.BTC = oiResults[0].openInterestUsd;
-      if (oiResults[1]?.openInterestUsd) openInterestUsd.ETH = oiResults[1].openInterestUsd;
-      if (oiResults[2]?.openInterestUsd) openInterestUsd.SUI = oiResults[2].openInterestUsd;
+      for (const { asset, market } of marketFetches) {
+        if (!market) continue;
+        if (market.openInterestUsd) openInterestUsd[asset] = market.openInterestUsd;
+        // Fill perpSpecs for tickers not in KNOWN_PERP_SPECS. Guard against
+        // undefined venue fields (minQty schema is best-effort per exchange).
+        if (!perpSpecs[asset]) {
+          const mq = Number((market as unknown as { minQuantity?: number; stepSize?: number }).minQuantity);
+          const ss = Number((market as unknown as { minQuantity?: number; stepSize?: number }).stepSize);
+          if (Number.isFinite(mq) && mq > 0) {
+            perpSpecs[asset] = { minQuantity: mq, stepSize: Number.isFinite(ss) && ss > 0 ? ss : mq };
+          }
+        }
+      }
     } catch {
       // best-effort — fall back to minQty-only clamp
     }
@@ -281,12 +301,18 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
           // Build a sandbox-like snapshot from real holdings for the pure driver.
           // Derive per-asset spot USD from the live allocation × NAV. poolStats
           // is already available in this scope from the earlier getPoolStats call.
-          const liveAlloc = poolStats.allocation ?? { BTC: 0, ETH: 0, SUI: 0 };
-          const spotUsd: Record<string, number> = {
-            wBTC: navUsd * ((liveAlloc.BTC || 0) / 100),
-            wETH: navUsd * ((liveAlloc.ETH || 0) / 100),
-            SUI:  navUsd * ((liveAlloc.SUI || 0) / 100),
-          };
+          const liveAlloc = (poolStats.allocation ?? {}) as unknown as Record<string, number>;
+          // Dynamic: iterate the enabled asset set instead of hardcoding
+          // BTC/ETH/SUI. Wrapped tickers (wBTC/wETH) still use the wrapped
+          // key so PortfolioDriver's SPOT_TO_ASSET map resolves cleanly;
+          // everything else uses the ticker as its own spot key.
+          const WRAP_KEY: Record<string, string> = { BTC: 'wBTC', ETH: 'wETH' };
+          const spotUsd: Record<string, number> = {};
+          for (const asset of POOL_ASSETS) {
+            const pct = liveAlloc[asset as keyof typeof liveAlloc] || 0;
+            const spotKey = WRAP_KEY[asset] ?? asset;
+            spotUsd[spotKey] = navUsd * (Number(pct) / 100);
+          }
           const spotSum = Object.values(spotUsd).reduce((s, v) => s + v, 0);
           const snapshot = {
             idleUsdc: Math.max(0, navUsd - spotSum),

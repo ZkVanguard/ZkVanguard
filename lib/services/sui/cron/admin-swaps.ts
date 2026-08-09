@@ -152,7 +152,15 @@ export async function replenishAdminUsdc(
           const swapResult = await aggregator.executeSwap(reverseQuote, slippage);
           const usdcReceived = Number(swapResult.amountOut || '0') / 1e6;
 
-          if (swapResult.success) {
+          // Silent-success guard: aggregators occasionally return success=true
+          // with amountOut=0 (route quoted but delivered nothing, or dust
+          // rounded to 0). Without this, the caller sees "swap ok" but pool
+          // capital sat still — the 2026-08-08 bleed root cause. Require at
+          // least half the target OR $0.10, whichever is smaller, to count.
+          const minAcceptableOut = Math.min(usdcTarget * 0.5, 0.10);
+          const isSilentZero = swapResult.success && usdcReceived < minAcceptableOut;
+
+          if (swapResult.success && !isSilentZero) {
             totalSwapped += usdcReceived;
             remainingShortfall -= usdcReceived;
             details.push({
@@ -166,6 +174,19 @@ export async function replenishAdminUsdc(
               slippageUsed: slippage,
             });
             await new Promise(r => setTimeout(r, 2500));
+            cleared = true;
+            break;
+          }
+
+          if (isSilentZero) {
+            const errMsg = `silent-zero: success=true but amountOut=${usdcReceived.toFixed(6)} (target ${usdcTarget.toFixed(4)}, tx=${swapResult.txDigest})`;
+            details.push({ asset: c.asset, amountSwapped: 0, error: errMsg });
+            logger.error(`[SUI Cron] ${c.asset} → USDC SILENT-ZERO — treating as failure`, {
+              txDigest: swapResult.txDigest,
+              usdcTarget: usdcTarget.toFixed(4),
+              usdcReceived: usdcReceived.toFixed(6),
+              slippageUsed: slippage,
+            });
             cleared = true;
             break;
           }
@@ -252,7 +273,10 @@ export async function getAdminAssetValuesUsd(
   network: 'mainnet' | 'testnet',
   pricesUSD: Record<string, number>,
 ): Promise<Record<PoolAsset, number>> {
-  const empty: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+  // Init one zero-slot per enabled asset (POOL_ASSETS is env-driven).
+  const empty: Record<PoolAsset, number> = Object.fromEntries(
+    POOL_ASSETS.map(a => [a, 0]),
+  ) as Record<PoolAsset, number>;
   const adminKey = (process.env.SUI_POOL_ADMIN_KEY || process.env.BLUEFIN_PRIVATE_KEY || '').trim();
   if (!adminKey) return empty;
   try {
@@ -265,7 +289,9 @@ export async function getAdminAssetValuesUsd(
     const suiClient = createFailoverSuiClient(network);
     const aggregator = getBluefinAggregatorService(network);
     const allBalances = await suiClient.getAllBalances({ owner: address });
-    const result: Record<PoolAsset, number> = { BTC: 0, ETH: 0, SUI: 0 };
+    const result: Record<PoolAsset, number> = Object.fromEntries(
+      POOL_ASSETS.map(a => [a, 0]),
+    ) as Record<PoolAsset, number>;
     // Build canonical lookup of {canonicalCoinType → PoolAsset} once.
     const canonMap = new Map<string, PoolAsset>();
     for (const a of POOL_ASSETS) {
@@ -323,8 +349,17 @@ export async function sellAssetForUsdc(
     }
     const swapResult = await aggregator.executeSwap(quote, 0.02); // 2% slippage tolerance
     const usdcReceived = Number(swapResult.amountOut || '0') / 1e6;
-    if (swapResult.success) {
+    // Same silent-zero guard as replenishAdminUsdc — success=true with
+    // amountOut≈0 is the primary bleed source (2026-08-08).
+    const minAcceptableOut = Math.min(targetUsdc * 0.5, 0.10);
+    if (swapResult.success && usdcReceived >= minAcceptableOut) {
       return { swapped: usdcReceived, txDigest: swapResult.txDigest };
+    }
+    if (swapResult.success) {
+      return {
+        swapped: 0,
+        error: `silent-zero: amountOut=${usdcReceived.toFixed(6)} < min=${minAcceptableOut.toFixed(6)} (tx=${swapResult.txDigest})`,
+      };
     }
     return { swapped: 0, error: swapResult.error };
   } catch (err) {

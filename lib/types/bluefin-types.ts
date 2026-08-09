@@ -58,7 +58,12 @@ export const ASSET_TO_COIN_KEY: Record<string, string> = {
 // ============================================
 
 export type NetworkType = 'mainnet' | 'testnet';
-export type PoolAsset = 'BTC' | 'ETH' | 'SUI' | 'CRO';
+// Pool assets are dynamic — enabled set comes from POOL_ASSETS_ENABLED env
+// (see lib/services/sui/cron/allocation.ts). Kept as `string` so new tickers
+// can be added at deploy time without a cascading type change. Coin-type /
+// decimals / minQty lookups fall back to venue metadata for unknown tickers
+// (see fetchPerpMinQty in BluefinService).
+export type PoolAsset = string;
 
 export interface SwapQuoteResult {
   asset: PoolAsset;
