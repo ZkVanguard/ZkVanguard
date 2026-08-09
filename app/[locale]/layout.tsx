@@ -7,6 +7,7 @@ import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
 import { CookieConsent } from '../../components/CookieConsent';
 import { PwaProvider } from '../../components/PwaProvider';
+import { LegacyDomainBanner } from '../../components/LegacyDomainBanner';
 import { locales } from '../../i18n/request';
 import { IntlProvider } from '../../components/IntlProvider';
 
@@ -120,6 +121,7 @@ export default async function LocaleLayout(
         <IntlProvider locale={locale}>
           <Providers>
             <div className="flex flex-col min-h-screen">
+              <LegacyDomainBanner />
               <Navbar />
               <main className="flex-1">
                 {children}
