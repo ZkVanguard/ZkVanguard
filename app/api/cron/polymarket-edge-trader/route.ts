@@ -55,6 +55,7 @@ import { logger } from '@/lib/utils/logger';
 import { verifyCronRequest } from '@/lib/qstash';
 import { errMsg } from '@/lib/utils/error-handler';
 import { computeEdgeStake } from '@/lib/services/trading/edge-sizing';
+import { expectedValueUsd } from '@/lib/services/hedging/quant-models';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { envFlag } from '@/lib/utils/env-flag';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
@@ -111,6 +112,14 @@ const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.30);
 // At free=$500 with 0.20: effective base = max($5, $100) = $100.
 const DYNAMIC_BASE_PCT = Number(process.env.POLYMARKET_EDGE_DYNAMIC_BASE_PCT || 0.20);
 const LEVERAGE = Number(process.env.POLYMARKET_EDGE_LEVERAGE || 3);
+// Funding-adjusted EV gate: assumed round-trip fees + funding cost that a
+// trade must beat via edge×payoff before we open it. Prevents the wash-trade
+// pattern where a marginal signal opens, pays 2×fees, and closes flat.
+// Defaults match observed BlueFin taker 5 bps × 2 = 10 bps + 3 bps slippage.
+const EV_FUNDING_APR = Number(process.env.POLYMARKET_EDGE_FUNDING_APR || 0.11);
+const EV_HOLDING_HOURS = Number(process.env.POLYMARKET_EDGE_HOLDING_HOURS || 0.5);
+const EV_FEE_BPS_ROUND_TRIP = Number(process.env.POLYMARKET_EDGE_FEE_BPS_RT || 13);
+const EV_MIN_USD = Number(process.env.POLYMARKET_EDGE_MIN_EV_USD || 0);
 const MAX_CONSECUTIVE_LOSSES = Number(process.env.POLYMARKET_EDGE_MAX_CONSECUTIVE_LOSSES || 5);
 const MAX_DRAWDOWN_PCT = Number(process.env.POLYMARKET_EDGE_MAX_DRAWDOWN_PCT || 0.30);
 const HALT_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -1172,6 +1181,40 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         stats: safeStats,
         daily,
         reason: `risk-gate: ${risk.reason}`,
+      });
+    }
+
+    // ── Funding-adjusted EV gate ─────────────────────────────────────
+    // Kelly + calibration only check that p > 0.5 with edge margin. But
+    // a 55% edge held 30 min at 11% APR funding + 13 bps round-trip fees
+    // on a 3× levered notional is often NEGATIVE-EV once you subtract
+    // costs. Skipping these is exactly what prevented the wash-trade
+    // pattern from being visible before (100% phantom rate 2026-08-08).
+    // Payoff odds = 1 for symmetric perp bet (win or lose 1× stake in
+    // notional terms); leverage is captured via notionalUsd (= stake × L).
+    const evP = Math.min(0.999, Math.max(0.001, prediction.confidence / 100));
+    const ev = expectedValueUsd({
+      probability: evP,
+      payoffOdds: 1,
+      notionalUsd,
+      holdingHours: EV_HOLDING_HOURS,
+      fundingRateApr: EV_FUNDING_APR,
+      feeBpsRoundTrip: EV_FEE_BPS_ROUND_TRIP,
+    });
+    if (ev.evUsd < EV_MIN_USD) {
+      const evReason = `ev-gate blocked ${asset} ${side}: EV=$${ev.evUsd.toFixed(3)} < min $${EV_MIN_USD.toFixed(2)} ` +
+        `(edge=$${ev.edgeUsd.toFixed(3)} funding=$${ev.fundingCostUsd.toFixed(3)} fees=$${ev.feeCostUsd.toFixed(3)}, ` +
+        `p=${(evP * 100).toFixed(1)}% notional=$${notionalUsd.toFixed(2)} hold=${EV_HOLDING_HOURS}h)`;
+      logger.warn('[PolymarketEdge] EV gate blocked entry', { reason: evReason, ev });
+      await recordSkip('no-edge', evReason);
+      return NextResponse.json({
+        success: true,
+        ranAt,
+        attempted: true,
+        action: 'no-edge',
+        stats: safeStats,
+        daily,
+        reason: `ev-gate: ${evReason}`,
       });
     }
 
