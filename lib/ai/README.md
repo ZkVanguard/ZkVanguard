@@ -89,15 +89,6 @@ const hedges = await aiService.generateHedgeRecommendations(portfolio, riskProfi
 
 ### API Routes
 
-#### Portfolio Analysis
-```bash
-POST /api/agents/portfolio/analyze
-{
-  "address": "0x...",
-  "portfolioData": { ... }
-}
-```
-
 #### Risk Assessment
 ```bash
 POST /api/agents/risk/assess
@@ -151,11 +142,6 @@ POST /api/agents/hedging/recommend
    - AI-generated strategies
    - Action planning
    - Expected reduction estimates
-
-3. **Portfolio Agent** (`app/api/agents/portfolio/analyze/route.ts`)
-   - Comprehensive analysis
-   - Asset breakdown
-   - Health scoring
 
 ## Fallback Logic
 
