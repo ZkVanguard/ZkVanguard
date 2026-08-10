@@ -166,11 +166,9 @@ export class SuiService {
    */
   async getTransaction(digest: string): Promise<unknown> {
     try {
-      // Migrated 2026-07-29 from raw `sui_getTransactionBlock` JSON-RPC
-      // to SuiClient — public fullnode deprecated the raw method name.
-      const { SuiClient } = await import('@mysten/sui/client');
-      const rpcUrl = SUI_NETWORKS[this.network].rpcUrl;
-      const client = new SuiClient({ url: rpcUrl });
+      // Failover transport handles provider selection + rotation.
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+      const client = createFailoverSuiClient(this.network as 'mainnet' | 'testnet');
       return await client.getTransactionBlock({
         digest,
         options: { showEffects: true, showInput: true },

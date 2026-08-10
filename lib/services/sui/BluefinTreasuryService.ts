@@ -21,12 +21,11 @@ import { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { logger } from '@/lib/utils/logger';
+import { createFailoverSuiClient } from '@/lib/services/sui/sui-failover-transport';
 
 // Native USDC on SUI Mainnet (Circle), 6 decimals.
 const NATIVE_USDC_TYPE_MAINNET =
   '0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC';
-
-const SUI_RPC_MAINNET = 'https://fullnode.mainnet.sui.io:443';
 
 // Bluefin V2 mainnet contract IDs (verified on-chain). The /v1/exchange/info
 // endpoint exposes these too — we fetch when reachable and fall back to these
@@ -92,7 +91,7 @@ export class BluefinTreasuryService {
 
       this.keypair = Ed25519Keypair.fromSecretKey(secretKey);
       this.walletAddress = this.keypair.getPublicKey().toSuiAddress();
-      this.suiClient = new SuiClient({ url: SUI_RPC_MAINNET });
+      this.suiClient = createFailoverSuiClient('mainnet');
 
       logger.info('[BluefinTreasury] initialized', { walletAddress: this.walletAddress });
     })().catch((e) => {
