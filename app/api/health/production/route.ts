@@ -187,6 +187,37 @@ async function checkPhantomRate(): Promise<Component & { ratePct?: number; total
   }
 }
 
+/**
+ * Reconstructed-orphan rate — catches silent createHedge failures.
+ *
+ * bluefin-db-reconcile writes `order_id = reconstructed_*` rows when it
+ * finds a live BlueFin position with no matching DB row. Post-2026-08-10
+ * fix, the trader writes its DB row on open, so orphan adoption should
+ * be rare (only when trader-side createHedge genuinely fails after
+ * openHedge succeeds). A spike means the trader-side DB write is broken
+ * again — same class of silent failure that hid the $0-PnL bug for a
+ * month. checkPhantomRate excludes reconstructed rows by design (they
+ * legitimately lack fill data), so without this check the regression
+ * is invisible.
+ */
+async function checkOrphanAdoptionRate(): Promise<Component & { orphansLastHour?: number }> {
+  try {
+    const r = await query<{ n: string }>(
+      `SELECT COUNT(*)::text as n
+       FROM hedges
+       WHERE chain = 'sui'
+         AND order_id LIKE 'reconstructed_%'
+         AND created_at > NOW() - INTERVAL '1 hour'`,
+    );
+    const n = Number(r[0]?.n ?? 0);
+    if (n >= 10) return { status: 'down', orphansLastHour: n, detail: `${n} orphan adoptions in 1h — trader createHedge broken; every trade losing entry_price + PnL fidelity` };
+    if (n >= 3) return { status: 'warn', orphansLastHour: n, detail: `${n} orphan adoptions in 1h — trader-side createHedge may be failing` };
+    return { status: 'ok', orphansLastHour: n };
+  } catch (e: any) {
+    return { status: 'warn', error: e?.message?.slice(0, 100) };
+  }
+}
+
 async function checkNavFreshness(): Promise<Component & { navUsd?: number }> {
   try {
     // Filter to chain='sui' — pool-nav-monitor also writes Cronos $0 snapshots
@@ -390,8 +421,9 @@ export async function GET(req: NextRequest) {
   // bulletproof drawdown test uses as its meta-invariant. > 1% warns;
   // > 5% is down (exchange fills unreliable → auto-halt trader gate).
   const phantomRate = await withCheckTimeout(checkPhantomRate(), 'phantomRate');
+  const orphanRate = await withCheckTimeout(checkOrphanAdoptionRate(), 'orphanRate');
 
-  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate };
+  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate, orphanRate };
   const overall = worstStatus(Object.values(components));
 
   const body = {
