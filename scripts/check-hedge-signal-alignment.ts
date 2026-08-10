@@ -170,12 +170,17 @@ async function main() {
   // ── 4. ALIGNMENT VERDICT ────────────────────────────────────
   log('\n── 4. ALIGNMENT VERDICT (per-asset) ──');
   {
-    // Operational $0.01 rebalance hedges (per SuiHedgeReconciler doc) carry
-    // collateral well below $1 and aren't directional bets — exclude them.
+    // Operational transport hedges (pool→admin USDC moves for spot swaps)
+    // are always 1x leverage — real directional hedges are ≥3x. The old
+    // <$1 filter missed transports like the 2026-07-28 BTC LONG at $6.07
+    // collat 1x that flagged as "misaligned" every tick despite being a
+    // capability-transport entry, not a bet.
     const OPERATIONAL_COLLAT_THRESHOLD_USD = 1;
-    const realOnChain = activeHedgesOnChain.filter(h => onChainCollatUsd(h.fields) >= OPERATIONAL_COLLAT_THRESHOLD_USD);
+    const isOperational = (f: any) =>
+      onChainCollatUsd(f) < OPERATIONAL_COLLAT_THRESHOLD_USD || Number(f?.leverage || 1) <= 1;
+    const realOnChain = activeHedgesOnChain.filter(h => !isOperational(h.fields));
     const skippedOps = activeHedgesOnChain.length - realOnChain.length;
-    if (skippedOps > 0) log(`  ${color(`(skipping ${skippedOps} on-chain operational <$1 collateral entries — not directional)`, 'dim')}`);
+    if (skippedOps > 0) log(`  ${color(`(skipping ${skippedOps} on-chain operational entries — 1x leverage or <$1 collat, not directional)`, 'dim')}`);
     const allActive = [
       ...realOnChain.map(h => ({
         src: 'on-chain', asset: ['BTC','ETH','SUI','CRO'][Number(h.fields?.pair_index)] ?? '?',
