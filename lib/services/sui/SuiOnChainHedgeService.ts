@@ -327,8 +327,8 @@ export class SuiOnChainHedgeService {
     try {
       // Migrated 2026-07-29 from raw `sui_getObject` JSON-RPC to
       // SuiClient — public fullnode deprecated the raw method name.
-      const { SuiClient } = await import('@mysten/sui/client');
-      const client = new SuiClient({ url: this.config.rpcUrl });
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+      const client = createFailoverSuiClient(this.network as 'mainnet' | 'testnet');
       const res = await client.getObject({
         id: hedgeId,
         options: { showContent: true, showType: true },
@@ -368,8 +368,8 @@ export class SuiOnChainHedgeService {
     if (!proxyId.startsWith('0x')) return null;
     try {
       // Migrated 2026-07-29 to SuiClient (see getHedgePosition above).
-      const { SuiClient } = await import('@mysten/sui/client');
-      const client = new SuiClient({ url: this.config.rpcUrl });
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+      const client = createFailoverSuiClient(this.network as 'mainnet' | 'testnet');
       const res = await client.getObject({
         id: proxyId,
         options: { showContent: true },

@@ -79,13 +79,13 @@ async function readOnChainHedges(): Promise<OnChainHedge[]> {
     throw new Error('No SUI pool state ID configured');
   }
 
-  const rpcUrl = env('NEXT_PUBLIC_SUI_RPC_URL', 'https://fullnode.mainnet.sui.io:443');
-
-  // Migrated 2026-07-29 from raw `sui_getObject` JSON-RPC to SuiClient
-  // — public fullnode deprecated the raw method name (dashboard was
-  // reading pool NAV = $0 as a result). See commit 61e889cb.
-  const { SuiClient } = await import('@mysten/sui/client');
-  const client = new SuiClient({ url: rpcUrl });
+  // Failover transport handles all RPC provider selection + rotation
+  // internally; NEXT_PUBLIC_SUI_RPC_URL is no longer read here (the
+  // hardcoded default was the dead sui.io fullnode, see memory
+  // `project_sui_public_rpc_dead_2026_07_29`).
+  const network = (process.env.SUI_NETWORK || 'mainnet').trim() as 'mainnet' | 'testnet';
+  const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+  const client = createFailoverSuiClient(network);
   const objectPromise = client.getObject({
     id: poolStateId,
     options: { showContent: true, showType: true },

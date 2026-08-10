@@ -401,8 +401,8 @@ export class SuiCommunityPoolService {
           // Migrated 2026-07-29 from raw `sui_multiGetObjects` JSON-RPC
           // to SuiClient — public fullnode deprecated the raw method
           // name (dashboard was reading $0 as a result).
-          const { SuiClient } = await import('@mysten/sui/client');
-          const rpcClient = new SuiClient({ url: this.config.rpcUrl });
+          const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+          const rpcClient = createFailoverSuiClient(this.network);
 
           for (let i = 0; i < objectIds.length; i += BATCH_SIZE) {
             const batchIds = objectIds.slice(i, i + BATCH_SIZE);
@@ -755,8 +755,8 @@ export class SuiCommunityPoolService {
     // 2026-07-29 (dashboard was showing $0 as a result); the SDK
     // dispatches to whatever method is current under the hood.
     try {
-      const { SuiClient } = await import('@mysten/sui/client');
-      const client = new SuiClient({ url: this.config.rpcUrl });
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+      const client = createFailoverSuiClient(this.network);
       const res = await client.getObject({
         id: objectId,
         options: { showContent: true },
