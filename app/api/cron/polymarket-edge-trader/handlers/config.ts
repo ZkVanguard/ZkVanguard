@@ -1,0 +1,65 @@
+/**
+ * Env-driven config + cron_state keys for the polymarket-edge-trader.
+ *
+ * Extracted from route.ts on 2026-08-10. Keep all trader-side tunables
+ * discoverable from ONE file so operators grepping for a knob don't have
+ * to hunt across the split.
+ */
+import { CronKeys } from '@/lib/db/cron-state';
+import {
+  DEFAULT_TRAILING_STOP_CONFIG,
+} from '@/lib/services/trading/trailing-stop';
+
+// ── Signal + risk thresholds ─────────────────────────────────────────────
+// Defaults lowered 2026-06-22 from 60/60 → 55/50. Trader had been returning
+// action='no-edge' every 5-min tick because BTC/ETH 5-min binaries rarely
+// hit BOTH thresholds at 60 simultaneously in normal market regimes.
+export const MIN_CONFIDENCE = Number(process.env.POLYMARKET_EDGE_MIN_CONFIDENCE || 55);
+export const MIN_CONSENSUS = Number(process.env.POLYMARKET_EDGE_MIN_CONSENSUS || 50);
+export const MIN_FREE_COLLATERAL_USD = Number(process.env.POLYMARKET_EDGE_MIN_COLLATERAL || 15);
+
+// ── Stake sizing ─────────────────────────────────────────────────────────
+// Base $5. Reverted 2026-07-14 after Lever A ($15) hit the risk-gate
+// 50%-capacity cap. Meaningful stake growth requires either growing pool
+// free collateral or bumping the risk-gate cap.
+export const BASE_STAKE_USD = Number(process.env.POLYMARKET_EDGE_BASE_STAKE_USD || 5);
+export const MAX_STAKE_USD = Number(process.env.POLYMARKET_EDGE_MAX_STAKE_USD || 500);
+export const STAKE_PCT_OF_FREE = Number(process.env.POLYMARKET_EDGE_STAKE_PCT || 0.30);
+// Autonomous exponential-growth driver — see original inline comment for the
+// full ratio table.
+export const DYNAMIC_BASE_PCT = Number(process.env.POLYMARKET_EDGE_DYNAMIC_BASE_PCT || 0.20);
+export const LEVERAGE = Number(process.env.POLYMARKET_EDGE_LEVERAGE || 3);
+
+// ── Funding-adjusted EV gate ─────────────────────────────────────────────
+export const EV_FUNDING_APR = Number(process.env.POLYMARKET_EDGE_FUNDING_APR || 0.11);
+export const EV_HOLDING_HOURS = Number(process.env.POLYMARKET_EDGE_HOLDING_HOURS || 0.5);
+export const EV_FEE_BPS_ROUND_TRIP = Number(process.env.POLYMARKET_EDGE_FEE_BPS_RT || 13);
+export const EV_MIN_USD = Number(process.env.POLYMARKET_EDGE_MIN_EV_USD || 0);
+
+// ── Kill switch + slippage ───────────────────────────────────────────────
+export const MAX_CONSECUTIVE_LOSSES = Number(process.env.POLYMARKET_EDGE_MAX_CONSECUTIVE_LOSSES || 5);
+export const MAX_DRAWDOWN_PCT = Number(process.env.POLYMARKET_EDGE_MAX_DRAWDOWN_PCT || 0.30);
+export const HALT_DURATION_MS = 24 * 60 * 60 * 1000;
+export const MAX_SLIPPAGE_BPS = Number(process.env.POLYMARKET_EDGE_MAX_SLIPPAGE_BPS || 30);
+export const DAILY_LOSS_CAP_USD = Number(
+  process.env.POLYMARKET_EDGE_DAILY_LOSS_CAP_USD || -2 * BASE_STAKE_USD,
+);
+
+// ── Trailing stop + fee-bleed defer (resolved from trailing-stop config) ─
+export const STOP_LOSS_BPS = DEFAULT_TRAILING_STOP_CONFIG.stopLossBps;
+export const FEE_BREAKEVEN_BPS = DEFAULT_TRAILING_STOP_CONFIG.feeBreakevenBps;
+export const DEFER_EXTEND_MS = DEFAULT_TRAILING_STOP_CONFIG.deferExtendMs;
+
+// ── Signal-flip exit ─────────────────────────────────────────────────────
+// Tightened from 50% → 30% so signal degradation triggers exit sooner.
+export const SIGNAL_FLIP_SCORE_COLLAPSE = Number(
+  process.env.POLYMARKET_EDGE_SIGNAL_FLIP_SCORE_COLLAPSE || 0.7,
+);
+
+// ── Cron state keys ──────────────────────────────────────────────────────
+export const KEY_ACTIVE = 'polymarket-edge:active-trade';
+export const KEY_STATS = 'polymarket-edge:stats';
+export const KEY_HALTED_UNTIL = CronKeys.polymarketEdgeHaltedUntil;
+export const KEY_DAILY = 'polymarket-edge:daily';
+export const KEY_LAST_SKIP = 'polymarket-edge:last-skip';
+export const KEY_NOEDGE_STREAK = 'polymarket-edge:noedge-streak';
