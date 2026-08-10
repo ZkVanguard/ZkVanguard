@@ -620,8 +620,8 @@ export class SuiPrivateHedgeService {
     if (!this.isMainnetReady() && this.network === 'mainnet') return { exists: false };
     try {
       // Migrated 2026-07-29 to SuiClient (see commit 61e889cb).
-      const { SuiClient } = await import('@mysten/sui/client');
-      const client = new SuiClient({ url: this.config.rpcUrl });
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+      const client = createFailoverSuiClient(this.network as 'mainnet' | 'testnet');
       const res = await client.getObject({
         id: this.config.zkHedgeCommitmentState,
         options: { showContent: true },

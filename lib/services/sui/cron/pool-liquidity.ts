@@ -170,17 +170,13 @@ async function openMicroHedgeAndGetId(
   try {
     const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
     const { Transaction } = await import('@mysten/sui/transactions');
-    const { SuiClient, getFullnodeUrl } = await import('@mysten/sui/client');
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
     const keypair = adminKey.startsWith('suiprivkey')
       ? Ed25519Keypair.fromSecretKey(adminKey)
       : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
 
-    const rpcUrl =
-      network === 'mainnet'
-        ? (process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet')).trim()
-        : (process.env.SUI_TESTNET_RPC || getFullnodeUrl('testnet')).trim();
-    const suiClient = new SuiClient({ url: rpcUrl });
+    const suiClient = createFailoverSuiClient(network);
 
     const amountRaw = Math.max(1, Math.floor(collateralUsdc * 1e6));
     const usdcType = SUI_USDC_COIN_TYPE[network];

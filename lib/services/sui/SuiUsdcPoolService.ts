@@ -201,8 +201,8 @@ export class SuiUsdcPoolService {
                 ? Ed25519Keypair.fromSecretKey(adminKey)
                 : Ed25519Keypair.fromSecretKey(Buffer.from(adminKey.replace(/^0x/, ''), 'hex'));
               const addr = kp.getPublicKey().toSuiAddress();
-              const rpcUrl = this.config.rpcUrl;
-              const tmpClient = new SuiClient({ url: rpcUrl });
+              const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+              const tmpClient = createFailoverSuiClient(this.network);
               const allBal = await tmpClient.getAllBalances({ owner: addr });
               const mds = getMarketDataService();
 
@@ -618,8 +618,8 @@ export class SuiUsdcPoolService {
     // handles the migration for us — one place to update if it happens
     // again instead of two hand-rolled fetches.
     try {
-      const { SuiClient } = await import('@mysten/sui/client');
-      const client = new SuiClient({ url: this.config.rpcUrl });
+      const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+      const client = createFailoverSuiClient(this.network);
       const res = await client.getObject({
         id: objectId,
         options: { showContent: true },
