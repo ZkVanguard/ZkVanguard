@@ -98,7 +98,7 @@ async function readOnChainSuiHedges(): Promise<OnChainSuiState> {
     // pool → admin wallet by calling open_hedge with tiny collateral
     // (typically 0.01 USDC, pair_index=0/BTC, is_long=true). These are not
     // real risk hedges and should never surface in the user-facing panel.
-    // Real auto-hedges use MIN_HEDGE_SIZE_USD=$25 (see SuiAutoHedgingAdapter).
+    // Real auto-hedges use collateral >= 1 USDC.
     const MIN_DISPLAYABLE_COLLATERAL_USDC = 1_000_000; // 1 USDC, raw 6-dec
     const activeHedges = allActiveHedges.filter((h) => {
       const c = Number(h?.fields?.collateral_usdc || 0);

@@ -5,11 +5,10 @@
  * 1. BluefinAggregatorService - Swap quotes, rebalance, wallet check
  * 2. SuiOnChainHedgeService - Contract reads, commitment generation, tx builders
  * 3. SuiCommunityPoolService - Pool stats, tx builders, payment routing
- * 4. SuiAutoHedgingAdapter  - Lifecycle, config, risk assessment
- * 5. SuiPrivateHedgeService - Commitment scheme, proofs, stealth deposits
- * 6. SuiExplorerService     - Balances, transactions, objects, checkpoints
- * 7. SuiPortfolioManager    - Init, positions, risk metrics, hedging
- * 8. USDC Pool API          - user-position, record-deposit, record-withdraw
+ * 4. SuiPrivateHedgeService - Commitment scheme, proofs, stealth deposits
+ * 5. SuiExplorerService     - Balances, transactions, objects, checkpoints
+ * 6. SuiPortfolioManager    - Init, positions, risk metrics, hedging
+ * 7. USDC Pool API          - user-position, record-deposit, record-withdraw
  * 
  * Run: npx tsx scripts/test-sui-services-e2e.ts
  */
@@ -680,83 +679,6 @@ async function testSuiPrivateHedgeService() {
 }
 
 // ============================================================
-// TEST 7: SuiAutoHedgingAdapter
-// ============================================================
-async function testSuiAutoHedgingAdapter() {
-  console.log('\n═══ TEST 7: SuiAutoHedgingAdapter ═══');
-
-  const { SuiAutoHedgingAdapter } = await import('../lib/services/sui/SuiAutoHedgingAdapter');
-  const adapter = new SuiAutoHedgingAdapter();
-
-  // Status before starting
-  try {
-    const status = adapter.getStatus();
-    if (!status.isRunning && status.enabledAddresses.length === 0 && status.activeHedges === 0) {
-      ok('Initial status', 'isRunning=false, no addresses, no hedges');
-    } else {
-      fail('Initial status', 'Unexpected initial state');
-    }
-  } catch (e) { fail('Initial status', e); }
-
-  // Enable for an address
-  try {
-    adapter.enableForAddress({
-      ownerAddress: '0xtest_owner_address',
-      enabled: true,
-      riskThreshold: 5,
-      maxLeverage: 3,
-      allowedPairs: ['SUI-PERP', 'BTC-PERP', 'ETH-PERP'],
-    });
-
-    const status = adapter.getStatus();
-    if (status.enabledAddresses.includes('0xtest_owner_address')) {
-      ok('enableForAddress()', 'Address registered');
-    } else {
-      fail('enableForAddress()', 'Address not found in status');
-    }
-  } catch (e) { fail('enableForAddress()', e); }
-
-  // Risk assessment (will call SUI RPC — owner has no portfolios, so should return safe defaults)
-  try {
-    const risk = await adapter.assessRisk('0xtest_owner_address');
-    if (typeof risk.riskScore === 'number' && risk.riskScore >= 1 && risk.riskScore <= 10) {
-      ok('assessRisk()', `score: ${risk.riskScore}, topAsset: ${risk.topAsset || 'none'}, recs: ${risk.recommendations.length}`);
-    } else {
-      fail('assessRisk()', 'Invalid risk result');
-    }
-  } catch (e) { fail('assessRisk()', e); }
-
-  // Get active hedges (should be empty)
-  try {
-    const hedges = adapter.getActiveHedges();
-    if (hedges.length === 0) {
-      ok('getActiveHedges()', '0 active (expected)');
-    } else {
-      fail('getActiveHedges()', `Unexpected ${hedges.length} hedges`);
-    }
-  } catch (e) { fail('getActiveHedges()', e); }
-
-  // Disable
-  try {
-    adapter.disableForAddress('0xtest_owner_address');
-    const status = adapter.getStatus();
-    if (status.enabledAddresses.length === 0) {
-      ok('disableForAddress()', 'Address removed');
-    } else {
-      fail('disableForAddress()', 'Address still present');
-    }
-  } catch (e) { fail('disableForAddress()', e); }
-
-  // Config check
-  try {
-    const { SUI_HEDGE_CONFIG } = await import('../lib/services/sui/SuiAutoHedgingAdapter');
-    if (SUI_HEDGE_CONFIG.PNL_UPDATE_INTERVAL_MS > 0 && SUI_HEDGE_CONFIG.MAX_DRAWDOWN_PERCENT > 0) {
-      ok('SUI_HEDGE_CONFIG', `drawdown: ${SUI_HEDGE_CONFIG.MAX_DRAWDOWN_PERCENT}%, leverage: ${SUI_HEDGE_CONFIG.DEFAULT_LEVERAGE}x`);
-    }
-  } catch (e) { fail('SUI_HEDGE_CONFIG', e); }
-}
-
-// ============================================================
 // TEST 8: SuiPortfolioManager
 // ============================================================
 async function testSuiPortfolioManager() {
@@ -984,7 +906,6 @@ async function main() {
     await testSuiOnChainHedgeService();
     await testSuiCommunityPoolService();
     await testSuiPrivateHedgeService();
-    await testSuiAutoHedgingAdapter();
     await testSuiPortfolioManager();
     await testSuiUsdcPoolAPI();
   } catch (e) {
