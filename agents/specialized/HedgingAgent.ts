@@ -1000,38 +1000,13 @@ export class HedgingAgent extends BaseAgent {
     const chain = (params.chain as string) || task.chain || 'cronos';
 
     // ── Chain-specific hedge routing ──
-    // For SUI: use BlueFin-based SuiAutoHedgingAdapter
     // For Oasis: use OasisAutoHedgingAdapter
-    // For Cronos: use default Moonlander/HedgeExecutor path
-    if (chain === 'sui') {
-      try {
-        const { getSuiAutoHedgingAdapter } =
-          await import('../../lib/services/sui/SuiAutoHedgingAdapter');
-        const suiAdapter = getSuiAutoHedgingAdapter();
-        const riskResult = await suiAdapter.assessRisk(
-          (params.portfolioId as string) || 'community-pool'
-        );
-        logger.info('SUI hedge strategy created via SuiAutoHedgingAdapter', {
-          chain,
-          recommendations: riskResult.recommendations?.length || 0,
-        });
-        return {
-          success: true,
-          data: {
-            strategyId: `sui-strategy-${Date.now()}`,
-            chain: 'sui',
-            riskScore: riskResult.riskScore,
-            recommendations: riskResult.recommendations,
-            active: true,
-          },
-          error: null,
-          executionTime: Date.now() - startTime,
-          agentId: this.agentId,
-        };
-      } catch (error) {
-        logger.warn('SUI hedge adapter failed, using generic strategy', { error });
-      }
-    } else if (chain === 'oasis-sapphire' || chain === 'oasis') {
+    // For Cronos + SUI + anything else: use default Moonlander/HedgeExecutor path.
+    //   (SUI-side hedging in prod runs through the sui-community-pool cron
+    //   and polymarket-edge-trader — NOT the chat/agent path. The old
+    //   SuiAutoHedgingAdapter branch was reachable only via LeadAgent NL
+    //   parsing and had 0 hits in 30 days; deleted 2026-08-10.)
+    if (chain === 'oasis-sapphire' || chain === 'oasis') {
       try {
         const { getOasisAutoHedgingAdapter } =
           await import('../../lib/services/oasis/OasisAutoHedgingAdapter');

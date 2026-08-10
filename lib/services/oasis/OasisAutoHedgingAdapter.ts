@@ -2,8 +2,7 @@
  * Oasis Auto-Hedging Adapter
  * 
  * Extends the AutoHedging system for Oasis Sapphire portfolios.
- * Like SuiAutoHedgingAdapter but for the EVM-compatible Oasis chain.
- * 
+ *
  * Architecture:
  * 1. Monitors Oasis portfolio positions (via RWAManager contract)
  * 2. Fetches live prices via RealMarketDataService (chain-agnostic)
@@ -14,7 +13,6 @@
  * Hedges are executed directly on-chain via HedgeExecutor contract.
  * 
  * @see lib/services/AutoHedgingService.ts      (Cronos equivalent)
- * @see lib/services/SuiAutoHedgingAdapter.ts    (SUI equivalent)
  */
 
 import { ethers } from 'ethers';
