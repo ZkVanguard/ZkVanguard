@@ -1458,6 +1458,38 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       highWaterBps: 0,
     };
     await setCronState(KEY_ACTIVE, trade);
+    // Write the DB row NOW with actual fill price. Without this, the trader
+    // opens on BlueFin and leaves DB blank; bluefin-db-reconcile later
+    // creates a `reconstructed_` row 15 min later with markPrice as
+    // ESTIMATED entry — corrupting entry_price for every trade closed via
+    // this cron (observed 2026-07-31 → 08-03: 20/20 trades adopted as
+    // orphans, all with $0 recorded PnL). Best-effort: never blocks the
+    // trade — a DB hiccup here still leaves the reconciler as backstop.
+    try {
+      const { createHedge } = await import('@/lib/db/hedges');
+      const { SUI_COMMUNITY_POOL_PORTFOLIO_ID } = await import('@/lib/constants');
+      await createHedge({
+        orderId: clientOrderId,
+        portfolioId: SUI_COMMUNITY_POOL_PORTFOLIO_ID,
+        walletAddress: (process.env.SUI_ADMIN_ADDRESS || '').trim(),
+        asset,
+        market: symbol,
+        side,
+        size: sizeQty,
+        notionalValue: sizeQty * fillPrice,
+        leverage: LEVERAGE,
+        entryPrice: fillPrice,
+        simulationMode: false,
+        chain: 'sui',
+        reason: `PolymarketEdge ${prediction.recommendation} conf=${prediction.confidence.toFixed(0)} cons=${prediction.consensus.toFixed(0)} score=${scan.best.score.toFixed(2)}`,
+        predictionMarket: prediction.sources.map((s) => s.name).join(','),
+      });
+    } catch (dbErr) {
+      logger.warn('[PolymarketEdge] createHedge failed after openHedge succeeded — reconciler will adopt as orphan', {
+        error: errMsg(dbErr),
+        symbol, side, fillPrice, sizeQty,
+      });
+    }
     // Trade actually opened — reset the no-edge streak so gates snap
     // back to the operator's configured MIN_CONFIDENCE / MIN_CONSENSUS.
     // Only reset here (not on scan.best truthy) so a signal that

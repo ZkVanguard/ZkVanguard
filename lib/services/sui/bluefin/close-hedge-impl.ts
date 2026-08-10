@@ -194,7 +194,18 @@ export async function performCloseHedge(
     // Without this, hedges.realized_pnl stays 0 and win-rate/signal validation break.
     try {
       const { closePerpHedgeBySymbolSide } = await import('@/lib/db/hedges');
-      const realizedPnl = parseFloat(orderResponse?.realizedPnl || '0');
+      // BlueFin's MARKET-order response often omits realizedPnl (settles async).
+      // Fall back to the pre-close position's unrealizedPnl — the instant the
+      // opposite-side market order fills, that unrealized number becomes the
+      // realized figure. Without this fallback, every profitable trade recorded
+      // as $0 (root cause of 20/20 zero-PnL closes observed 2026-07-15 → 08-03).
+      // For partial closes, scale by the fraction of the position we closed.
+      const responsePnl = orderResponse?.realizedPnl;
+      const hasResponsePnl = typeof responsePnl === 'string' && responsePnl !== '' && !isNaN(parseFloat(responsePnl));
+      const closeFraction = preCloseSize > 0 ? Math.min(1, closeSize / preCloseSize) : 1;
+      const realizedPnl = hasResponsePnl
+        ? parseFloat(responsePnl!)
+        : Number((position.unrealizedPnl ?? 0)) * closeFraction;
       const feesPaid = parseFloat(orderResponse?.fee || '0');
       const originalSide: 'LONG' | 'SHORT' = closeSide === 'LONG' ? 'SHORT' : 'LONG';
       const updateResult = await closePerpHedgeBySymbolSide({
