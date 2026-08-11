@@ -13,6 +13,7 @@ import { logger } from '@/lib/utils/logger';
 import { BLUEFIN_PAIRS, BLUEFIN_NETWORKS, type BluefinHedgeResult, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import * as HedgeResult from '@/lib/services/sui/bluefin/hedge-result';
 import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
+import { checkMarkPriceDivergence } from '@/lib/services/sui/bluefin/markprice-divergence';
 import type { OrderSignedFields } from '@/lib/services/sui/bluefin/sign-request';
 
 export interface CloseHedgeContext {
@@ -207,6 +208,40 @@ export async function performCloseHedge(
         ? parseFloat(responsePnl!)
         : Number((position.unrealizedPnl ?? 0)) * closeFraction;
       const feesPaid = parseFloat(orderResponse?.fee || '0');
+
+      // markPrice divergence check — silent-PnL-corruption barrier.
+      // Only meaningful when we're using the unrealizedPnl fallback (since
+      // that's the value derived from BlueFin's markPrice). If BlueFin's
+      // response gave us realizedPnl directly, it's the venue-settled truth
+      // and needs no cross-check.
+      if (!hasResponsePnl && position.markPrice > 0) {
+        try {
+          const asset = params.symbol.replace('-PERP', '');
+          const { getMarketDataService } = await import('@/lib/services/market-data/RealMarketDataService');
+          const independent = await getMarketDataService().getTokenPrice(asset).catch(() => null);
+          if (independent?.price) {
+            const div = checkMarkPriceDivergence(position.markPrice, independent.price);
+            if (div.warn) {
+              logger.warn('[BlueFin] markPrice divergence at close — recorded PnL may be off', {
+                symbol: params.symbol,
+                bluefinMark: position.markPrice,
+                independent: independent.price,
+                divergencePct: div.divergencePct.toFixed(2),
+                realizedPnl,
+              });
+              try {
+                const { notifyDiscord } = await import('@/lib/utils/discord-notify');
+                await notifyDiscord(
+                  `⚠️ markPrice divergence: ${params.symbol} ${div.detail}. Recorded PnL: $${realizedPnl.toFixed(2)}`,
+                  'WARN',
+                  { symbol: params.symbol, bluefinMark: position.markPrice, independent: independent.price, divergencePct: div.divergencePct, realizedPnl },
+                );
+              } catch { /* discord is best-effort */ }
+            }
+          }
+        } catch { /* independent-price check is best-effort; never block the write */ }
+      }
+
       const originalSide: 'LONG' | 'SHORT' = closeSide === 'LONG' ? 'SHORT' : 'LONG';
       const updateResult = await closePerpHedgeBySymbolSide({
         symbol: params.symbol,
