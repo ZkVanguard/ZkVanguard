@@ -66,6 +66,12 @@ export interface AggregatedPrediction {
 const CACHE_KEY = 'prediction_aggregation';
 const CACHE_TTL_MS = 20_000; // 20 seconds - balance freshness vs. API load
 
+// Next.js data-cache tags for on-demand invalidation via revalidateTag().
+// Not currently triggered by any cron, but wired so a future circuit-breaker
+// can force-refresh external market data without waiting for TTL expiry.
+export const CACHE_TAG_CRYPTOCOM_TICKER = 'prediction:cryptocom-ticker';
+export const CACHE_TAG_BLUEFIN_FUNDING = 'prediction:bluefin-funding';
+
 // ─── Service ─────────────────────────────────────────────────────────
 
 export class PredictionAggregatorService {
@@ -376,8 +382,13 @@ export class PredictionAggregatorService {
     perAsset: Record<string, { price: number; change24h: number; volume: number }>;
   }> {
     try {
+      // Next.js data cache: 30s revalidate + tag for on-demand invalidation.
+      // Ticker is public + moves slowly enough at 30s cadence; caching across
+      // Vercel instances significantly reduces external API load when
+      // trader (5min) + autohedge (30min) crons both call this hot.
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         signal: AbortSignal.timeout(5000),
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
 
       if (!response.ok) throw new Error('Crypto.com API unavailable');
@@ -454,9 +465,14 @@ export class PredictionAggregatorService {
       const asset = rawAsset.toUpperCase();
       const symbol = `${asset}-PERP`;
       try {
+        // Funding rate ticker: 60s revalidate. BlueFin updates funding
+        // every ~1min; more frequent fetches waste requests + risk rate limits.
         const res = await fetch(
           `${base}/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`,
-          { signal: AbortSignal.timeout(4000) },
+          {
+            signal: AbortSignal.timeout(4000),
+            next: { revalidate: 60, tags: [CACHE_TAG_BLUEFIN_FUNDING] },
+          },
         );
         if (!res.ok) return;
         const data = await res.json() as {
