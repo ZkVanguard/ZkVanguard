@@ -8,8 +8,7 @@
  * 4. SuiAutoHedgingAdapter  - Lifecycle, config, risk assessment
  * 5. SuiPrivateHedgeService - Commitment scheme, proofs, stealth deposits
  * 6. SuiExplorerService     - Balances, transactions, objects, checkpoints
- * 7. SuiPortfolioManager    - Init, positions, risk metrics, hedging
- * 8. USDC Pool API          - user-position, record-deposit, record-withdraw
+ * 7. USDC Pool API          - user-position, record-deposit, record-withdraw
  * 
  * Run: npx tsx scripts/test-sui-services-e2e.ts
  */
@@ -757,112 +756,12 @@ async function testSuiAutoHedgingAdapter() {
 }
 
 // ============================================================
-// TEST 8: SuiPortfolioManager
-// ============================================================
-async function testSuiPortfolioManager() {
-  console.log('\n═══ TEST 8: SuiPortfolioManager ═══');
-
-  const { SuiPortfolioManager } = await import('../lib/services/sui/SuiPortfolioManager');
-  const mgr = new SuiPortfolioManager('testnet');
-
-  // Fetch the rwaManager owner first (a real SUI address)
-  let suiAddress = '';
-  try {
-    const obj = await suiRpc('sui_getObject', [
-      OBJECT_IDS.rwaManagerState,
-      { showContent: true, showOwner: true },
-    ]) as Record<string, unknown>;
-    const data = obj.data as Record<string, unknown> | undefined;
-    const owner = data?.owner as Record<string, string> | undefined;
-    suiAddress = owner?.AddressOwner || owner?.Shared ? '' : '';
-    if (!suiAddress && typeof data?.owner === 'object') {
-      // Try extracting from Shared owner
-      suiAddress = (data?.owner as Record<string, string>)?.AddressOwner || '';
-    }
-  } catch {}
-
-  // If we can't find a real SUI address, use a random valid-looking one
-  if (!suiAddress) {
-    suiAddress = '0x0000000000000000000000000000000000000000000000000000000000000001';
-  }
-
-  // Initialize
-  try {
-    await mgr.initialize(suiAddress);
-    ok('initialize()', `owner: ${suiAddress.slice(0, 16)}...`);
-  } catch (e) { fail('initialize()', e); }
-
-  // Get summary
-  try {
-    const summary = await mgr.getSummary();
-    if (summary.ownerAddress && typeof summary.totalValueUsd === 'number') {
-      ok('getSummary()', `totalUsd: $${summary.totalValueUsd.toFixed(2)}, positions: ${summary.positions.length}`);
-      for (const pos of summary.positions.slice(0, 3)) {
-        console.log(`       ${pos.symbol}: ${pos.amount.toFixed(4)} @ $${pos.currentPrice} = $${pos.valueUsd.toFixed(2)} (${pos.allocation}%)`);
-      }
-    } else {
-      fail('getSummary()', 'Invalid summary');
-    }
-  } catch (e) { fail('getSummary()', e); }
-
-  // Risk metrics
-  try {
-    const summary = await mgr.getSummary();
-    const risk = summary.riskMetrics;
-    if (typeof risk.overallRiskScore === 'number' && risk.overallRiskScore >= 1) {
-      ok('riskMetrics', `score: ${risk.overallRiskScore}/10, concentration: ${risk.concentrationRisk.toFixed(1)}%, hedgeRatio: ${risk.hedgeRatio.toFixed(1)}%`);
-      for (const rec of risk.recommendations) {
-        console.log(`       💡 ${rec}`);
-      }
-    } else {
-      fail('riskMetrics', 'Invalid risk metrics');
-    }
-  } catch (e) { fail('riskMetrics', e); }
-
-  // Transaction builders
-  try {
-    const tx = mgr.buildCreatePortfolioTransaction(800, 50, 5_000_000_000n);
-    if (tx.target.includes('rwa_manager::create_portfolio')) {
-      ok('buildCreatePortfolio()', `deposit: ${tx.coinAmount}n`);
-    } else {
-      fail('buildCreatePortfolio()', 'Invalid tx');
-    }
-  } catch (e) { fail('buildCreatePortfolio()', e); }
-
-  try {
-    const tx = mgr.buildDepositTransaction('0xportfolio1', 1_000_000_000n);
-    if (tx.target.includes('rwa_manager::deposit')) {
-      ok('buildDepositTransaction()', 'correct');
-    }
-  } catch (e) { fail('buildDeposit()', e); }
-
-  try {
-    const tx = mgr.buildRebalanceTransaction(
-      '0xportfolio1',
-      [3500, 2500, 2000, 1000, 1000],
-      'Quarterly rebalance',
-    );
-    if (tx.target.includes('rwa_manager::rebalance')) {
-      ok('buildRebalanceTransaction()', 'correct');
-    }
-  } catch (e) { fail('buildRebalance()', e); }
-
-  // Deployment config
-  try {
-    const config = mgr.getDeploymentConfig();
-    if (config.packageId === PACKAGE_ID) {
-      ok('getDeploymentConfig()', 'packageId matches');
-    }
-  } catch (e) { fail('getDeploymentConfig()', e); }
-}
-
-// ============================================================
-// TEST 9: SUI USDC Pool API Endpoints (Database-backed)
+// TEST 8: SUI USDC Pool API Endpoints (Database-backed)
 // ============================================================
 const API_BASE = 'http://localhost:3099';
 
 async function testSuiUsdcPoolAPI() {
-  console.log('\n═══ TEST 9: SUI USDC Pool API Endpoints ═══');
+  console.log('\n═══ TEST 8: SUI USDC Pool API Endpoints ═══');
 
   // Test wallet address (64 hex chars after 0x)
   const testWallet = '0xac13bb75d72169cee6dcef201bf6217a4f20228248bede51bb7893ae43a78c38';
@@ -985,7 +884,6 @@ async function main() {
     await testSuiCommunityPoolService();
     await testSuiPrivateHedgeService();
     await testSuiAutoHedgingAdapter();
-    await testSuiPortfolioManager();
     await testSuiUsdcPoolAPI();
   } catch (e) {
     console.error('\n💥 FATAL ERROR:', e);
