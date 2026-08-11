@@ -285,6 +285,68 @@ async function checkTraderActivity(): Promise<Component & { hoursSinceLastTrade?
 }
 
 /**
+ * TVL headroom — surfaces how close the pool is to its on-chain TVL cap so
+ * operators can lift it BEFORE deposits start reverting with
+ * E_MAX_DEPOSIT_EXCEEDED. Cap is settable via `/api/admin/sui-set-tvl-cap`.
+ *
+ *   ok    — pool TVL well under conservative-floor
+ *   warn  — TVL crossed 80% of deployed cap ($8k of $10k) — plan raise
+ *   down  — TVL ≥ 110% of deployed cap — deposits likely already reverting
+ *
+ * ponytail: reads on-chain `total_deposited`, doesn't fetch the DF-stored
+ * cap (would cost a second RPC round-trip per health check). Uses the
+ * known-deployed value ($10k) as the reference. Update the constant
+ * below whenever you raise the cap via the admin endpoint.
+ */
+async function checkTvlHeadroom(): Promise<Component & { totalDepositedUsdc?: number; capUsdc?: number; utilizationPct?: number }> {
+  const DEPLOYED_TVL_CAP_USDC = 10_000; // update when /api/admin/sui-set-tvl-cap is invoked with a new value
+  try {
+    const network = (process.env.SUI_NETWORK || 'mainnet').trim() as 'mainnet' | 'testnet';
+    const { SUI_USDC_POOL_CONFIG } = await import('@/lib/types/sui-pool-types');
+    const poolConfig = SUI_USDC_POOL_CONFIG[network];
+    if (!poolConfig.poolStateId) return { status: 'ok', detail: 'no pool configured' };
+
+    const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
+    const client = createFailoverSuiClient(network);
+    const obj = await client.getObject({ id: poolConfig.poolStateId, options: { showContent: true } });
+    const content = obj?.data?.content as { fields?: Record<string, unknown> } | undefined;
+    const fields = content?.fields;
+    if (!fields) return { status: 'warn', detail: 'pool object unreadable' };
+
+    const totalDepositedRaw = Number(fields.total_deposited ?? 0);
+    const totalDepositedUsdc = totalDepositedRaw / 1_000_000;
+    const utilizationPct = Number(((totalDepositedUsdc / DEPLOYED_TVL_CAP_USDC) * 100).toFixed(1));
+
+    if (utilizationPct >= 110) {
+      return {
+        status: 'down',
+        totalDepositedUsdc: Number(totalDepositedUsdc.toFixed(2)),
+        capUsdc: DEPLOYED_TVL_CAP_USDC,
+        utilizationPct,
+        detail: `pool TVL $${totalDepositedUsdc.toFixed(2)} likely past deployed cap $${DEPLOYED_TVL_CAP_USDC.toLocaleString()} — deposits may already be reverting. Raise cap via POST /api/admin/sui-set-tvl-cap`,
+      };
+    }
+    if (utilizationPct >= 80) {
+      return {
+        status: 'warn',
+        totalDepositedUsdc: Number(totalDepositedUsdc.toFixed(2)),
+        capUsdc: DEPLOYED_TVL_CAP_USDC,
+        utilizationPct,
+        detail: `pool TVL $${totalDepositedUsdc.toFixed(2)} at ${utilizationPct}% of cap $${DEPLOYED_TVL_CAP_USDC.toLocaleString()} — plan raise via /api/admin/sui-set-tvl-cap`,
+      };
+    }
+    return {
+      status: 'ok',
+      totalDepositedUsdc: Number(totalDepositedUsdc.toFixed(2)),
+      capUsdc: DEPLOYED_TVL_CAP_USDC,
+      utilizationPct,
+    };
+  } catch (e: any) {
+    return { status: 'warn', error: e?.message?.slice(0, 100) };
+  }
+}
+
+/**
  * Autohedge halt duration — catches the peak-NAV deadlock class of bug.
  *
  * The 2026-07-30 → 2026-08-11 incident stayed hidden for ~12 days because
@@ -560,8 +622,9 @@ export async function GET(req: NextRequest) {
   const orphanRate = await withCheckTimeout(checkOrphanAdoptionRate(), 'orphanRate');
   const autohedgeHalt = await withCheckTimeout(checkAutohedgeHaltDuration(), 'autohedgeHalt');
   const traderActivity = await withCheckTimeout(checkTraderActivity(), 'traderActivity');
+  const tvlHeadroom = await withCheckTimeout(checkTvlHeadroom(), 'tvlHeadroom');
 
-  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, poolNavMonitorCron, phantomRate, orphanRate, autohedgeHalt, traderActivity };
+  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, poolNavMonitorCron, phantomRate, orphanRate, autohedgeHalt, traderActivity, tvlHeadroom };
   const overall = worstStatus(Object.values(components));
 
   const body = {
