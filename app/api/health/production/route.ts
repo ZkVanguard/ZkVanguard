@@ -218,6 +218,71 @@ async function checkOrphanAdoptionRate(): Promise<Component & { orphansLastHour?
   }
 }
 
+/**
+ * Autohedge halt duration — catches the peak-NAV deadlock class of bug.
+ *
+ * The 2026-07-30 → 2026-08-11 incident stayed hidden for ~12 days because
+ * no monitor tracked how LONG a cron had been in halted state. Individual
+ * daily halt-KILL alerts fired, but the fact that they were consecutive
+ * (halt re-set at every midnight against a stale peak) wasn't surfaced.
+ * This check makes prolonged halts visible.
+ *
+ *   WARN  ≥ 24 h continuously halted
+ *   DOWN  ≥ 72 h continuously halted
+ *
+ * Detection is based on `cron:haltUntil:sui-community-pool:autohedge`
+ * being repeatedly extended. We can't see "extension history" directly,
+ * but a haltUntil that's > 24h from the current writer's created_at means
+ * either a fresh very-long halt (rare, defense-in-depth) or repeated
+ * daily extensions (the deadlock pattern). Both warrant a page.
+ */
+async function checkAutohedgeHaltDuration(): Promise<Component & { halted?: boolean; haltHours?: number }> {
+  try {
+    const r = await query<{ value: string | null; updated_at: string }>(
+      `SELECT value::text, updated_at::text
+       FROM cron_state
+       WHERE key = 'cron:haltUntil:sui-community-pool:autohedge'
+       LIMIT 1`,
+    );
+    if (r.length === 0 || !r[0].value || r[0].value === 'null') {
+      return { status: 'ok', halted: false };
+    }
+    // Value shape can be either a raw number (legacy) or { untilMs, reason }
+    let untilMs: number | null = null;
+    try {
+      const parsed = JSON.parse(r[0].value);
+      if (typeof parsed === 'number') untilMs = parsed;
+      else if (parsed && typeof parsed.untilMs === 'number') untilMs = parsed.untilMs;
+    } catch { /* not JSON — try raw parse */ }
+    if (untilMs === null) untilMs = Number(r[0].value);
+    if (!Number.isFinite(untilMs) || untilMs <= 0) {
+      return { status: 'ok', halted: false };
+    }
+    const now = Date.now();
+    if (untilMs <= now) {
+      return { status: 'ok', halted: false };
+    }
+    // Halt is active. How long has it been rolling? Use writer age as
+    // proxy — a fresh single-day halt is < 24h old writer; deadlock
+    // pattern writes new haltUntil every midnight so writer is < 24h
+    // old too. Combine both signals: writer age + untilMs distance.
+    const writerAgeHours = (now - new Date(r[0].updated_at).getTime()) / 3_600_000;
+    const remainingHours = (untilMs - now) / 3_600_000;
+    const totalHaltHours = writerAgeHours + remainingHours;
+    if (totalHaltHours >= 72) {
+      return { status: 'down', halted: true, haltHours: Number(totalHaltHours.toFixed(1)),
+        detail: `autohedge halted ${totalHaltHours.toFixed(1)}h continuously — peak-NAV deadlock class of bug likely; check drawdown gate + poolNav:peak freshness` };
+    }
+    if (totalHaltHours >= 24) {
+      return { status: 'warn', halted: true, haltHours: Number(totalHaltHours.toFixed(1)),
+        detail: `autohedge halted ${totalHaltHours.toFixed(1)}h continuously — investigate if extending past 48h` };
+    }
+    return { status: 'ok', halted: true, haltHours: Number(totalHaltHours.toFixed(1)) };
+  } catch (e: any) {
+    return { status: 'warn', error: e?.message?.slice(0, 100) };
+  }
+}
+
 async function checkNavFreshness(): Promise<Component & { navUsd?: number }> {
   try {
     // Filter to chain='sui' — pool-nav-monitor also writes Cronos $0 snapshots
@@ -422,8 +487,9 @@ export async function GET(req: NextRequest) {
   // > 5% is down (exchange fills unreliable → auto-halt trader gate).
   const phantomRate = await withCheckTimeout(checkPhantomRate(), 'phantomRate');
   const orphanRate = await withCheckTimeout(checkOrphanAdoptionRate(), 'orphanRate');
+  const autohedgeHalt = await withCheckTimeout(checkAutohedgeHaltDuration(), 'autohedgeHalt');
 
-  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate, orphanRate };
+  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate, orphanRate, autohedgeHalt };
   const overall = worstStatus(Object.values(components));
 
   const body = {
