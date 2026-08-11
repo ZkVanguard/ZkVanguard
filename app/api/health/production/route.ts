@@ -219,6 +219,72 @@ async function checkOrphanAdoptionRate(): Promise<Component & { orphansLastHour?
 }
 
 /**
+ * Trader long-idle check — catches "trader silently broken" regressions.
+ *
+ * The trader cron heartbeats every 5 min (traderCron check catches "not
+ * running"), but doesn't catch "running but never opening". If the
+ * signal + collateral + edge gates block every tick indefinitely, that
+ * COULD be correct behavior (no edge to trade) OR a silent regression
+ * (broken signal, wrong env, etc). This check surfaces prolonged idle:
+ *
+ *   WARN  ≥ 48 h since last real trade AND noedge-streak > 500
+ *   DOWN  ≥ 168 h (1 week) since last real trade AND streak > 1500
+ *
+ * Combines two independent signals so noise doesn't trip it — the streak
+ * counter alone can climb during genuine market quiet; the DB row alone
+ * could be stale for other reasons.
+ */
+async function checkTraderActivity(): Promise<Component & { hoursSinceLastTrade?: number; noedgeStreak?: number }> {
+  try {
+    const [rowRes, streakRes] = await Promise.all([
+      query<{ age_hours: number | null }>(
+        `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at)))::float / 3600 as age_hours
+         FROM hedges
+         WHERE chain = 'sui' AND notional_value >= 5
+           AND (order_id IS NULL OR order_id NOT LIKE 'reconstructed_%')`,
+      ),
+      query<{ value: string | null }>(
+        `SELECT value::text FROM cron_state WHERE key = 'polymarket-edge:noedge-streak' LIMIT 1`,
+      ),
+    ]);
+    const hoursSinceLastTrade = Number(rowRes[0]?.age_hours ?? 0);
+    let noedgeStreak = 0;
+    if (streakRes[0]?.value) {
+      try {
+        noedgeStreak = Number(JSON.parse(streakRes[0].value));
+      } catch {
+        noedgeStreak = Number(streakRes[0].value ?? 0);
+      }
+    }
+
+    if (!Number.isFinite(hoursSinceLastTrade) || hoursSinceLastTrade <= 0) {
+      // No qualifying trades ever — pool is bootstrapping, don't alarm.
+      return { status: 'ok', hoursSinceLastTrade: 0, noedgeStreak };
+    }
+
+    if (hoursSinceLastTrade >= 168 && noedgeStreak > 1500) {
+      return {
+        status: 'down',
+        hoursSinceLastTrade: Number(hoursSinceLastTrade.toFixed(1)),
+        noedgeStreak,
+        detail: `trader idle ${hoursSinceLastTrade.toFixed(0)}h with ${noedgeStreak} no-edge skips — likely silent regression (signal path / env / collat gate)`,
+      };
+    }
+    if (hoursSinceLastTrade >= 48 && noedgeStreak > 500) {
+      return {
+        status: 'warn',
+        hoursSinceLastTrade: Number(hoursSinceLastTrade.toFixed(1)),
+        noedgeStreak,
+        detail: `trader idle ${hoursSinceLastTrade.toFixed(0)}h with ${noedgeStreak} no-edge skips — verify signal + collat gate`,
+      };
+    }
+    return { status: 'ok', hoursSinceLastTrade: Number(hoursSinceLastTrade.toFixed(1)), noedgeStreak };
+  } catch (e: any) {
+    return { status: 'warn', error: e?.message?.slice(0, 100) };
+  }
+}
+
+/**
  * Autohedge halt duration — catches the peak-NAV deadlock class of bug.
  *
  * The 2026-07-30 → 2026-08-11 incident stayed hidden for ~12 days because
@@ -480,6 +546,11 @@ export async function GET(req: NextRequest) {
   const hedgeReconcileCron = await withCheckTimeout(checkCronAge('cron:lastRun:sui-hedge-reconcile', 120, 240), 'hedgeReconcileCron');
   const bluefinHealthCron = await withCheckTimeout(checkCronAge('bluefin-health:consecutiveDegraded', 15, 30), 'bluefinHealthCron');
   const bluefinDbReconcileCron = await withCheckTimeout(checkCronAge('cron:lastRun:bluefin-db-reconcile', 30, 60), 'bluefinDbReconcileCron');
+  // pool-nav-monitor runs every 15 min and owns the `poolNav:peak` rolling-window
+  // computation (PR #55). If this cron stops, peak stops updating → rolling
+  // window silently degrades to "stuck at last value" → the peak-NAV deadlock
+  // class of bug can re-establish. Detect the cron death, not just the deadlock.
+  const poolNavMonitorCron = await withCheckTimeout(checkCronAge('cron:lastRun:pool-nav-monitor', 25, 60), 'poolNavMonitorCron');
 
   // v0.3.0 defense: phantom hedge rate over last hour. Proxies via closed
   // hedges with $0 realized_pnl and notional ≥ $1 — the same query the
@@ -488,8 +559,9 @@ export async function GET(req: NextRequest) {
   const phantomRate = await withCheckTimeout(checkPhantomRate(), 'phantomRate');
   const orphanRate = await withCheckTimeout(checkOrphanAdoptionRate(), 'orphanRate');
   const autohedgeHalt = await withCheckTimeout(checkAutohedgeHaltDuration(), 'autohedgeHalt');
+  const traderActivity = await withCheckTimeout(checkTraderActivity(), 'traderActivity');
 
-  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, phantomRate, orphanRate, autohedgeHalt };
+  const components = { db, polymarket, suiRpc, bluefin, navFreshness, suiPoolCron, traderCron, hedgeReconcileCron, bluefinHealthCron, bluefinDbReconcileCron, poolNavMonitorCron, phantomRate, orphanRate, autohedgeHalt, traderActivity };
   const overall = worstStatus(Object.values(components));
 
   const body = {
