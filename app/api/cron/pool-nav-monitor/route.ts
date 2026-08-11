@@ -261,56 +261,54 @@ async function getPreviousNAV(poolId: string): Promise<number | null> {
 }
 
 /**
- * Calculate drawdown from peak - uses database for persistence across cold starts
+ * Calculate drawdown from a ROLLING-WINDOW peak.
+ *
+ * Was: monotonically-ratcheting all-time max. That created a chicken-and-egg
+ * halt loop after any real drawdown — 2026-07-06 peak $57 vs 2026-08-11 NAV
+ * $28 = 51% drawdown, both HEDGE_DRAWDOWN_HALT_PCT (>10%) and
+ * PROFIT_LOCK_ZERO_RISK_AT (>20%) permanently tripped, autohedge halted at
+ * every UTC midnight, no recovery path. Fixed 2026-08-11.
+ *
+ * Now: peak = max(currentNAV, ...maxOfLast PEAK_ROLLING_WINDOW_DAYS-of-history)
+ * where the window defaults to 7 days. Old highs age out naturally; the
+ * halt gate then reflects "did I just take a beating?" not "am I still
+ * below a high from months ago?". Env override for stricter regimes.
  */
 async function calculateDrawdown(
   poolId: string,
   currentNAV: number
 ): Promise<{ drawdownPercent: number; peakNAV: number }> {
-  // Load state from DB on cold start
+  // Load state from DB on cold start (still useful for the fallback branch below)
   await loadStateFromDb();
 
-  // Try cached peak first (already loaded from DB)
-  let peak = peakNavCache.get(poolId);
-
-  if (!peak) {
-    // Load NAV history from database to find peak
-    try {
-      const navHist = await getNavHistory(30); // Last 30 days
-      if (navHist && navHist.length > 0) {
-        peak = Math.max(...navHist.map((h) => h.total_nav));
-        peakNavCache.set(poolId, peak);
-        logger.info(`[PoolNAVMonitor] Loaded peak NAV from history: $${peak.toFixed(2)}`);
-      }
-    } catch (error) {
-      logger.warn('[PoolNAVMonitor] Could not load NAV history for peak calculation');
+  const windowDays = Number(process.env.PEAK_ROLLING_WINDOW_DAYS) || 7;
+  let peak = currentNAV;
+  try {
+    const navHist = await getNavHistory(windowDays);
+    if (navHist && navHist.length > 0) {
+      // Peak can never be below currentNAV — always includes the live point.
+      peak = Math.max(currentNAV, ...navHist.map((h) => h.total_nav));
     }
+  } catch (error) {
+    logger.warn('[PoolNAVMonitor] Could not load NAV history for peak calculation — falling back to cached value', { error });
+    // Fallback: use last cached peak (may be stale) OR currentNAV
+    const cached = peakNavCache.get(poolId);
+    if (cached && cached > 0) peak = Math.max(currentNAV, cached);
   }
 
-  // Default to current NAV if no history
-  if (!peak) {
-    peak = currentNAV;
+  // Sanity check: sub-$1 pool with a >$100 peak = corrupt from a bad
+  // 0-value snapshot (SUI RPC deprecation pattern, 2026-07-29). Reset.
+  if (currentNAV === 0 && peak > 100) {
+    logger.warn(`[PoolNAVMonitor] Corrupt peakNAV for ${poolId}: $${peak.toFixed(2)} vs current $0 — resetting`);
+    peak = 0;
   }
 
-  // Sanity check: if peak is clearly corrupt (> 1000x current NAV, or pool is empty but peak is huge),
-  // reset it to current NAV to avoid permanent 100% drawdown display
-  if (peak > Math.max(currentNAV * 1000, 100000) || (currentNAV === 0 && peak > 100)) {
-    logger.warn(
-      `[PoolNAVMonitor] Corrupt peakNAV detected for ${poolId}: $${peak.toFixed(2)} vs current $${currentNAV.toFixed(2)} — resetting`
-    );
-    peak = currentNAV;
-    peakNavCache.set(poolId, peak);
-    await setNumber(CronKeys.poolNavPeak(poolId), peak);
+  peakNavCache.set(poolId, peak);
+  await setNumber(CronKeys.poolNavPeak(poolId), peak);
+
+  if (peak <= 0 || currentNAV >= peak) {
     return { drawdownPercent: 0, peakNAV: peak };
   }
-
-  // Update peak if new high — persist to DB
-  if (currentNAV > peak) {
-    peakNavCache.set(poolId, currentNAV);
-    await setNumber(CronKeys.poolNavPeak(poolId), currentNAV);
-    return { drawdownPercent: 0, peakNAV: currentNAV };
-  }
-
   const drawdownPercent = ((peak - currentNAV) / peak) * 100;
   return { drawdownPercent, peakNAV: peak };
 }
