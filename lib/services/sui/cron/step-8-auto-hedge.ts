@@ -24,7 +24,8 @@ import { logger } from '@/lib/utils/logger';
 import { envFlag } from '@/lib/utils/env-flag';
 import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { query } from '@/lib/db/postgres';
-import { getCronStateOr, getCronHalt, setCronHalt, endOfUtcDayMs, CronKeys } from '@/lib/db/cron-state';
+import { getCronStateOr, getCronHalt, setCronHalt, deleteCronState, endOfUtcDayMs, CronKeys } from '@/lib/db/cron-state';
+import { evaluateHaltRecovery } from '@/lib/services/sui/cron/halt-recovery';
 import { getAutoHedgeConfigs } from '@/lib/storage/auto-hedge-storage';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { bluefinTreasury } from '@/lib/services/sui/BluefinTreasuryService';
@@ -99,8 +100,41 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
   try {
     const existingHalt = await getCronHalt('sui-community-pool:autohedge');
     if (existingHalt) {
-      drawdownHalted = true;
-      logger.warn('[SUI Cron] Auto-hedge halt active', { until: new Date(existingHalt.untilMs).toISOString(), reason: existingHalt.reason });
+      // Autonomous recovery: re-verify the halt condition on every tick.
+      // Historically the halt would honor its `untilMs` deadline blindly
+      // (paused until UTC midnight regardless of underlying drawdown
+      // recovering). With rolling-window peak (PR #55) the drawdown can
+      // drop under threshold well before natural expiry — smart behavior
+      // is to clear the halt as soon as the reason no longer holds.
+      // Never touches non-drawdown halts (manual, phantom-rate, etc.)
+      // — see halt-recovery.ts for the decision rules.
+      const peakNav = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+      const recovery = evaluateHaltRecovery({
+        haltReason: existingHalt.reason,
+        currentNavUsd: navUsd,
+        peakNavUsd: peakNav,
+        thresholdPct: HEDGE_DRAWDOWN_HALT_PCT,
+      });
+      if (recovery.shouldClear) {
+        await deleteCronState('cron:haltUntil:sui-community-pool:autohedge');
+        logger.info('[SUI Cron] Auto-cleared drawdown halt — recovery detected', {
+          navUsd, peakNav, ddPct: recovery.drawdownPct.toFixed(2),
+          threshold: HEDGE_DRAWDOWN_HALT_PCT,
+        });
+        await notifyDiscord(
+          `✅ Auto-hedge halt AUTO-CLEARED — pool NAV $${navUsd.toFixed(2)} recovered to ${recovery.drawdownPct.toFixed(1)}% below peak $${peakNav.toFixed(2)} (< ${HEDGE_DRAWDOWN_HALT_PCT}% threshold). Autohedge resumes.`,
+          'INFO',
+          { navUsd, peakNav, drawdownPct: recovery.drawdownPct.toFixed(2) },
+        );
+        // Fall through — halt cleared, let this tick proceed with autohedge
+      } else {
+        drawdownHalted = true;
+        logger.warn('[SUI Cron] Auto-hedge halt active', {
+          until: new Date(existingHalt.untilMs).toISOString(),
+          reason: existingHalt.reason,
+          recoveryDecision: recovery.reason,
+        });
+      }
     } else if (navUsd <= 0) {
       // ponytail: navUsd=0 is an oracle/RPC read failure, not a real 100%
       // drawdown (2026-07-30 incident: SUI public RPC died → navUsd came in
