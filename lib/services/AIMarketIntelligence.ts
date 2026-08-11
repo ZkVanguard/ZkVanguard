@@ -35,6 +35,7 @@ import {
   type AggregatedPrediction,
 } from './market-data/PredictionAggregatorService';
 import type { FusionUpgrade, AlignmentSnapshot } from './market-data/SignalDriftFusion';
+import { CACHE_TAG_CRYPTOCOM_TICKER } from './market-data/cache-tags';
 
 // ============================================================================
 // Enhanced Types for AI Agents
@@ -540,6 +541,7 @@ export class AIMarketIntelligence {
     try {
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         signal: AbortSignal.timeout(5000),
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
 
       if (!response.ok) throw new Error('Price API unavailable');

@@ -66,11 +66,10 @@ export interface AggregatedPrediction {
 const CACHE_KEY = 'prediction_aggregation';
 const CACHE_TTL_MS = 20_000; // 20 seconds - balance freshness vs. API load
 
-// Next.js data-cache tags for on-demand invalidation via revalidateTag().
-// Not currently triggered by any cron, but wired so a future circuit-breaker
-// can force-refresh external market data without waiting for TTL expiry.
-export const CACHE_TAG_CRYPTOCOM_TICKER = 'prediction:cryptocom-ticker';
-export const CACHE_TAG_BLUEFIN_FUNDING = 'prediction:bluefin-funding';
+import { CACHE_TAG_CRYPTOCOM_TICKER, CACHE_TAG_BLUEFIN_FUNDING } from './cache-tags';
+// Re-export so anything that previously imported the tags from here keeps
+// working; no importers today, kept for symmetry with the prior commit.
+export { CACHE_TAG_CRYPTOCOM_TICKER, CACHE_TAG_BLUEFIN_FUNDING };
 
 // ─── Service ─────────────────────────────────────────────────────────
 
