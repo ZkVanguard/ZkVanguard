@@ -28,6 +28,7 @@ import {
 } from '@/lib/db/cron-state';
 import { COMMUNITY_POOL_PORTFOLIO_ID } from '@/lib/constants';
 import { errMsg } from '@/lib/utils/error-handler';
+import { computeRollingPeak } from '@/lib/services/hedging/rolling-peak';
 
 export const runtime = 'nodejs';
 
@@ -285,13 +286,11 @@ async function calculateDrawdown(
   let peak = currentNAV;
   try {
     const navHist = await getNavHistory(windowDays);
-    if (navHist && navHist.length > 0) {
-      // Peak can never be below currentNAV — always includes the live point.
-      peak = Math.max(currentNAV, ...navHist.map((h) => h.total_nav));
-    }
+    // computeRollingPeak: pure fn locked by test/unit/rolling-peak.test.ts —
+    // any change back toward monotonic-max fails those tests loudly.
+    peak = computeRollingPeak(currentNAV, navHist ?? []);
   } catch (error) {
     logger.warn('[PoolNAVMonitor] Could not load NAV history for peak calculation — falling back to cached value', { error });
-    // Fallback: use last cached peak (may be stale) OR currentNAV
     const cached = peakNavCache.get(poolId);
     if (cached && cached > 0) peak = Math.max(currentNAV, cached);
   }
