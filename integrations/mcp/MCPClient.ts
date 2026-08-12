@@ -10,9 +10,6 @@ import { EventEmitter } from 'node:events';
 import { logger } from '../../shared/utils/logger';
 import config from '../../shared/utils/config';
 import { RealMarketDataService } from '../../lib/services/market-data/RealMarketDataService';
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const EventSourceModule = require('eventsource');
-const EventSourceConstructor = (EventSourceModule.default || EventSourceModule) as { new(url: string, options?: Record<string, unknown>): EventSource };
 
 export interface MCPPriceData {
   symbol: string;
@@ -65,12 +62,10 @@ export class MCPClient extends EventEmitter {
       const mcpUrl = config.mcpServerUrl || 'https://mcp.crypto.com/market-data/mcp';
       logger.info('Connecting to MCP Server via SSE', { url: mcpUrl });
 
-      // Connect via SSE (Server-Sent Events)
-      this.eventSource = new EventSourceConstructor(mcpUrl, {
-        headers: {
-          'Accept': 'text/event-stream',
-        },
-      });
+      // Connect via SSE (Server-Sent Events) — Node 22 has global EventSource.
+      // WHATWG EventSource sends `Accept: text/event-stream` by default, so
+      // the old npm `eventsource` shim's headers arg is redundant.
+      this.eventSource = new EventSource(mcpUrl);
 
       if (this.eventSource) {
         // @ts-expect-error - EventSource types from external library

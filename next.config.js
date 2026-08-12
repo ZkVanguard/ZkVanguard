@@ -46,8 +46,9 @@ const nextConfig = {
       'ethers', 'zod', 'eventemitter3', 'uuid',
       '@tanstack/react-query', 'react-markdown', 'remark-gfm',
     ],
-    // Reduce page data sent to browser
-    optimizeCss: true,
+    // optimizeCss removed: it's webpack-only + requires the `critters`
+    // dependency (not installed). Next 16 defaults to Turbopack for
+    // `next build`, so the flag was a no-op. Turbopack uses lightningcss.
   },
 
   // Reduce serverless function size (moved from experimental in Next 15)
@@ -72,18 +73,10 @@ const nextConfig = {
   //   a runtime "Can't resolve X for browser" surfaces.
   turbopack: {},
 
-  // Environment variables exposed to the browser (NEVER expose secrets here)
-  env: {
-    NEXT_PUBLIC_CRONOS_RPC_URL: process.env.NEXT_PUBLIC_CRONOS_RPC_URL,
-    NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
-    NEXT_PUBLIC_MOONLANDER_API: process.env.NEXT_PUBLIC_MOONLANDER_API,
-    NEXT_PUBLIC_VVS_API: process.env.NEXT_PUBLIC_VVS_API,
-    NEXT_PUBLIC_MCP_API: process.env.NEXT_PUBLIC_MCP_API,
-    NEXT_PUBLIC_X402_API: process.env.NEXT_PUBLIC_X402_API,
-    NEXT_PUBLIC_DELPHI_API: process.env.NEXT_PUBLIC_DELPHI_API,
-    // NOTE: API keys are server-only — accessed via process.env on server routes
-    // Do NOT expose CRYPTOCOM_DEVELOPER_API_KEY or secrets to the browser
-  },
+  // env: {} block removed — all vars listed were NEXT_PUBLIC_*, which
+  // Next.js auto-inlines at build time. The block was doubling that work.
+  // API keys stay server-only via process.env on server routes; never
+  // expose CRYPTOCOM_DEVELOPER_API_KEY or any secret to the browser.
 
   // Production optimizations
   compress: true,

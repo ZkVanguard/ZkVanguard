@@ -13,8 +13,6 @@
       "jest",
       "react",
       "react-dom",
-      "ws",
-      "eventsource",
       "chai",
       "mocha"
     ],

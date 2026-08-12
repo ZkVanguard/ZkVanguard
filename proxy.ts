@@ -128,8 +128,6 @@ const API_CACHE_POLICIES: Array<{ prefix: string; value: string }> = [
   { prefix: '/api/community-pool/', value: 'public, s-maxage=30, stale-while-revalidate=60' },
   { prefix: '/api/community-pool', value: 'public, s-maxage=30, stale-while-revalidate=60' },
   { prefix: '/api/oasis/', value: 'public, s-maxage=30, stale-while-revalidate=60' },
-  // Slow-changing data (60s+)
-  { prefix: '/api/analytics', value: 'public, s-maxage=60, stale-while-revalidate=120' },
 ];
 
 /** Get Cache-Control value for a GET API route, or null if none applies */
