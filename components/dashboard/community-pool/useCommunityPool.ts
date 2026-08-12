@@ -176,7 +176,7 @@ export function useCommunityPool(propAddress?: string) {
 
   // Helper to lazily fetch permit details only when needed
   const getPermitDetails = useCallback(
-    async (tokenAddress: string, walletAddress: string, chainId: number) => {
+    async (tokenAddress: string, walletAddress: string, _chainId: number) => {
       try {
         const { ethers } = await import('ethers');
         const chainConfig = POOL_CHAIN_CONFIGS[selectedChain];

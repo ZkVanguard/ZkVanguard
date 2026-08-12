@@ -36,7 +36,7 @@ import { attestExternalNav } from '@/lib/services/sui/cron/nav-oracle';
 import { replenishAdminUsdc } from '@/lib/services/sui/cron/admin-swaps';
 import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
 import { recordPoolNavSnapshot } from '@/lib/services/sui/cron/persistence';
-import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
+import { envFlagOnByDefault } from '@/lib/utils/env-flag';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import type { SuiUsdcPoolStats } from '@/lib/types/sui-pool-types';
 

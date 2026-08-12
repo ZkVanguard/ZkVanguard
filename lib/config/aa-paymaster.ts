@@ -523,7 +523,7 @@ export function getUSDTAddress(
 export function estimateUSDTGasCost(
   gasEstimate: GasEstimation,
   maxFeePerGas: bigint,
-  usdtPriceUSD: number = 1.0 // USDT is pegged to USD
+  _usdtPriceUSD: number = 1.0 // USDT is pegged to USD
 ): bigint {
   const totalGas =
     gasEstimate.preVerificationGas +

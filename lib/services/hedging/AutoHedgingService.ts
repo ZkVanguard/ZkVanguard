@@ -1146,8 +1146,7 @@ class AutoHedgingService {
 
       // Read portfolio data from blockchain
       const portfolioData = await rwaManager.portfolios(portfolioId);
-      const [owner, totalValueBN, targetYield, riskTolerance, lastRebalance, isActive] =
-        portfolioData;
+      const isActive = portfolioData[5];
 
       if (!isActive) {
         logger.warn('[AutoHedging] Portfolio inactive on-chain', { portfolioId });

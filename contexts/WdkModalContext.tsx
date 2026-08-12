@@ -61,7 +61,6 @@ function WdkModalOverlay({
     importWallet,
     loginWithPasskey,
     registerPasskey,
-    lockWallet,
     unlockWallet,
   } = useWdk();
   const [seedPhrase, setSeedPhrase] = useState('');

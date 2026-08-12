@@ -868,7 +868,7 @@ export class BluefinAggregatorService {
     }
 
     try {
-      const { Ed25519Keypair, Transaction } = await getSuiSdk();
+      const { Ed25519Keypair } = await getSuiSdk();
       const { createFailoverSuiClient } = await import('@/lib/services/sui/sui-failover-transport');
 
       // Derive keypair from env (supports suiprivkey bech32 or hex)

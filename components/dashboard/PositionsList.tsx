@@ -38,11 +38,9 @@ import type {
   Position,
   AgentRecommendation,
   SettlementBatch,
-  PortfolioAssetDetail,
   PortfolioTransaction,
   PortfolioDetail,
   PositionsListProps,
-  AssetBalance,
   OnChainPortfolio,
 } from './positions-types';
 

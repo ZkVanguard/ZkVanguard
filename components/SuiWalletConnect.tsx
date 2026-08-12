@@ -43,7 +43,6 @@ export function SuiWalletConnect({
   onClose,
 }: SuiWalletConnectProps) {
   const [copied, setCopied] = useState(false);
-  const [showNetworkHelp, setShowNetworkHelp] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {

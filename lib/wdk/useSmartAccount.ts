@@ -28,7 +28,6 @@ export function useSmartAccount() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
-  const [isDeployed, setIsDeployed] = useState(false);
 
   // Calculate Safe address on mount/change
   useEffect(() => {

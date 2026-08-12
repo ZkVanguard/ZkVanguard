@@ -11,7 +11,6 @@
  * @see contracts/sui/sources/community_pool_usdc.move
  */
 import { logger } from '@/lib/utils/logger';
-import { getMarketDataService } from '../market-data/RealMarketDataService';
 import { composeNavUsdc, computeSharePrice, isNavSane } from '@/lib/services/sui/pool-nav';
 import { parseTargetAllocation, computeLiveAllocation } from '@/lib/services/sui/pool-allocation';
 import {
@@ -20,15 +19,10 @@ import {
   invalidateSuiCache,
   SUI_STATS_TTL_MS as SUI_STATS_TTL,
   SUI_MEMBER_TTL_MS as SUI_MEMBER_TTL,
-  SUI_MEMBERS_TTL_MS as SUI_MEMBERS_TTL,
-  SUI_RPC_TIMEOUT_MS,
 } from '@/lib/services/sui/sui-rpc-utils';
 import {
   SUI_USDC_POOL_CONFIG,
-  SHARE_DECIMALS,
   CLOCK_OBJECT_ID,
-  safeRawToDecimal,
-  safeDecimalToRaw,
   type SuiNetworkType,
   type SuiUsdcPoolStats,
   type SuiMemberPosition,
@@ -183,7 +177,6 @@ export class SuiUsdcPoolService {
             ).trim();
             if (adminKey) {
               const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
-              const { SuiClient } = await import('@mysten/sui/client');
               const { normalizeStructTag } = await import('@mysten/sui/utils');
               const canon = (t: string): string => {
                 try {

@@ -6,7 +6,7 @@ import { useWallet } from '@/lib/hooks/useWallet';
 import { useCreatePortfolio, useUserPortfolios } from '../../lib/contracts/hooks';
 import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
 export function CreatePortfolioButton() {
-  const { isConnected, evmAddress, evmConnected, isSUI } = useWallet();
+  const { evmAddress, evmConnected, isSUI } = useWallet();
   // Get only portfolios owned by the connected wallet (EVM only)
   const { count: userPortfolioCount } = useUserPortfolios(evmAddress as `0x${string}` | undefined);
   const { createPortfolio, isPending, isConfirming, isConfirmed, error } = useCreatePortfolio();

@@ -22,7 +22,6 @@ import type { WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-s
 import { useSuiSafe } from '@/app/sui-providers';
 import { useWdk, useWdkAccount } from '@/lib/wdk/wdk-context';
 import { WDK_CHAINS } from '@/lib/config/wdk';
-import { useWdkModal } from '@/contexts/WdkModalContext';
 import {
   SUI_MOBILE_WALLETS,
   isMobileBrowser,
@@ -91,9 +90,6 @@ export function ConnectButton() {
       setSlushDeepLink(buildMobileWalletLink(SUI_MOBILE_WALLETS[0]) || '#');
     }
   }, [mounted, showMobileWallets]);
-
-  // WDK modal context — modal renders outside Navbar's DOM tree
-  const { openWdkModal } = useWdkModal();
 
   // WDK wallet hooks
   const { disconnect: wdkDisconnect } = useWdk();

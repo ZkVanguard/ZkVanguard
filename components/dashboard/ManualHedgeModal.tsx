@@ -226,18 +226,6 @@ export function ManualHedgeModal({
 
   // ── Mint tx (inline faucet) ───────────────────────────────────
   const {
-    writeContract: writeMint,
-    isPending: isMintPending,
-    error: mintError,
-    reset: resetMint,
-  } = useWriteContract();
-
-  const { isLoading: isMintConfirming, isSuccess: isMintConfirmed } = useWaitForTransactionReceipt({
-    hash: undefined,
-  }); // Tracks latest mint
-
-  // Actually track the mint hash
-  const {
     writeContract: writeMintTracked,
     data: mintTxHash,
     isPending: isMintPendingTracked,

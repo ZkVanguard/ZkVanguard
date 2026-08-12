@@ -142,13 +142,11 @@ async function main() {
   }
 
   console.log('\n── 5. DEDUP GATE PREVIEW ──');
-  let willActuallyOpen = 0;
   for (const p of planned) {
     const k = `${p.asset}-PERP|${side}`;
     if (dedup.has(k)) {
       warn(`${p.asset}-PERP ${side}`, 'already-active → SKIPPED_DUP');
     } else {
-      willActuallyOpen++;
       ok(`${p.asset}-PERP ${side}`, `clear to open (no existing ${side} position)`);
     }
   }
