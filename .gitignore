@@ -69,7 +69,16 @@ coverage.json
 # -------------------------------------------
 # Deployment Records (sensitive - regenerate per deploy)
 # -------------------------------------------
-deployments/
+# Ignore contents by default; keep the specific reference records
+# previously committed (per-deploy artifacts stay ignored).
+deployments/*
+!deployments/community-pool-arbitrum-sepolia.json
+!deployments/community-pool-hedera-testnet.json
+!deployments/community-pool.json
+!deployments/cronos-testnet.json
+!deployments/mainnet-config.json
+!deployments/sui-mainnet-deployment.md
+!deployments/sui-testnet.json
 mainnet-deploy.json
 
 # -------------------------------------------
@@ -97,6 +106,9 @@ bun-debug.log*
 # All check-* and analyze-* diagnostics under scripts/ are local tools
 scripts/check-*
 scripts/analyze-*
+# Canonical diagnostics (per CLAUDE.md) — must stay tracked
+!scripts/analyze-pool-pnl.ts
+!scripts/check-hedge-signal-alignment.ts
 # Underscore-prefix scripts (scripts/_foo.ts, scripts/_local/**) are scratch/ephemeral, never commit
 scripts/_*
 # MemSearch plugin state (per-machine, never commit)
@@ -345,10 +357,21 @@ external/wdk-wallet-evm/
 # NOTE: zk-proof, zk-authenticity, zk-verification were legacy top-level
 # folders. They now serve as legacy-URL redirect stubs inside app/[locale]/
 # and MUST be tracked. Do not re-add them to this ignore list.
-privacy/
-terms/
+# Same story for privacy/terms/whitepaper: both /app/*/ and
+# /app/[locale]/*/ contain redirect stubs that must stay tracked.
+# Ignore root-level orphan dirs but keep the app/ redirect stubs.
+# `*` matches `[locale]` as a directory name (git treats `[...]` as
+# a character class, so a literal `app/[locale]/` pattern would fail).
+/privacy/
+/terms/
 /simulator/
-whitepaper/
+/whitepaper/
+!app/privacy/
+!app/terms/
+!app/whitepaper/
+!app/*/privacy/
+!app/*/terms/
+!app/*/whitepaper/
 ~/
 
 # -------------------------------------------
