@@ -52,6 +52,30 @@
 import { logger } from '@/lib/utils/logger';
 import { envFlag } from '@/lib/utils/env-flag';
 
+/**
+ * Derive the effective peak NAV from on-chain ATH share price × current shares.
+ *
+ * Fixes the peak-NAV deadlock (2026-08-11): the previous mechanism stored a
+ * monotonic peak NAV in cron_state. New deposits raised NAV but not the peak,
+ * so the drawdown percentage stayed pinned in halt territory even after fresh
+ * capital arrived. Deriving peak from `athSharePrice × totalShares` makes the
+ * calc invariant to deposits/withdrawals — new depositors get a fresh cost
+ * basis, existing shareholders keep their DD position.
+ *
+ * Falls back to the cron-state peak if on-chain ATH isn't populated yet
+ * (e.g., a freshly-deployed pool with no snapshots).
+ */
+export function deriveEffectivePeakNav(
+  athSharePriceUsd: number,
+  totalShares: number,
+  fallbackPeakNav: number,
+): number {
+  const derived = athSharePriceUsd > 0 && totalShares > 0
+    ? athSharePriceUsd * totalShares
+    : 0;
+  return derived > 0 ? derived : fallbackPeakNav;
+}
+
 export interface ProfitLockDecision {
   active: boolean;
   drawdownPct: number;
