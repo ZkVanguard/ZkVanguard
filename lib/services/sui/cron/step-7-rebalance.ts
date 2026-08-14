@@ -226,6 +226,14 @@ export async function runStep7Rebalance(input: Step7Input): Promise<Step7Result>
           const maxTransferable = Math.min(maxByHedgeRatio, maxByReserve, maxByDailyCap);
           const cappedDeficit = Math.min(deficit, maxTransferable * 0.90); // 10% safety margin
 
+          // Below this transfer size, admin USDC lands below the $0.10 swap-execution floor
+          // (line 339) and the tick becomes a silent no-op. Prefer attempting the AI-driven
+          // reset over wasting a tick on a sub-dollar transfer. Env-overridable so operators
+          // can tune per-pool without a code change. Observed 2026-08-14: pool sat with
+          // $8.56/$8.63 daily cap used → maxTransferable=$0.07 → transfer succeeded but
+          // admin USDC still $0.06 < $0.10 → all buys deferred every tick for hours.
+          const MIN_USEFUL_TRANSFER_USD = Number(process.env.MIN_USEFUL_TRANSFER_USD) || 1;
+
           if (maxByHedgeRatio <= 0) {
             logger.warn('[SUI Cron] Already at max hedge ratio — skipping pool transfer', {
               existingHedgedValue: existingHedgedValue.toFixed(2),
@@ -236,7 +244,7 @@ export async function runStep7Rebalance(input: Step7Input): Promise<Step7Result>
               success: false,
               error: 'Max hedge ratio reached',
             };
-          } else if (maxTransferable <= 0 || cappedDeficit <= 0.000001) {
+          } else if (maxTransferable <= 0 || cappedDeficit < MIN_USEFUL_TRANSFER_USD) {
             // Daily cap exhausted on-chain. Try an AI-driven reset before
             // giving up: if the prediction-market signal is strong (urgency
             // HIGH/CRITICAL or confidence >= 75) and we still have reset
