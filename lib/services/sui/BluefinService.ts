@@ -31,9 +31,7 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { envFlag } from '@/lib/utils/env-flag';
 import { signOrderRequest, type OrderSignedFields } from '@/lib/services/sui/bluefin/sign-request';
-import * as HedgeResult from '@/lib/services/sui/bluefin/hedge-result';
 import {
   fetchMarketData, fetchOrderBook, fetchFundingRates,
   type ExchangeApiCaller,
@@ -41,10 +39,8 @@ import {
 import { performDryRunHedge, type DryRunParams, type DryRunResult } from '@/lib/services/sui/bluefin/dry-run-hedge';
 import { performOpenHedge } from '@/lib/services/sui/bluefin/open-hedge-impl';
 import { performCloseHedge } from '@/lib/services/sui/bluefin/close-hedge-impl';
-import { snapToStepSize } from '@/lib/services/sui/bluefin-order-size';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import crypto from 'crypto';
 
 // Network configurations - Updated per BlueFin Pro API docs
 export const BLUEFIN_NETWORKS = {

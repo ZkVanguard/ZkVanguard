@@ -188,8 +188,10 @@ export default function DashboardPage() {
   // user on the actual deposit/withdraw surface, not a generic dashboard view.
   const [activeNav, setActiveNav] = useState<NavId>('community');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [swapModalOpen, setSwapModalOpen] = useState(false);
-  const [hedgeModalOpen, setHedgeModalOpen] = useState(false);
+  // Getters unused today — modals gated behind SUI-only mode (see comment
+  // above imports). Setters still wire buttons for when EVM re-enables.
+  const [, setSwapModalOpen] = useState(false);
+  const [, setHedgeModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);

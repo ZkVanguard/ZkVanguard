@@ -677,10 +677,9 @@ export async function POST(request: NextRequest) {
           const proxyAddress = deriveTreasuryProxy('pool-share');
           logger.info('[DepositProxy] Treasury proxy', { proxyAddress, depositor: walletAddress });
 
-          const [userAllowance, poolAllowance, serverUsdtBalance] = await Promise.all([
+          const [userAllowance, poolAllowance] = await Promise.all([
             usdt.allowance(walletAddress, serverWallet.address),
             usdt.allowance(serverWallet.address, communityPoolAddress),
-            usdt.balanceOf(serverWallet.address),
           ]);
 
           if (BigInt(userAllowance) < amountInUnits) {

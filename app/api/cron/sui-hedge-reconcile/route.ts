@@ -44,7 +44,7 @@ import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 // Static so Graphify sees the stale-hedge dispatch. Left the 3 @mysten/sui
 // SDK dynamic imports alone (cold-start defers, low graph value).
 import { detectStaleHedges } from '@/lib/services/sui/StaleHedgeDetector';
-import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
+import { envFlagOnByDefault } from '@/lib/utils/env-flag';
 import { runWatchdogChecks } from '@/lib/services/deploy-watchdog/run';
 import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
 import { query } from '@/lib/db/postgres';

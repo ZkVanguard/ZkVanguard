@@ -87,7 +87,7 @@ const ProbabilityBar = memo(function ProbabilityBar({
 
 /** Expandable details panel — conditionally rendered, isolated rendering */
 const SignalDetails = memo(function SignalDetails({
-  signal, history, isUp, onQuickHedge,
+  signal, history, isUp, onQuickHedge: _onQuickHedge,
 }: {
   signal: FiveMinBTCSignal;
   history: FiveMinSignalHistory | null;

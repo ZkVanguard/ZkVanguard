@@ -24,7 +24,6 @@ import {
 import { ZKBadgeInline, type ZKProofData } from '../../../components/ZKVerificationBadge';
 import type {
   RealPriceData,
-  RealRiskAssessment,
   RealZKProof,
   AgentStatus,
   PortfolioState,

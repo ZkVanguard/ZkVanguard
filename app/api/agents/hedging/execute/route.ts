@@ -153,7 +153,6 @@ export async function POST(request: NextRequest) {
       useOnChainVault = false,
       ownerSecret,
       depositAmount,
-      systemSecret,
     } = body;
 
     // Check for system/internal authentication (cron jobs, liquidation guard, etc.)

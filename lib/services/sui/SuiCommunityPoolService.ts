@@ -15,8 +15,6 @@
  */
 
 import { logger } from '@/lib/utils/logger';
-import { composeNavUsdc, computeSharePrice, isNavSane } from '@/lib/services/sui/pool-nav';
-import { parseTargetAllocation, computeLiveAllocation } from '@/lib/services/sui/pool-allocation';
 import { getMarketDataService } from '../market-data/RealMarketDataService';
 import {
   suiFetchWithTimeout,
@@ -25,7 +23,6 @@ import {
   SUI_STATS_TTL_MS as SUI_STATS_TTL,
   SUI_MEMBER_TTL_MS as SUI_MEMBER_TTL,
   SUI_MEMBERS_TTL_MS as SUI_MEMBERS_TTL,
-  SUI_RPC_TIMEOUT_MS,
 } from '@/lib/services/sui/sui-rpc-utils';
 
 // SuiUsdcPoolService class split into its own file 2026-07-25; re-export
@@ -56,7 +53,6 @@ export {
 
 import {
   SUI_POOL_CONFIG,
-  SUI_USDC_POOL_CONFIG,
   SUI_DECIMALS,
   SHARE_DECIMALS,
   CLOCK_OBJECT_ID,
@@ -64,7 +60,6 @@ import {
   safeDecimalToRaw,
   type SuiNetworkType,
   type SuiPoolStats,
-  type SuiUsdcPoolStats,
   type SuiMemberPosition,
   type SuiTreasuryInfo,
 } from '@/lib/types/sui-pool-types'; // ============================================

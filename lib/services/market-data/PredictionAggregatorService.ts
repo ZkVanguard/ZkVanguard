@@ -66,6 +66,11 @@ export interface AggregatedPrediction {
 const CACHE_KEY = 'prediction_aggregation';
 const CACHE_TTL_MS = 20_000; // 20 seconds - balance freshness vs. API load
 
+import { CACHE_TAG_CRYPTOCOM_TICKER, CACHE_TAG_BLUEFIN_FUNDING } from './cache-tags';
+// Re-export so anything that previously imported the tags from here keeps
+// working; no importers today, kept for symmetry with the prior commit.
+export { CACHE_TAG_CRYPTOCOM_TICKER, CACHE_TAG_BLUEFIN_FUNDING };
+
 // ─── Service ─────────────────────────────────────────────────────────
 
 export class PredictionAggregatorService {
@@ -376,8 +381,13 @@ export class PredictionAggregatorService {
     perAsset: Record<string, { price: number; change24h: number; volume: number }>;
   }> {
     try {
+      // Next.js data cache: 30s revalidate + tag for on-demand invalidation.
+      // Ticker is public + moves slowly enough at 30s cadence; caching across
+      // Vercel instances significantly reduces external API load when
+      // trader (5min) + autohedge (30min) crons both call this hot.
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         signal: AbortSignal.timeout(5000),
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
 
       if (!response.ok) throw new Error('Crypto.com API unavailable');
@@ -454,9 +464,14 @@ export class PredictionAggregatorService {
       const asset = rawAsset.toUpperCase();
       const symbol = `${asset}-PERP`;
       try {
+        // Funding rate ticker: 60s revalidate. BlueFin updates funding
+        // every ~1min; more frequent fetches waste requests + risk rate limits.
         const res = await fetch(
           `${base}/v1/exchange/ticker?symbol=${encodeURIComponent(symbol)}`,
-          { signal: AbortSignal.timeout(4000) },
+          {
+            signal: AbortSignal.timeout(4000),
+            next: { revalidate: 60, tags: [CACHE_TAG_BLUEFIN_FUNDING] },
+          },
         );
         if (!res.ok) return;
         const data = await res.json() as {

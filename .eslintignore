@@ -20,3 +20,10 @@ tailwind.config.js
 postcss.config.js
 jest.config.js
 hardhat.config.cjs
+
+# Scratch scripts (gitignored, local-only)
+# Mirrors .gitignore rules for scripts/_*, scripts/debug-*, scripts/test-*
+scripts/_*
+scripts/debug-*
+scripts/test-auto-hedging-e2e.ts
+

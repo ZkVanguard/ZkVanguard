@@ -45,10 +45,7 @@ import { notifyDiscord } from '@/lib/utils/discord-notify';
 import { envFlag } from '@/lib/utils/env-flag';
 import { BluefinService, type BluefinPosition } from '@/lib/services/sui/BluefinService';
 import { safeBluefinSnapshot, refreshBluefinCache } from '@/lib/services/sui/bluefin-read-safe';
-import {
-  PredictionAggregatorService,
-  type AggregatedPrediction,
-} from '@/lib/services/market-data/PredictionAggregatorService';
+import { PredictionAggregatorService } from '@/lib/services/market-data/PredictionAggregatorService';
 import { getCronStateOr, setCronState } from '@/lib/db/cron-state';
 import { query } from '@/lib/db/postgres';
 import { computeSizeMultiplier, computeRegretScore } from '@/lib/services/ai/regret-tracker';
@@ -92,7 +89,6 @@ import {
   quantize,
   findActivePosition,
   recommendationToSide,
-  isActionable,
   utcDayKey,
   recordSkip,
 } from './handlers/trader-utils';
@@ -108,11 +104,6 @@ import { reconcileActiveTrade } from './handlers/reconcile-active-trade';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
-
-// ── Risk-gate + adaptive knobs kept inline (route-body-only usage) ───────
-const MAX_STAKE_PCT_OF_FREE_FOR_MIN_QTY = 0.70;
-const OPEN_BUFFER = 1.5; // minQty bump per BlueFin dust guard
-
 
 export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult>> {
   const ranAt = new Date().toISOString();

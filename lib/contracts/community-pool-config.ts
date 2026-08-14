@@ -309,7 +309,7 @@ export function getUsdtAddress(chainKey: string, network: NetworkType = 'testnet
  * - EVM chains: USDT (via Tether WDK)
  * - SUI: USDC
  */
-export function getDepositTokenSymbol(chainKey: string, network: NetworkType = 'testnet'): string {
+export function getDepositTokenSymbol(chainKey: string, _network: NetworkType = 'testnet'): string {
   // SUI uses USDC across all networks
   if (chainKey === 'sui') return 'USDC';
   // EVM chains: USDT on both mainnet and testnet (WDK integration)
@@ -322,7 +322,7 @@ export function getDepositTokenSymbol(chainKey: string, network: NetworkType = '
  */
 export function getDepositTokenInfo(
   chainKey: string,
-  network: NetworkType = 'testnet'
+  _network: NetworkType = 'testnet'
 ): { symbol: string; name: string; decimals: number; logo?: string } {
   // SUI uses USDC
   if (chainKey === 'sui') {

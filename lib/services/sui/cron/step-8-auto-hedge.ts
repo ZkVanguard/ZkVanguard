@@ -37,6 +37,8 @@ import { HyperliquidService } from '@/lib/services/perps/HyperliquidService';
 import { checkBeforeTrade, completeTrade } from '@/lib/services/agents/agent-trade-guard';
 import { emitPrivateHedgeCommitment } from '@/lib/services/sui/cron/private-hedge-emit';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
+import type { SuiUsdcPoolStats } from '@/lib/types/sui-pool-types';
+import { deriveEffectivePeakNav } from '@/lib/services/sui/cron/profit-lock-guard';
 
 export interface AutoHedgeRow {
   symbol: string;
@@ -60,6 +62,8 @@ export interface Step8Input {
   aboveSafetyCeiling: boolean;
   navSafetyCeilingUsdc: number;
   network: 'mainnet' | 'testnet';
+  /** Pool stats — used to derive deposit-aware peak NAV for the drawdown halt check. */
+  poolStats: SuiUsdcPoolStats;
 }
 
 export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result> {
@@ -71,6 +75,7 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
     aboveSafetyCeiling,
     navSafetyCeilingUsdc: NAV_SAFETY_CEILING_USDC,
     network,
+    poolStats,
   } = input;
 
   let autoHedgeResult: Step8Result = { triggered: false };
@@ -103,7 +108,14 @@ export async function runStep8AutoHedge(input: Step8Input): Promise<Step8Result>
       // loudly so bad reads don't disappear silently.
       logger.warn('[SUI Cron] Drawdown halt SKIPPED — navUsd non-positive (oracle/RPC read failure suspected)', { navUsd });
     } else {
-      const peakNav = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+      // Derived peak scales with deposits (see deriveEffectivePeakNav docstring)
+      // so a fresh deposit unhalts the drawdown gate without a manual reset.
+      const cronStatePeak = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+      const peakNav = deriveEffectivePeakNav(
+        poolStats.allTimeHighNav || 0,
+        poolStats.totalShares,
+        cronStatePeak,
+      );
       if (peakNav > 0 && navUsd < peakNav) {
         const ddPct = ((peakNav - navUsd) / peakNav) * 100;
         if (ddPct >= HEDGE_DRAWDOWN_HALT_PCT) {

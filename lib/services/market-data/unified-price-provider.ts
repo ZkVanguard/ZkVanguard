@@ -18,6 +18,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { EventEmitter } from 'events';
+import { CACHE_TAG_CRYPTOCOM_TICKER } from './cache-tags';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -307,6 +308,7 @@ class UnifiedPriceProvider extends EventEmitter {
     try {
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         headers: { 'Content-Type': 'application/json' },
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

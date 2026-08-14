@@ -12,6 +12,7 @@
 
 import { logger } from '@/lib/utils/logger';
 import { cache } from '../../utils/cache';
+import { CACHE_TAG_CRYPTOCOM_TICKER } from './cache-tags';
 
 export interface PredictionMarket {
   id: string;
@@ -140,6 +141,7 @@ export class DelphiMarketService {
       // Fetch real market data from Crypto.com Exchange API
       const response = await fetch(`${this.CRYPTOCOM_API}/get-tickers`, {
         signal: AbortSignal.timeout(5000),
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
       
       if (!response.ok) throw new Error('Crypto.com API unavailable');

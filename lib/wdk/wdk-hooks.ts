@@ -435,7 +435,7 @@ export function useSignTypedData() {
         // Use proper EIP-712 signing via ethers.js HDNodeWallet.signTypedData
         const { domain, types, message } = data;
         // ethers.js signTypedData does NOT want the EIP712Domain type in the types object
-        const { EIP712Domain, ...signingTypes } = types;
+        const { EIP712Domain: _EIP712Domain, ...signingTypes } = types;
         const signature = await signTypedData(domain, signingTypes, message);
         if (!signature) throw new Error('Failed to sign typed data');
         return signature;

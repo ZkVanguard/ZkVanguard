@@ -76,7 +76,6 @@ export const Leaderboard = memo(function Leaderboard({
   const memberTotal = Math.max(totalMembers ?? 0, entries.length);
   const showingCount = entries.length;
   const isTruncated = memberTotal > showingCount;
-  const [showProof, setShowProof] = useState(false);
   const [treasuryProxy, setTreasuryProxy] = useState<string>('');
   const isSui = selectedChain === 'sui' || chainConfig?.chainType === 'sui';
 

@@ -8,6 +8,7 @@ import { ethers } from 'ethers';
 import { logger } from '@/lib/utils/logger';
 import { cryptocomExchangeService } from '../CryptocomExchangeService';
 import { getCronosProvider } from '@/lib/throttled-provider';
+import { CACHE_TAG_CRYPTOCOM_TICKER } from './cache-tags';
 
 export interface MarketPrice {
   symbol: string;
@@ -146,6 +147,7 @@ class RealMarketDataService {
     try {
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         signal: AbortSignal.timeout(4000), // 4s timeout (leaves 1s buffer)
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
       
       if (!response.ok) {
@@ -867,6 +869,7 @@ class RealMarketDataService {
     try {
       const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
         signal: AbortSignal.timeout(5000), // Reduced timeout for faster response
+        next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
       });
       
       if (!response.ok) {
@@ -967,6 +970,7 @@ class RealMarketDataService {
         
         const response = await fetch('https://api.crypto.com/exchange/v1/public/get-tickers', {
           signal: AbortSignal.timeout(5000),
+          next: { revalidate: 30, tags: [CACHE_TAG_CRYPTOCOM_TICKER] },
         });
         
         if (!response.ok) return;

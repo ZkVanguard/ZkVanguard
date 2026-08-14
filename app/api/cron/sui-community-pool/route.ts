@@ -469,6 +469,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<SuiCronRes
     const autoHedgeResult = await runStep8AutoHedge({
       navUsd, pricesUSD, aiResult, enhancedContext,
       aboveSafetyCeiling, navSafetyCeilingUsdc: NAV_SAFETY_CEILING_USDC, network,
+      poolStats,
     });
 
 

@@ -28,7 +28,7 @@ const fail = (name: string, detail: string) => {
 };
 const sect = (n: string) => console.log(`\n${'='.repeat(72)}\n${n}\n${'='.repeat(72)}`);
 
-const NETWORK: 'mainnet' = 'mainnet';
+const NETWORK = 'mainnet' as const;
 const ADMIN_ADDR = '0x99a3a0fd45bb6b467547430b8efab77eb64218ab098428297a7a3be77329ac93';
 
 async function main() {
@@ -55,8 +55,7 @@ async function main() {
   const sui = new SuiClient({ url: process.env.SUI_MAINNET_RPC || getFullnodeUrl('mainnet') });
   let navUsd = 0,
     contractBalance = 0,
-    dailyHedgedToday = 0,
-    currentHedgeDay = 0;
+    dailyHedgedToday = 0;
   let poolFields: any = null;
   try {
     const obj = await sui.getObject({ id: cfg.poolStateId!, options: { showContent: true } });
@@ -71,7 +70,6 @@ async function main() {
     const totalHedged = Number(poolFields.hedge_state?.fields?.total_hedged_value || 0) / 1e6;
     navUsd = contractBalance + totalHedged;
     dailyHedgedToday = Number(poolFields.hedge_state?.fields?.daily_hedge_total || 0) / 1e6;
-    currentHedgeDay = Number(poolFields.hedge_state?.fields?.current_hedge_day || 0);
     ok(
       'pool readable',
       `NAV=$${navUsd.toFixed(2)} bal=$${contractBalance.toFixed(2)} dailyHedged=$${dailyHedgedToday.toFixed(2)}`
@@ -223,11 +221,9 @@ async function main() {
   } catch (e) {
     fail('prices', e instanceof Error ? e.message : String(e));
   }
-  let totalAlloc = 0,
-    totalNotional = 0;
+  let totalNotional = 0;
   for (const a of ['BTC', 'ETH', 'SUI'] as const) {
     const alloc = Number(aiCtx?.allocations?.[a] || 0);
-    totalAlloc += alloc;
     const valUsd = navUsd * (alloc / 100) * ratio;
     const eff = valUsd * lev;
     const raw = eff / (prices[a] || 1);

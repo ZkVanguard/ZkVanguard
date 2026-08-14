@@ -29,14 +29,14 @@ import { getCronStateOr, setCronState, CronKeys } from '@/lib/db/cron-state';
 import { BluefinService } from '@/lib/services/sui/BluefinService';
 import { resolveLeverage, hedgeRatioForNav } from '@/lib/services/sui/cron/hedge-sizing';
 import { clampAllocationsToHedgeable } from '@/lib/services/sui/cron/hedgeable-allocation';
-import { applyProfitLock } from '@/lib/services/sui/cron/profit-lock-guard';
+import { applyProfitLock, deriveEffectivePeakNav } from '@/lib/services/sui/cron/profit-lock-guard';
 import { runPortfolioDriverTick } from '@/lib/services/sui/PortfolioDriver';
 import { Polymarket5MinService } from '@/lib/services/market-data/Polymarket5MinService';
 import { attestExternalNav } from '@/lib/services/sui/cron/nav-oracle';
 import { replenishAdminUsdc } from '@/lib/services/sui/cron/admin-swaps';
 import { POOL_ASSETS } from '@/lib/services/sui/cron/allocation';
 import { recordPoolNavSnapshot } from '@/lib/services/sui/cron/persistence';
-import { envFlag, envFlagOnByDefault } from '@/lib/utils/env-flag';
+import { envFlagOnByDefault } from '@/lib/utils/env-flag';
 import type { AllocationDecision } from '@/agents/specialized/SuiPoolAgent';
 import type { SuiUsdcPoolStats } from '@/lib/types/sui-pool-types';
 
@@ -173,7 +173,15 @@ export async function runStep4NavDefense(input: Step4Input): Promise<Step4Result
     // sub-minQty scale. Env-tunable via PROFIT_LOCK_DRAWDOWN_START (5%)
     // and PROFIT_LOCK_ZERO_RISK_AT (20%). Disable with PROFIT_LOCK_DISABLE=1.
     try {
-      const peakNavForLock = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+      // Peak derived from on-chain ATH share price × current shares — see
+      // deriveEffectivePeakNav docstring for why this beats a static
+      // cron-state peak (fixes the 2026-08-11 deposit-during-halt deadlock).
+      const cronStatePeak = await getCronStateOr<number>(CronKeys.poolNavPeak('community-pool'), navUsd);
+      const peakNavForLock = deriveEffectivePeakNav(
+        poolStats.allTimeHighNav || 0,  // ATH share price in USD (see SuiUsdcPoolService.ts:369)
+        poolStats.totalShares,
+        cronStatePeak,
+      );
 
       // Fetch 7-day-ago NAV so profit-lock can compute recovery momentum
       // (avoid "sit in USDC through the rally" pattern).

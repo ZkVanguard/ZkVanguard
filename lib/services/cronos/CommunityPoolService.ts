@@ -323,7 +323,7 @@ export async function deposit(
   }
 
   try {
-    const { totalValueUSD, allocations } = await calculatePoolNAV(chain);
+    const { totalValueUSD } = await calculatePoolNAV(chain);
 
     // FAIRNESS: ERC-4626 virtual shares mechanism
     // Add virtual offset to prevent first depositor attacks

@@ -11,11 +11,9 @@ import {
   parseActionIntent,
   formatActionResult
 } from '../services/portfolio-actions';
-import { generatePrivateHedges, type PrivateHedge } from '../services/hedging/zk-hedge-service';
-
 // Re-export public types for consumers
 export type { ChatMessage, LLMResponse, StreamChunk } from './llm-types';
-import type { ChatMessage, LLMResponse, StreamChunk, ChatClient, AnthropicClient, HedgeAction } from './llm-types';
+import type { ChatMessage, LLMResponse, StreamChunk, ChatClient, AnthropicClient } from './llm-types';
 import { SYSTEM_CONTEXT } from './llm-system-prompt';
 import { hashPrompt, shouldCacheQuery, getCachedLLMResponse, setCachedLLMResponse } from './llm-cache';
 import { generateFallbackResponse as generateFallbackResponseImpl } from './fallback-responses';

@@ -403,7 +403,6 @@ export class AAClient {
       smartAccountAddress,
       communityPoolAddress,
       amountUSDT,
-      approveFirst,
       factory,
       factoryData,
       permit,

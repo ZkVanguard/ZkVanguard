@@ -105,7 +105,6 @@ export function clampAllocationsToHedgeable(input: ClampInput): ClampOutput {
 
   const dropped: ClampOutput['dropped'] = [];
   const survivors: string[] = [];
-  let droppedPctSum = 0;
   let survivorPctSum = 0;
 
   for (const asset of assets) {
@@ -130,7 +129,6 @@ export function clampAllocationsToHedgeable(input: ClampInput): ClampOutput {
           ? `no price for ${asset}`
           : `NAV $${navUsd.toFixed(2)} × ${pct}% × ratio ${hedgeRatio} × ${leverage}x lev = ${check.snappedSize} ${asset} < minQty ${spec.minQuantity}`,
       });
-      droppedPctSum += pct;
       continue;
     }
     // Check OI constraint if provided. Hedge notional = snappedSize × price.
@@ -146,7 +144,6 @@ export function clampAllocationsToHedgeable(input: ClampInput): ClampOutput {
           notionalAvailable: maxAllowedByOi,
           reason: `hedge notional $${proposedNotional.toFixed(2)} > ${oiPct}% of venue OI $${oi.toFixed(0)} (max $${maxAllowedByOi.toFixed(2)})`,
         });
-        droppedPctSum += pct;
         continue;
       }
     }
