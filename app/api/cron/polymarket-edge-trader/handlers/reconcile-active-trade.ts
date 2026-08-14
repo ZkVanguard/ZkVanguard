@@ -11,6 +11,7 @@
  *   2. Trailing-stop / stop-loss trigger (before max-hold expiry)
  *   3. Signal-flip / score-collapse (before max-hold expiry)
  *   4. Fee-bleed defer (in-flight trade with mid-range move, extend hold)
+ *   4.5 Signal-aligned defer at max-hold (still STRONG_ + same side → extend hold)
  *   5. Max-hold expired → close and book realized PnL
  *   6. In flight, no exit condition → return 'idle'
  */
@@ -34,6 +35,7 @@ import {
   FEE_BREAKEVEN_BPS,
   DEFER_EXTEND_MS,
   SIGNAL_FLIP_SCORE_COLLAPSE,
+  MAX_ALIGNED_DEFER_COUNT,
 } from './config';
 
 export interface ReconcileArgs {
@@ -273,6 +275,72 @@ export async function reconcileActiveTrade(args: ReconcileArgs): Promise<NextRes
       daily,
       reason: `Fee-bleed defer #${deferCount + 1}: move ${moveBps.toFixed(1)}bps < ${FEE_BREAKEVEN_BPS}bps; extended by ${DEFER_EXTEND_MS / 60000}min`,
     });
+  }
+
+  // ── Branch 4.5: Signal-aligned defer at max-hold expiry ───────────────
+  // If the signal that opened the trade is STILL STRONG_ + same side + score
+  // healthy, extending the hold is strictly better than close+reopen: no
+  // round-trip fees, no re-open slippage, no lost entry price. Bounded by
+  // MAX_ALIGNED_DEFER_COUNT so a stubbornly-strong signal can't force
+  // forever-hold. Separate counter from `deferCount` so fee-bleed and
+  // aligned-signal budgets don't compete.
+  const alignedDeferCount = active.alignedDeferCount ?? 0;
+  if (alignedDeferCount < MAX_ALIGNED_DEFER_COUNT) {
+    try {
+      const liveScan = await PredictionAggregatorService.scanAndPickBest(
+        SUPPORTED_ASSETS,
+        { minConfidence: 0, minConsensus: 0, minSources: 1 },
+      );
+      const livePred = liveScan.all[active.asset];
+      if (livePred) {
+        const liveSide = recommendationToSide(livePred.recommendation);
+        const liveScore = PredictionAggregatorService.scoreOpportunity(livePred);
+        const stillAligned =
+          liveSide === active.side &&
+          isActionable(livePred.recommendation) &&
+          livePred.recommendation.startsWith('STRONG_') &&
+          liveScore >= active.entryScore * SIGNAL_FLIP_SCORE_COLLAPSE;
+
+        if (stillAligned) {
+          const newCloseBy = active.closeBy + DEFER_EXTEND_MS;
+          await setCronState(KEY_ACTIVE, {
+            ...active,
+            closeBy: newCloseBy,
+            highWaterBps,
+            alignedDeferCount: alignedDeferCount + 1,
+          });
+          logger.info('[PolymarketEdge] Signal-aligned defer', {
+            asset: active.asset,
+            alignedDeferCount: alignedDeferCount + 1,
+            score: liveScore.toFixed(0),
+            entryScore: active.entryScore.toFixed(0),
+            newCloseBy: new Date(newCloseBy).toISOString(),
+          });
+          return NextResponse.json({
+            success: true,
+            ranAt,
+            attempted: true,
+            action: 'idle',
+            trade: {
+              symbol: active.symbol,
+              asset: active.asset,
+              side: active.side,
+              size: active.size,
+              stakeUsd: active.stakeUsd,
+              consensus: active.consensus,
+              confidence: active.confidence,
+              sourceCount: active.sourceCount,
+              recommendation: active.recommendation,
+            },
+            stats: safeStats,
+            daily,
+            reason: `Signal-aligned defer #${alignedDeferCount + 1}: ${livePred.recommendation} score ${liveScore.toFixed(0)}; extended by ${DEFER_EXTEND_MS / 60000}min`,
+          });
+        }
+      }
+    } catch (e) {
+      logger.debug('[PolymarketEdge] aligned-defer rescan failed (non-fatal)', { error: errMsg(e) });
+    }
   }
 
   // ── Branch 5: Max-hold expired → close ────────────────────────────────
