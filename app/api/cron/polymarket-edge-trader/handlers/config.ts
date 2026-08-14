@@ -56,6 +56,18 @@ export const SIGNAL_FLIP_SCORE_COLLAPSE = Number(
   process.env.POLYMARKET_EDGE_SIGNAL_FLIP_SCORE_COLLAPSE || 0.7,
 );
 
+// ── Signal-aligned defer at max-hold ─────────────────────────────────────
+// Added 2026-08-14 after observing 13 SOL LONG opens/closes in one day
+// where every close was max-hold expiry, and every re-open re-took the
+// identical STRONG_HEDGE_LONG signal on the next tick. Each round-trip
+// paid ~13 bps in fees for zero directional change → pure churn bleed.
+// When max-hold expires but the signal is STILL STRONG_ + aligned + score
+// not collapsed, extend the hold instead of close+reopen. Bounded to
+// prevent forever-hold on a stubbornly-strong signal.
+export const MAX_ALIGNED_DEFER_COUNT = Number(
+  process.env.POLYMARKET_EDGE_MAX_ALIGNED_DEFER_COUNT || 6,
+);
+
 // ── Cron state keys ──────────────────────────────────────────────────────
 export const KEY_ACTIVE = 'polymarket-edge:active-trade';
 export const KEY_STATS = 'polymarket-edge:stats';

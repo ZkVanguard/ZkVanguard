@@ -40,6 +40,13 @@ export interface ActiveTrade {
    * Capped at MAX_DEFER_COUNT. Optional for back-compat.
    */
   deferCount?: number;
+  /**
+   * Number of times max-hold was deferred because the signal was still
+   * aligned + STRONG_ at expiry. Separate counter from `deferCount` so
+   * fee-bleed and aligned-signal caps don't compete for the same budget.
+   * Capped at MAX_ALIGNED_DEFER_COUNT. Optional for back-compat.
+   */
+  alignedDeferCount?: number;
 }
 
 /** cron_state key where the ActiveTrade blob lives. */
