@@ -480,12 +480,14 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
     // The trader would refuse to open every 5-min tick because $13 < $15,
     // even though the actual stake it wants to place is only ~$5.
     //
-    // Small-pool relief: cap the effective floor at 2× BASE_STAKE_USD.
-    // Operators still get their configured threshold on any pool where
-    // that threshold is ≤ 2× the stake (i.e. large pools where the
-    // absolute floor is small relative to trade size). Small pools get
-    // the relaxed 2×-stake requirement, which is the actual amount the
-    // trader will spend + 1 stake of headroom for slippage.
+    // Small-pool relief: cap the effective floor at 1.5× BASE_STAKE_USD.
+    // Sized against actual per-trade cost: max slip (30 bps) + fees (13 bps)
+    // on 3× levered notional = ~1.3% of stake = ~$0.07 on a $5 stake, so
+    // 0.5× stake ($2.50) of headroom is ~35× the expected worst case. The
+    // earlier 2× relief was blocking $9.23 free at $10 floor (2026-08-14:
+    // 3243-tick no-edge streak) despite the pool having enough for the
+    // actual stake. At scale (BASE_STAKE_USD ≥ $10) the operator's $15
+    // MIN_FREE_COLLATERAL_USD floor wins via Math.min as intended.
     //
     // Use safeBluefinSnapshot so a transient venue API blip (empty
     // getBalance response) falls back to the last-good cache rather
@@ -506,7 +508,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
         source: bfSnap.source, ageMs: bfSnap.ageMs, free, warning: bfSnap.warning,
       });
     }
-    const effectiveMinFree = Math.min(MIN_FREE_COLLATERAL_USD, BASE_STAKE_USD * 2);
+    const effectiveMinFree = Math.min(MIN_FREE_COLLATERAL_USD, BASE_STAKE_USD * 1.5);
     if (free < effectiveMinFree) {
       const reason = `free=$${free.toFixed(2)} < effective-min=$${effectiveMinFree.toFixed(2)} (configured min=$${MIN_FREE_COLLATERAL_USD}, base-stake=$${BASE_STAKE_USD}, bf-source=${bfSnap.source})`;
       await recordSkip('no-collateral', reason);
