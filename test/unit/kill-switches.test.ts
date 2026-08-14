@@ -31,7 +31,7 @@ describe('evaluateKillSwitch', () => {
   });
 
   it('trips on 5 consecutive losses when peak is meaningful', () => {
-    // Peak $25 >= floor $20 → losses trip fires.
+    // Peak $25 >= floor $10 → losses trip fires.
     const d = evaluateKillSwitch(
       { totalPnlUsd: -20, peakPnlUsd: 25, consecutiveLosses: 5 },
       { pnlUsd: -8 },
@@ -44,7 +44,7 @@ describe('evaluateKillSwitch', () => {
 
   it('does NOT trip on 5 consecutive losses when peak is below floor (2026-08-01 regression)', () => {
     // 5 losses of $0.10 each: consecutiveLosses=5, totalPnl=-$0.50, peak=$0.58
-    // Peak $0.58 < floor $20 → no trip (statistical noise, not broken strategy).
+    // Peak $0.58 < floor $10 → no trip (statistical noise, not broken strategy).
     const d = evaluateKillSwitch(
       { totalPnlUsd: -0.50, peakPnlUsd: 0.58, consecutiveLosses: 5 },
       { pnlUsd: -0.50 },
@@ -54,10 +54,10 @@ describe('evaluateKillSwitch', () => {
     expect(d.peakMeaningful).toBe(false);
   });
 
-  it('trips on 30% drawdown when peak is meaningful (>= 4×BASE_STAKE)', () => {
-    // peak $20 (>= max(4*5, 10) = 20), drop 30% → total $14
+  it('trips on 30% drawdown when peak is meaningful (>= 2×BASE_STAKE)', () => {
+    // peak $10 (>= max(2*5, 5) = 10), drop 30% → total $7
     const d = evaluateKillSwitch(
-      { totalPnlUsd: 14, peakPnlUsd: 20, consecutiveLosses: 1 },
+      { totalPnlUsd: 7, peakPnlUsd: 10, consecutiveLosses: 1 },
       { pnlUsd: 0 },
       0, CFG,
     );
@@ -68,7 +68,7 @@ describe('evaluateKillSwitch', () => {
 
   it('does NOT trip on drawdown when peak is below floor (the 2026-07-13 regression)', () => {
     // $0.10 win → peak = $0.10, then $0.10 loss → total = 0
-    // Drawdown = 100% but peak floor is $20 (max(4*5, 10)) → no trip.
+    // Drawdown = 100% but peak floor is $10 (max(2*5, 5)) → no trip.
     const d = evaluateKillSwitch(
       { totalPnlUsd: 0, peakPnlUsd: 0.10, consecutiveLosses: 1 },
       { pnlUsd: -0.10 },
@@ -77,6 +77,20 @@ describe('evaluateKillSwitch', () => {
     expect(d.trip).toBe(false);
     expect(d.peakMeaningful).toBe(false);
     expect(d.drawdownPct).toBeGreaterThan(0.5); // drawdown IS 100% mathematically
+  });
+
+  it('arms drawdown trip at new $10 floor (2026-08-14 lowered from $20)', () => {
+    // Regression: at peak $12 (< old $20 floor, >= new $10 floor) with 40% drawdown,
+    // old code left kill switch muted → strategy that never got past $20 could bleed
+    // indefinitely. New floor arms the guard when trader has 2 base stakes accumulated.
+    const d = evaluateKillSwitch(
+      { totalPnlUsd: 7, peakPnlUsd: 12, consecutiveLosses: 1 },
+      { pnlUsd: 0 },
+      0, CFG,
+    );
+    expect(d.trip).toBe(true);
+    expect(d.reason).toBe('drawdown');
+    expect(d.peakMeaningful).toBe(true);
   });
 
   it('trips on daily loss cap breach', () => {

@@ -76,7 +76,7 @@ export function evaluateKillSwitch(
   // Absolute-$ floor. At penny-level P&L, every trip condition is dominated
   // by noise: 3 losses of $0.10 each is "MAX_CONSECUTIVE_LOSSES tripped"
   // even though the strategy is fine; $0.10 win then $0.10 loss reads as
-  // "100% drawdown". Peak of at least max(4×BASE_STAKE, $10) means we've
+  // "100% drawdown". Peak of at least max(2×BASE_STAKE, $5) means we've
   // accumulated real money before the halt logic takes over — below that,
   // the trader is still bootstrapping and short streaks are pure variance.
   //
@@ -85,7 +85,11 @@ export function evaluateKillSwitch(
   //
   // Observed 2026-07-13 (drawdown false trip on $0.10 pullback) and
   // 2026-08-01 (consecutiveLosses=3 trip on 3 tiny penny losses).
-  const peakFloor = Math.max(config.baseStakeUsd * 4, 10);
+  //
+  // Lowered 2026-08-14 from 4×/$10 → 2×/$5 after observing that a strategy
+  // losing since day 1 (peak = $0.07 across 28 lifetime trades) can never
+  // accumulate enough to arm the guard — kill switch was permanently muted.
+  const peakFloor = Math.max(config.baseStakeUsd * 2, 5);
   const peakMeaningful = stats.peakPnlUsd >= peakFloor;
 
   const tripLosses = stats.consecutiveLosses >= config.maxConsecutiveLosses && peakMeaningful;
