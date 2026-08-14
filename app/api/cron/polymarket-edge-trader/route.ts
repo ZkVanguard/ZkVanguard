@@ -564,6 +564,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
        */
     }
 
+    // Same fall-through pattern for pre-existing positions. Without this,
+    // the walk pins the top-ranked candidate (e.g. ETH), then the downstream
+    // conflict check at line 754 hard-skips because ETH-PERP is already open
+    // — losing the chance to fall through to the next affordable asset.
+    // Observed 2026-08-14: pool held a 2-month ETH-PERP SHORT (+$1.37 delta-
+    // neutral funding) that blocked the trader every tick whenever ETH ranked
+    // top, even though BTC/SOL/SUI were tradeable. The intent expressed at
+    // line 751 ("other assets can still trade") was correct; the walk just
+    // didn't respect it. Downstream check remains as belt-and-suspenders.
+    let openPositionSymbols = new Set<string>();
+    try {
+      const openNow = await bf.getPositions();
+      openPositionSymbols = new Set(
+        (openNow || [])
+          .filter((p) => Number(p.size ?? 0) !== 0)
+          .map((p) => String(p.symbol ?? '')),
+      );
+    } catch {
+      /* non-critical — downstream conflict check will still catch it */
+    }
+
     let compoundMul = 1;
     let stakeUsd = BASE_STAKE_USD;
     let effectiveStake = BASE_STAKE_USD;
@@ -587,6 +608,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<EdgeResult
       // non-alerted candidate.
       if (alertedAssets.has(c.asset)) {
         rejectedForMinQty.push(`${c.asset}: price-alert active`);
+        continue;
+      }
+      // Fall past pre-existing positions so a delta-neutral hedge
+      // on one asset doesn't lock out trading on the rest.
+      if (openPositionSymbols.has(`${c.asset}-PERP`)) {
+        rejectedForMinQty.push(`${c.asset}: position already open`);
         continue;
       }
       const rp = priceMap.get(c.asset) || 0;
