@@ -65,4 +65,19 @@ describe('deriveEffectivePeakNav', () => {
     // directly when derivation fails; caller decides how to handle 0.
     expect(deriveEffectivePeakNav(0, 0, 0)).toBe(0);
   });
+
+  it('caps anachronistic derived peak at rolling-window fallback', () => {
+    // 2026-08-14 live scenario: on-chain athSharePrice $2.32 was set during
+    // pool bootstrap (~10 shares in circulation, NAV ~$23). Later deposits
+    // grew shares to 74, but athSharePrice stayed at the boot-phase high.
+    // Raw derived = 2.32 × 74 = $171.76 — a peak the current cohort never
+    // actually observed. Rolling peak from pool-nav-monitor knows the real
+    // peak ($56.52), so the cap prevents the anachronism from halting.
+    const derived = deriveEffectivePeakNav(2.32, 74, 56.52);
+    expect(derived).toBe(56.52);
+    // Verify the drawdown gate would NOT trip: NAV $56.41 vs peak $56.52
+    // = 0.19% drawdown, well below any halt threshold.
+    const drawdownPct = ((56.52 - 56.41) / 56.52) * 100;
+    expect(drawdownPct).toBeLessThan(1);
+  });
 });

@@ -53,17 +53,26 @@ import { logger } from '@/lib/utils/logger';
 import { envFlag } from '@/lib/utils/env-flag';
 
 /**
- * Derive the effective peak NAV from on-chain ATH share price × current shares.
+ * Derive the effective peak NAV from on-chain ATH share price × current shares,
+ * capped at the rolling-window peak from pool-nav-monitor.
  *
- * Fixes the peak-NAV deadlock (2026-08-11): the previous mechanism stored a
- * monotonic peak NAV in cron_state. New deposits raised NAV but not the peak,
- * so the drawdown percentage stayed pinned in halt territory even after fresh
- * capital arrived. Deriving peak from `athSharePrice × totalShares` makes the
- * calc invariant to deposits/withdrawals — new depositors get a fresh cost
- * basis, existing shareholders keep their DD position.
+ * Historically this fixed the peak-NAV deadlock (2026-08-11) where a monotonic
+ * cron_state peak trapped the pool after a drawdown: deposits raised NAV but
+ * not the peak, so drawdown stayed halted. Deriving from `athSharePrice ×
+ * currentShares` was intended to scale the peak with deposits.
  *
- * Falls back to the cron-state peak if on-chain ATH isn't populated yet
- * (e.g., a freshly-deployed pool with no snapshots).
+ * But the derivation is anachronistic when `athSharePrice` was recorded with
+ * a much smaller `totalShares` than today: multiplying today's share count by
+ * a boot-phase share-price high produces a peak the current cohort never
+ * actually held at. Observed 2026-08-14: on-chain ATH share price $2.32 (set
+ * with ~10 shares in pool bootstrap) × current 74 shares = $171.76 phantom
+ * peak → 67% "drawdown" from a NAV the pool never reached → autohedge halted.
+ *
+ * Rolling peak from pool-nav-monitor (`poolNav:peak:<pool>`) already handles
+ * the deposit case correctly — its 7-day window advances organically when a
+ * deposit lifts NAV. Cap derived at rolling peak so anachronism can't inflate
+ * the halt gate. Only use raw derived value when rolling peak is missing
+ * (fresh pool, cron never ran) — bootstrap-only fallback.
  */
 export function deriveEffectivePeakNav(
   athSharePriceUsd: number,
@@ -73,7 +82,11 @@ export function deriveEffectivePeakNav(
   const derived = athSharePriceUsd > 0 && totalShares > 0
     ? athSharePriceUsd * totalShares
     : 0;
-  return derived > 0 ? derived : fallbackPeakNav;
+  if (derived <= 0) return fallbackPeakNav;
+  if (fallbackPeakNav > 0 && derived > fallbackPeakNav) {
+    return fallbackPeakNav;
+  }
+  return derived;
 }
 
 export interface ProfitLockDecision {
