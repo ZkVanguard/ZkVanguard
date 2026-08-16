@@ -22,7 +22,26 @@ import {
   getQuote as bluefinGetQuote,
   buildTx as bluefinBuildTx,
   isSuiTransaction,
-} from '@bluefin-exchange/bluefin7k-aggregator-sdk'; // Dynamic imports for SUI SDK (avoids type conflicts at module level)
+  DEFAULT_SOURCES as SDK_DEFAULT_SOURCES,
+  type SourceDex,
+} from '@bluefin-exchange/bluefin7k-aggregator-sdk';
+
+// STEAMM banks + springsui routes silently deliver $0 on-chain despite
+// non-zero quotes — the 2026-08-08 bleed root cause. SDK's own buildTx.js
+// comment: "STEAMM banks, dynamic fields can shift between simulation and
+// execution". Filtering these costs ~0.1-0.6% of quoted output but eliminates
+// the silent-zero pattern entirely. Override with AGG_INCLUDE_RISKY_SOURCES=1.
+const RISKY_SOURCES = new Set<SourceDex>([
+  'steamm', 'steamm_oracle_quoter', 'steamm_oracle_quoter_v2', 'springsui',
+]);
+const SAFE_QUOTE_SOURCES: SourceDex[] = SDK_DEFAULT_SOURCES.filter(s => !RISKY_SOURCES.has(s));
+function quoteSources(): SourceDex[] | undefined {
+  return (process.env.AGG_INCLUDE_RISKY_SOURCES || '').trim() === '1'
+    ? undefined
+    : SAFE_QUOTE_SOURCES;
+}
+
+// Dynamic imports for SUI SDK (avoids type conflicts at module level)
 async function getSuiSdk() {
   const { Ed25519Keypair } = await import('@mysten/sui/keypairs/ed25519');
   const { Transaction } = await import('@mysten/sui/transactions');
@@ -224,6 +243,7 @@ export class BluefinAggregatorService {
         tokenIn: fromCoinType,
         tokenOut: toCoinType,
         amountIn: amountInRaw,
+        sources: quoteSources(),
       });
 
       if (!quoteResponse || quoteResponse.returnAmount === '0') return null;
@@ -323,6 +343,7 @@ export class BluefinAggregatorService {
         tokenIn: fromCoinType,
         tokenOut: toCoinType,
         amountIn: amountInRaw,
+        sources: quoteSources(),
       });
 
       if (!quoteResponse) {
@@ -1266,6 +1287,7 @@ export class BluefinAggregatorService {
             tokenIn: mainnetFrom,
             tokenOut: mainnetTo,
             amountIn: amountInStr,
+            sources: quoteSources(),
           });
 
           if (quoteResponse && quoteResponse.returnAmount !== '0') {
@@ -1386,6 +1408,7 @@ export class BluefinAggregatorService {
         tokenIn: fromCoinType,
         tokenOut: toCoinType,
         amountIn: amountInRaw,
+        sources: quoteSources(),
       });
 
       if (!quoteResponse) {
