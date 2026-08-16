@@ -65,10 +65,9 @@ const ActiveHedges = nextDynamic(
   }
 );
 
-// SUI-only mode: Cronos/EVM-bound widgets (SwapModal, ManualHedgeModal,
-// RecentTransactions, SettlementsPanel, AdvancedPortfolioCreator) are
-// intentionally not imported. They can be restored when those chains
-// are re-enabled in the UI.
+// SUI-only mode: EVM/Cronos-bound widgets were removed with the dead-code
+// cleanup. Hedging is driven by the SUI Community Pool + BlueFin auto-hedge
+// cron instead of manual modals. Re-add here when other chains re-enable.
 
 const PredictionInsights = nextDynamic(
   () =>
