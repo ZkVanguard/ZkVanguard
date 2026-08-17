@@ -187,29 +187,10 @@ export default function DashboardPage() {
   // user on the actual deposit/withdraw surface, not a generic dashboard view.
   const [activeNav, setActiveNav] = useState<NavId>('community');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Getters unused today — modals gated behind SUI-only mode (see comment
-  // above imports). Setters still wire buttons for when EVM re-enables.
-  const [, setSwapModalOpen] = useState(false);
-  const [, setHedgeModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const [agentMessage, setAgentMessage] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
-
-  // Initial values for hedge modal (from AI recommendations)
-  const [hedgeInitialValues, setHedgeInitialValues] = useState<
-    | {
-        asset?: string;
-        side?: 'LONG' | 'SHORT';
-        leverage?: number;
-        size?: number;
-        reason?: string;
-        entryPrice?: number;
-        targetPrice?: number;
-        stopLoss?: number;
-      }
-    | undefined
-  >(undefined);
 
   const displayAddress = address || '';
   // SUI-only mode: portfolio asset universe is fixed to SUI/USDC.
@@ -224,16 +205,6 @@ export default function DashboardPage() {
   const handleNavChange = (id: NavId) => {
     setActiveNav(id);
     setMobileMenuOpen(false);
-  };
-
-  // Handle AI recommendation -> pre-fill hedge modal
-  const handleCreateRecommendedHedge = (values: typeof hedgeInitialValues) => {
-    logger.info('Creating hedge from AI recommendation', {
-      component: 'DashboardPage',
-      data: values,
-    });
-    setHedgeInitialValues(values);
-    setHedgeModalOpen(true);
   };
 
   const handleOpenHedge = async (market: PredictionMarket) => {
@@ -740,9 +711,6 @@ export default function DashboardPage() {
                   hideHeader={true}
                   onActionTrigger={(action, params) => {
                     switch (action) {
-                      case 'hedge':
-                        setHedgeModalOpen(true);
-                        break;
                       case 'analyze':
                         setActiveNav('insights');
                         setShowChat(false);
@@ -751,10 +719,9 @@ export default function DashboardPage() {
                         setActiveNav('positions');
                         setShowChat(false);
                         break;
-                      case 'swap':
-                        setSwapModalOpen(true);
-                        break;
                       default:
+                        // hedge/swap actions dropped: SUI-only mode hedges
+                        // via the auto-hedge cron, not manual modals.
                         logger.info('Chat action triggered', {
                           component: 'DashboardPage',
                           data: { action, params },
@@ -805,16 +772,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Real-time 5-Min BTC Signal */}
-            <FiveMinSignalWidget
-              onQuickHedge={(direction) => {
-                setHedgeInitialValues({
-                  asset: 'BTC',
-                  side: direction,
-                  reason: '5-min Polymarket signal — strong directional confidence',
-                });
-                setHedgeModalOpen(true);
-              }}
-            />
+            <FiveMinSignalWidget />
 
             {/* Stats Grid - Stack on mobile, 2 cols on tablet+ */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 items-stretch">
@@ -841,7 +799,6 @@ export default function DashboardPage() {
                   <ActiveHedges
                     address={displayAddress}
                     compact
-                    onCreateHedge={() => setHedgeModalOpen(true)}
                     onOpenChat={() => setShowChat(true)}
                   />
                 </div>
@@ -882,19 +839,12 @@ export default function DashboardPage() {
               <CardHeader title="Active Hedges" subtitle="Your protective positions and options" />
               <ActiveHedges
                 address={displayAddress}
-                onCreateHedge={() => setHedgeModalOpen(true)}
                 onOpenChat={() => setShowChat(true)}
               />
             </Card>
             <TestnetUSDCFaucet />
           </div>
         );
-
-      case 'swap':
-      case 'history':
-      case 'zk-proofs':
-        // SUI-only mode: these tabs are hidden from nav and unreachable here.
-        return null;
 
       case 'agents':
         return (
@@ -929,7 +879,6 @@ export default function DashboardPage() {
           <PredictionInsights
             onOpenHedge={handleOpenHedge}
             onTriggerAgentAnalysis={handleAgentAnalysis}
-            onCreateRecommendedHedge={handleCreateRecommendedHedge}
             assets={portfolioAssets}
           />
         );
