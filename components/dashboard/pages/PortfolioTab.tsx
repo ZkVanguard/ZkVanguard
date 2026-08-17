@@ -184,7 +184,7 @@ function HedgeRow({ h }: { h: HedgeExposure }) {
   );
 }
 
-export default function DashboardOverviewPage() {
+export function PortfolioTab() {
   const evm = useAccount();
   const sui = useSui();
   const [data, setData] = useState<UnifiedPortfolio | null>(null);

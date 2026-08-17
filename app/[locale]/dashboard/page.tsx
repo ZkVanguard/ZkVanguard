@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import nextDynamic from 'next/dynamic';
-import { Link } from '@/i18n/routing';
 import { useAccount, useBalance } from '@/lib/wdk/wdk-hooks';
 import {
   Bot,
@@ -127,6 +126,26 @@ const CommunityPool = nextDynamic(
   }
 );
 
+// Platform sub-tabs — extracted from former /dashboard/{portfolio,risk,custody}
+// pages so they render as tabs inside this dashboard instead of separate routes.
+const PortfolioTab = nextDynamic(
+  () =>
+    import('@/components/dashboard/pages/PortfolioTab').then((mod) => ({ default: mod.PortfolioTab })),
+  { loading: () => <LoadingSkeleton />, ssr: false },
+);
+
+const RiskTab = nextDynamic(
+  () =>
+    import('@/components/dashboard/pages/RiskTab').then((mod) => ({ default: mod.RiskTab })),
+  { loading: () => <LoadingSkeleton />, ssr: false },
+);
+
+const CustodyTab = nextDynamic(
+  () =>
+    import('@/components/dashboard/pages/CustodyTab').then((mod) => ({ default: mod.CustodyTab })),
+  { loading: () => <LoadingSkeleton />, ssr: false },
+);
+
 // Reusable loading skeleton
 function LoadingSkeleton({ height = 'h-40' }: { height?: string }) {
   return <div className={`animate-pulse bg-[#f5f5f7] ${height} rounded-[24px]`} />;
@@ -140,10 +159,8 @@ interface NavItem {
   badge?: string;
 }
 
-// SUI-only mode: Cronos/EVM-bound nav items (Swap, History, ZK Proofs)
-// are intentionally hidden until those chains are re-enabled.
-// Order: Vault first — it's the flagship product; users landing here should
-// see deposit/withdraw immediately, not a generic "Overview" tab.
+// Primary nav — surfaces the daily user actions (deposit + monitor).
+// Vault first: flagship product; user lands on deposit/withdraw immediately.
 const navItems: NavItem[] = [
   { id: 'community', label: 'Vault', icon: Users },
   { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -153,7 +170,16 @@ const navItems: NavItem[] = [
   { id: 'insights', label: 'Insights', icon: TrendingUp },
 ];
 
-type NavId = NavItem['id'];
+// Platform nav — sub-tabs consolidated from former /dashboard/{portfolio,risk,
+// custody} sub-routes. Rendered in a secondary sidebar section so they stay
+// visually separated from the daily-use tabs above.
+const platformItems: NavItem[] = [
+  { id: 'portfolio', label: 'Portfolio', icon: Layers },
+  { id: 'risk', label: 'Risk', icon: Activity },
+  { id: 'custody', label: 'Custody', icon: ShieldCheck },
+];
+
+type NavId = (typeof navItems)[number]['id'] | (typeof platformItems)[number]['id'];
 
 export default function DashboardPage() {
   // EVM wallet state
@@ -374,7 +400,7 @@ export default function DashboardPage() {
       <header className="lg:hidden fixed top-[52px] left-0 right-0 z-40 bg-white/95 backdrop-blur-xl border-b border-black/5">
         <div className="flex items-center justify-between px-4 h-12">
           <h1 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight truncate">
-            {navItems.find((n) => n.id === activeNav)?.label}
+            {[...navItems, ...platformItems].find((n) => n.id === activeNav)?.label}
           </h1>
 
           <button
@@ -572,35 +598,25 @@ export default function DashboardPage() {
               Platform
             </p>
 
-            <Link
-              href="/dashboard/portfolio"
-              className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            >
-              <Layers className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">
-                Portfolio
-              </span>
-            </Link>
-
-            <Link
-              href="/dashboard/risk"
-              className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            >
-              <Activity className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">
-                Risk
-              </span>
-            </Link>
-
-            <Link
-              href="/dashboard/custody"
-              className="w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left hover:bg-[#f5f5f7] transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            >
-              <ShieldCheck className="w-5 h-5 text-[#86868b]" strokeWidth={2} />
-              <span className="text-[15px] font-medium text-[#1d1d1f] tracking-[-0.01em]">
-                Custody
-              </span>
-            </Link>
+            {platformItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveNav(item.id)}
+                  className={`
+                    w-[calc(100%-16px)] mx-2 mb-1 flex items-center gap-3 px-4 py-2.5 rounded-[12px] text-left transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]
+                    ${isActive ? 'bg-[#007AFF] shadow-[0_2px_8px_rgba(0,122,255,0.25)]' : 'hover:bg-[#f5f5f7]'}
+                  `}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-[#86868b]'}`} />
+                  <span className={`text-[15px] font-medium tracking-[-0.01em] ${isActive ? 'text-white' : 'text-[#1d1d1f]'}`}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
 
             <div className="my-4 mx-4 border-t border-black/5" />
 
@@ -633,7 +649,7 @@ export default function DashboardPage() {
             {/* Page Header - Desktop only */}
             <div className="hidden lg:block mb-8">
               <h1 className="text-[34px] font-bold text-[#1d1d1f] tracking-[-0.02em] leading-[1.1]">
-                {navItems.find((n) => n.id === activeNav)?.label}
+                {[...navItems, ...platformItems].find((n) => n.id === activeNav)?.label}
               </h1>
             </div>
 
@@ -894,6 +910,17 @@ export default function DashboardPage() {
             <CommunityPool address={displayAddress} />
           </Card>
         );
+
+      // Platform tabs — extracted from former /dashboard/{portfolio,risk,custody}
+      // sub-routes. Self-contained (own header + spacing), so no Card wrapper.
+      case 'portfolio':
+        return <PortfolioTab />;
+
+      case 'risk':
+        return <RiskTab />;
+
+      case 'custody':
+        return <CustodyTab />;
 
       default:
         return null;
