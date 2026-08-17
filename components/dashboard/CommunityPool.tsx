@@ -36,7 +36,8 @@ import {
   useCommunityPool,
 } from './community-pool';
 import { PieChart, Shield, Users } from 'lucide-react';
-import { CommunityPoolSkeleton } from './community-pool/Skeletons'; // Lazy load heavy panels (only load when in viewport)
+import { CommunityPoolSkeleton } from './community-pool/Skeletons';
+import { NavHistoryChart } from './NavHistoryChart'; // Lazy load heavy panels (only load when in viewport)
 const RiskMetricsPanel = lazy(() =>
   import('./RiskMetricsPanel').then((mod) => ({ default: mod.RiskMetricsPanel }))
 );
@@ -287,6 +288,12 @@ export const CommunityPool = memo(function CommunityPool({
         network={pool.network}
         poolDeployed={pool.poolDeployed}
       />
+
+      {/* Share-price history chart owns the hero slot — Total Value and
+          Total Shares tiles that used to sit atop PoolStats were removed
+          in favour of showing the story rather than the point-in-time
+          number. Current NAV surfaces as the last tooltip on the chart. */}
+      <NavHistoryChart />
 
       <PoolStats poolData={pool.poolData} selectedChain={pool.selectedChain} />
 
