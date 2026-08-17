@@ -159,7 +159,7 @@ function AttestationCard({ a }: { a: AttestationView }) {
   );
 }
 
-export default function CustodyProofsPage() {
+export function CustodyTab() {
   const sui = useSui();
   const [data, setData] = useState<ListResponse | null>(null);
   const [loading, setLoading] = useState(false);

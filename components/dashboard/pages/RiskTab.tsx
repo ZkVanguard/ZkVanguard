@@ -392,7 +392,7 @@ async function fetchRiskOverview(): Promise<RiskOverview> {
   return r.json();
 }
 
-export default function PlatformRiskPage() {
+export function RiskTab() {
   const { data, isPending: loading, error: queryError } = useQuery({
     queryKey: ['platform-risk-overview'],
     queryFn: fetchRiskOverview,
