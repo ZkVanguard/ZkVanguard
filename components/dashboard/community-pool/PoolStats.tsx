@@ -63,16 +63,6 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
     ? formatStaleAge(poolData.staleAgeSeconds)
     : undefined;
 
-  const totalValueDisplay = useMemo(() => {
-    if (isSui) {
-      const totalUsdc = Number(poolData.totalValueUSD) || Number(poolData.totalShares) || 0;
-      return formatUSD(totalUsdc);
-    }
-    return formatUSD(poolData.totalValueUSD);
-  }, [isSui, poolData.totalValueUSD, poolData.totalShares]);
-
-  const totalValueSubtext = isSui ? 'Total Pool Value (USDC)' : 'Total Value';
-
   const sharePriceDisplay = useMemo(() => {
     const price = Number(poolData.sharePrice) || (isSui ? 1 : 0);
     return `$${price.toFixed(4)}`;
@@ -132,59 +122,43 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
     );
   }, [isSui, profit, poolData.allTimeHighNav]);
 
+  // Total Value + Total Shares tiles removed 2026-08-17: superseded by the
+  // NavHistoryChart hero (share price chart tells the story better; NAV is
+  // the chart's last-point tooltip; total-share count is investor-irrelevant).
+  // Keep: Return, Profit, Members, Share Price. Stale chip re-anchored on
+  // the Share Price tile so users still see "snapshot · Xh old" context.
   return (
     <div className="p-3 sm:p-4 md:p-5 border-b border-gray-100 dark:border-gray-700 min-w-0">
-      {/* Mobile hero row */}
-      <div className="grid grid-cols-2 gap-2 sm:hidden">
-        <Metric
-          size="mobile-hero"
-          value={totalValueDisplay}
-          label={totalValueSubtext}
-          chip={staleChip}
-        />
-        {isSui && profit ? (
-          <Metric
-            size="mobile-hero"
-            value={signedPct(profit.returnPct)}
-            label="Total Return"
-            valueColorClass={pnlColor(profit.returnPct)}
-            chip={athChip}
-          />
-        ) : (
-          <Metric size="mobile-hero" value={sharePriceDisplay} label="Share Price" />
-        )}
-      </div>
-
-      {/* Mobile compact secondary strip */}
-      <div className="grid grid-cols-3 gap-2 mt-2 sm:hidden">
-        {isSui && profit && profit.profitUsd !== null && (
+      {/* Mobile compact strip — hero row removed; chart above owns the hero slot. */}
+      <div className="grid grid-cols-3 gap-2 sm:hidden">
+        {isSui && profit && profit.profitUsd !== null ? (
           <Metric
             size="mobile-strip"
             value={signedUsd(profit.profitUsd)}
             label="Profit"
             valueColorClass={pnlColor(profit.profitUsd)}
           />
+        ) : (
+          <Metric size="mobile-strip" value={sharePriceDisplay} label="Share Price" chip={staleChip} />
         )}
         {isSui && profit && (
-          <Metric size="mobile-strip" value={sharePriceDisplay} label="Share Price" />
+          <Metric
+            size="mobile-strip"
+            value={signedPct(profit.returnPct)}
+            label="Return"
+            valueColorClass={pnlColor(profit.returnPct)}
+            chip={athChip}
+          />
         )}
         <Metric
           size="mobile-strip"
           value={Number(poolData.memberCount).toLocaleString()}
           label={poolData.memberCount === 1 ? 'Member' : 'Members'}
         />
-        {(!isSui || !profit) && (
-          <Metric
-            size="mobile-strip"
-            value={(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            label="Shares"
-          />
-        )}
       </div>
 
-      {/* Desktop grid */}
-      <div className={`hidden sm:grid gap-3 sm:gap-4 ${isSui ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'}`}>
-        <Metric size="desktop" value={totalValueDisplay} label={totalValueSubtext} chip={staleChip} />
+      {/* Desktop grid — Total Value + Total Shares removed (chart owns them). */}
+      <div className={`hidden sm:grid gap-3 sm:gap-4 ${isSui ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-2'}`}>
         {isSui && profit && (
           <Metric
             size="desktop"
@@ -207,12 +181,7 @@ export const PoolStats = memo(function PoolStats({ poolData, selectedChain }: Po
           value={Number(poolData.memberCount).toLocaleString()}
           label={poolData.memberCount === 1 ? 'Pool Member' : 'Pool Members'}
         />
-        <Metric size="desktop" value={sharePriceDisplay} label={sharePriceSubtext} />
-        <Metric
-          size="desktop"
-          value={(Number(poolData.totalShares) || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-          label="Total Shares"
-        />
+        <Metric size="desktop" value={sharePriceDisplay} label={sharePriceSubtext} chip={staleChip} />
       </div>
     </div>
   );
